@@ -104,12 +104,12 @@ npm run build
 
 ## Template Files
 
-The application requires the following template files in your project directory:
+The application includes the following template files in the `templates/` directory:
 
-- `prompt_makePlan.md` - For architecture tasks
-- `prompt_makeDiffGitFormat.md` - For development tasks
-- `prompt_analyzeBug.md` - For debugging tasks
-- `prompt_projectManager.md` - For documentation sync tasks
+- `templates/prompt_makePlan.md` - For architecture tasks
+- `templates/prompt_makeDiffGitFormat.md` - For development tasks
+- `templates/prompt_analyzeBug.md` - For debugging tasks
+- `templates/prompt_projectManager.md` - For documentation sync tasks
 
 Each template should contain placeholders:
 - `{TASK}` - Replaced with your task description

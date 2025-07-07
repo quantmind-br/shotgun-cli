@@ -44,6 +44,7 @@
   ],
   "files": [
     "bin/",
+    "templates/",
     "internal/template/templates/",
     "install.js",
     "create-wrapper.js",

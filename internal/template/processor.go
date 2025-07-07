@@ -24,7 +24,7 @@ type PromptData struct {
 
 func NewProcessor() *Processor {
 	return &Processor{
-		templatesDir: ".",
+		templatesDir: "templates",
 	}
 }
 
