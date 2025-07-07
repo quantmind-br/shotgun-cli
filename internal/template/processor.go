@@ -1,12 +1,16 @@
 package template
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+//go:embed templates/*.md
+var embeddedTemplates embed.FS
 
 type Processor struct {
 	templatesDir string
@@ -25,11 +29,17 @@ func NewProcessor() *Processor {
 }
 
 func (p *Processor) LoadTemplate(templateName string) (string, error) {
+	// Try to load from local directory first (for development/customization)
 	templatePath := filepath.Join(p.templatesDir, templateName)
+	if content, err := os.ReadFile(templatePath); err == nil {
+		return string(content), nil
+	}
 	
-	content, err := os.ReadFile(templatePath)
+	// Fallback to embedded templates
+	embeddedPath := filepath.Join("templates", templateName)
+	content, err := embeddedTemplates.ReadFile(embeddedPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read template %s: %w", templateName, err)
+		return "", fmt.Errorf("failed to read template %s (tried local and embedded): %w", templateName, err)
 	}
 	
 	return string(content), nil
@@ -58,22 +68,16 @@ func (p *Processor) SavePrompt(content string) (string, error) {
 }
 
 func (p *Processor) ValidateTemplate(templateName string) error {
-	templatePath := filepath.Join(p.templatesDir, templateName)
-	
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		return fmt.Errorf("template file %s does not exist", templateName)
-	}
-	
-	content, err := os.ReadFile(templatePath)
+	// Try to load template using the same logic as LoadTemplate
+	content, err := p.LoadTemplate(templateName)
 	if err != nil {
-		return fmt.Errorf("failed to read template %s: %w", templateName, err)
+		return fmt.Errorf("template file %s does not exist or cannot be read: %w", templateName, err)
 	}
 	
-	templateStr := string(content)
-	
+	// Validate required placeholders
 	requiredPlaceholders := []string{"{TASK}", "{RULES}", "{FILE_STRUCTURE}"}
 	for _, placeholder := range requiredPlaceholders {
-		if !strings.Contains(templateStr, placeholder) {
+		if !strings.Contains(content, placeholder) {
 			return fmt.Errorf("template %s is missing required placeholder: %s", templateName, placeholder)
 		}
 	}

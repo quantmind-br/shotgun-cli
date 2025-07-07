@@ -58,7 +58,7 @@ func (s *Scanner) ScanDirectory() (*FileNode, error) {
 		Name:       filepath.Base(s.root),
 		Path:       ".",
 		IsDir:      true,
-		IsSelected: false,
+		IsSelected: true, // Root sempre selecionado por padrão
 		Children:   []*FileNode{},
 	}
 
@@ -91,7 +91,7 @@ func (s *Scanner) scanRecursive(currentPath string, node *FileNode) error {
 			Name:       entry.Name(),
 			Path:       relativePath,
 			IsDir:      entry.IsDir(),
-			IsSelected: false,
+			IsSelected: true, // Todos os arquivos selecionados por padrão
 		}
 
 		if !entry.IsDir() {
@@ -187,7 +187,7 @@ func (s *Scanner) writeTree(node *FileNode, sb *strings.Builder, prefix string) 
 		if node.IsSelected {
 			marker = "✓ " + marker
 		} else {
-			marker = "  " + marker
+			marker = "✗ " + marker  // Mostra claramente quando desselecionado
 		}
 		
 		sb.WriteString(fmt.Sprintf("%s%s%s", prefix, marker, node.Name))

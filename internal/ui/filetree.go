@@ -115,9 +115,9 @@ func (m *FileTreeModel) View() string {
 			cursor = ">"
 		}
 		
-		selection := " "
+		selection := "✗"  // Padrão é desselecionado (mostra o X)
 		if node.IsSelected {
-			selection = "✓"
+			selection = "✓"  // Selecionado mostra check
 		}
 		
 		expansion := " "
@@ -153,7 +153,7 @@ func (m *FileTreeModel) View() string {
 	
 	instructions := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
-		Render("Use ↑/↓ to navigate, Space to select, Enter to expand/collapse, Alt+D to continue")
+		Render("Use ↑/↓ to navigate, Space to deselect/select, Enter to expand/collapse, Alt+D to continue")
 	
 	return fmt.Sprintf("%s\n\n%s", style.Render(content), instructions)
 }

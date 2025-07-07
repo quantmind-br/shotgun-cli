@@ -14,14 +14,21 @@
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",
   "bin": {
-    "shotgun-cli": "./bin/shotgun-cli"
+    "shotgun": "./bin/shotgun.js",
+    "shotgun-cli": "./bin/shotgun.js"
   },
   "scripts": {
     "postinstall": "npm run build",
-    "build": "mkdir -p bin && go build -o bin/shotgun-cli",
+    "build": "npm run build:cross-platform",
+    "build:cross-platform": "node -e \"const fs = require('fs'); const os = require('os'); if (!fs.existsSync('bin')) fs.mkdirSync('bin', {recursive: true}); const ext = os.platform() === 'win32' ? '.exe' : ''; console.log('Building for:', os.platform(), 'with extension:', ext);\" && node -e \"const os = require('os'); const { execSync } = require('child_process'); const ext = os.platform() === 'win32' ? '.exe' : ''; execSync('go build -o bin/shotgun' + ext, {stdio: 'inherit'});\" && node create-wrapper.js",
+    "build:windows": "node -e \"const fs = require('fs'); if (!fs.existsSync('bin')) fs.mkdirSync('bin', {recursive: true});\" && go build -o bin/shotgun.exe",
+    "build:unix": "mkdir -p bin && go build -o bin/shotgun",
     "build-release": "node install.js",
     "test": "go test ./...",
-    "clean": "rm -rf bin/"
+    "clean:windows": "node -e \"const fs = require('fs'); if (fs.existsSync('bin')) fs.rmSync('bin', {recursive: true, force: true});\"",
+    "clean:unix": "rm -rf bin/",
+    "clean": "npm run clean:cross-platform",
+    "clean:cross-platform": "node -e \"const fs = require('fs'); if (fs.existsSync('bin')) fs.rmSync('bin', {recursive: true, force: true});\""
   },
   "engines": {
     "node": ">=14.0.0"
@@ -37,7 +44,9 @@
   ],
   "files": [
     "bin/",
+    "internal/template/templates/",
     "install.js",
+    "create-wrapper.js",
     "README.md",
     "LICENSE"
   ]

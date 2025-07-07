@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"shotgun-cli/internal/file"
@@ -237,12 +238,22 @@ func (a *App) handleRulesInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.wantsRules && strings.TrimSpace(a.rulesInput) != "" {
 			return a, a.initFileSelection()
 		}
+	case " ":
+		// Explicit space handling for rules input (Bubble Tea best practice)
+		if a.wantsRules {
+			a.rulesInput += " "
+		}
+		return a, nil
 	}
 
 	// Handle text input only when in rules input mode
 	if a.wantsRules {
 		// Handle special keys for text input
 		switch msg.Type {
+		case tea.KeySpace:
+			// Handle tea.KeySpace explicitly for maximum compatibility
+			a.rulesInput += " "
+			return a, nil
 		case tea.KeyBackspace:
 			if len(a.rulesInput) > 0 {
 				a.rulesInput = a.rulesInput[:len(a.rulesInput)-1]
@@ -251,10 +262,8 @@ func (a *App) handleRulesInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			a.rulesInput += "\n"
 			return a, nil
-		}
-
-		// Handle regular character input (including spaces)
-		if msg.Type == tea.KeyRunes {
+		case tea.KeyRunes:
+			// Handle regular character input (excluding spaces, already handled above)
 			a.rulesInput += string(msg.Runes)
 			return a, nil
 		}
@@ -425,8 +434,12 @@ func (a *App) renderFileSelection() string {
 		)
 	}
 
-	return fmt.Sprintf("\n%s\n\n%s",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("File Selection"),
+	header := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("File Selection")
+	subheader := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("✓ = Selected (will be included) | ✗ = Deselected (will be excluded)")
+	
+	return fmt.Sprintf("\n%s\n%s\n\n%s",
+		header,
+		subheader,
 		a.fileTree.View(),
 	)
 }
@@ -453,7 +466,21 @@ func (a *App) renderCompleted() string {
 }
 
 func (a *App) Run() error {
-	p := tea.NewProgram(a, tea.WithAltScreen())
+	// Configuração mais robusta para Windows
+	options := []tea.ProgramOption{}
+	
+	// No Windows, evitar AltScreen se houver problemas de TTY
+	if runtime.GOOS == "windows" {
+		// Tentar detectar se estamos em um terminal válido
+		if os.Getenv("TERM") == "" {
+			os.Setenv("TERM", "xterm-256color")
+		}
+		options = append(options, tea.WithoutSignalHandler())
+	} else {
+		options = append(options, tea.WithAltScreen())
+	}
+	
+	p := tea.NewProgram(a, options...)
 	_, err := p.Run()
 	return err
 }

@@ -43,15 +43,32 @@ Shotgun CLI streamlines the process of creating comprehensive prompts for AI ass
 ```bash
 git clone <repository-url>
 cd shotgun-cli/shotgun_cli
-go build -o shotgun-cli
+npm run build
 ```
+
+**Alternative build methods:**
+- `npm run build:windows` - Build for Windows (.exe)
+- `npm run build:unix` - Build for Unix/Linux/macOS  
+- `npm run build:cross-platform` - Cross-platform build (default)
+- `go build -o shotgun` - Direct Go build
+
+**Windows users:** 
+- Use `build.bat` to build and install globally
+- **Important**: Use Windows Terminal or PowerShell instead of Command Prompt for best compatibility
+- If you get TTY errors, try: `set TERM=xterm-256color` before running the command
+- The application now automatically detects Windows and uses the correct `.exe` binary
+- Run `npm run build:windows` to build the Windows `.exe` version manually
 
 ### Usage
 
-1. **Run the application** in your project directory:
+1. **Run the application** from any directory:
    ```bash
-   ./shotgun-cli
+   shotgun
+   # or if installed globally:
+   shotgun-cli
    ```
+   
+   **Note:** The application now works from any directory! Templates are embedded in the binary, so you don't need to be in a specific folder to use it.
 
 2. **Select task type** using arrow keys and Enter
 
@@ -65,10 +82,11 @@ go build -o shotgun-cli
    - If yes, enter multi-line rules and press `Alt+D`
 
 5. **Select files**:
+   - All files are **selected by default** (marked with ✓)
    - Navigate the file tree with ↑/↓ arrows
-   - Press Space to select/deselect files
+   - Press Space to **deselect/select** files (toggle ✓/✗)
    - Press Enter to expand/collapse directories
-   - Press `Alt+D` to continue
+   - Press `Alt+D` to continue with selected files
 
 6. **Generate prompt**:
    - The application processes your inputs
@@ -79,7 +97,7 @@ go build -o shotgun-cli
 
 - `↑/↓` - Navigate menus and file tree
 - `Enter` - Select option or expand/collapse directory
-- `Space` - Select/deselect files in file tree
+- `Space` - Toggle file selection (✓ selected / ✗ deselected)
 - `Alt+D` - Confirm input and proceed to next step
 - `Esc` - Go back to previous screen
 - `Ctrl+C` or `q` - Quit application
@@ -100,13 +118,15 @@ Each template should contain placeholders:
 
 ## File Exclusions
 
-The application automatically excludes common files and directories:
+The application automatically excludes common files and directories (these won't appear in the file tree):
 
 - Git files (`.git`, `.gitignore` contents)
-- Dependencies (`node_modules`, build artifacts)
+- Dependencies (`node_modules`, build artifacts)  
 - IDE files (`.vscode`, `.idea`)
 - Temporary files (`*.log`, `*.tmp`, `*.cache`)
 - Binary files (`*.exe`, `*.dll`, `*.so`)
+
+**Note**: All remaining files are **selected by default**. You only need to deselect files you don't want in your prompt.
 
 ## Output
 
