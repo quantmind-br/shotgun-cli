@@ -1,0 +1,44 @@
+{
+  "name": "shotgun-cli",
+  "version": "0.1.0",
+  "description": "A powerful CLI tool for generating optimized prompts for AI interactions",
+  "keywords": ["cli", "ai", "prompt", "template", "development"],
+  "homepage": "https://github.com/your-username/shotgun-cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/shotgun-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/shotgun-cli/issues"
+  },
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "bin": {
+    "shotgun-cli": "./bin/shotgun-cli"
+  },
+  "scripts": {
+    "postinstall": "npm run build",
+    "build": "mkdir -p bin && go build -o bin/shotgun-cli",
+    "build-release": "node install.js",
+    "test": "go test ./...",
+    "clean": "rm -rf bin/"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md",
+    "LICENSE"
+  ]
+}
