@@ -55,3 +55,6 @@ Thumbs.db
 # Build artifacts
 build/
 target/
+
+# Agent configuration files
+AGENTS.md
