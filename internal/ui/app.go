@@ -186,10 +186,18 @@ func (a *App) handleTaskInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		return a, nil
+	case " ":
+		// Explicit space handling (Bubble Tea best practice)
+		a.taskInput += " "
+		return a, nil
 	}
 
 	// Handle special keys
 	switch msg.Type {
+	case tea.KeySpace:
+		// Handle tea.KeySpace explicitly for maximum compatibility
+		a.taskInput += " "
+		return a, nil
 	case tea.KeyBackspace:
 		if len(a.taskInput) > 0 {
 			a.taskInput = a.taskInput[:len(a.taskInput)-1]
@@ -198,10 +206,8 @@ func (a *App) handleTaskInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		a.taskInput += "\n"
 		return a, nil
-	}
-	
-	// Handle regular character input (including spaces)
-	if msg.Type == tea.KeyRunes {
+	case tea.KeyRunes:
+		// Handle regular character input (excluding spaces, already handled above)
 		a.taskInput += string(msg.Runes)
 		return a, nil
 	}
