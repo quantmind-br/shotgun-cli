@@ -58,3 +58,4 @@ target/
 
 # Agent configuration files
 AGENTS.md
+.aider*
