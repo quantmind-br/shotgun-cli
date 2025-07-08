@@ -18,14 +18,15 @@
     "shotgun-cli": "./bin/shotgun.js"
   },
   "scripts": {
-    "postinstall": "npm run build",
-    "build": "npm run build:cross-platform",
-    "build:cross-platform": "node -e \"const fs = require('fs'); const os = require('os'); if (!fs.existsSync('bin')) fs.mkdirSync('bin', {recursive: true}); const ext = os.platform() === 'win32' ? '.exe' : ''; console.log('Building for:', os.platform(), 'with extension:', ext);\" && node -e \"const os = require('os'); const { execSync } = require('child_process'); const ext = os.platform() === 'win32' ? '.exe' : ''; execSync('go build -o bin/shotgun' + ext, {stdio: 'inherit'});\" && node create-wrapper.js",
-    "build:windows": "node -e \"const fs = require('fs'); if (!fs.existsSync('bin')) fs.mkdirSync('bin', {recursive: true});\" && go build -o bin/shotgun.exe",
-    "build:unix": "mkdir -p bin && go build -o bin/shotgun",
+    "postinstall": "node install.js || npm run build:platform",
+    "build": "npm run build:platform",
+    "build:platform": "node -e \"const os = require('os'); const { execSync } = require('child_process'); if (os.platform() === 'win32') { execSync('npm run build:windows', {stdio: 'inherit'}); } else { execSync('npm run build:unix', {stdio: 'inherit'}); }\"",
+    "build:cross-platform": "echo \"Cross-platform build specific logic if needed. For now, use build:windows or build:unix separately.\" && exit 1",
+    "build:windows": "node -e \"const fs = require('fs'); if (!fs.existsSync('bin')) fs.mkdirSync('bin', {recursive: true});\" && go build -ldflags='-s -w' -o bin/shotgun.exe main.go && node create-wrapper.js",
+    "build:unix": "mkdir -p bin && go build -ldflags='-s -w' -o bin/shotgun main.go && node create-wrapper.js",
     "build-release": "node install.js",
     "test": "go test ./...",
-    "clean:windows": "node -e \"const fs = require('fs'); if (fs.existsSync('bin')) fs.rmSync('bin', {recursive: true, force: true});\"",
+    "clean:windows": "node -e \"const fs = require('fs'); const path = require('path'); const binDir = path.join('bin'); if (fs.existsSync(binDir)) { fs.readdirSync(binDir).forEach(f => fs.unlinkSync(path.join(binDir, f))); fs.rmdirSync(binDir); }\"",
     "clean:unix": "rm -rf bin/",
     "clean": "npm run clean:cross-platform",
     "clean:cross-platform": "node -e \"const fs = require('fs'); if (fs.existsSync('bin')) fs.rmSync('bin', {recursive: true, force: true});\""
