@@ -91,6 +91,7 @@ The application supports multiline input for both Task Description and Custom Ru
 **General Navigation:**
 - **Esc**: Go back to previous step
 - **?**: Toggle help menu
+- **o**: Access configuration/settings
 - **Ctrl+Q, Ctrl+C**: Quit application
 
 **Template Selection Screen:**

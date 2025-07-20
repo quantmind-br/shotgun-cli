@@ -125,6 +125,7 @@ shotgun-cli --help       # Show help
 ### General
 - `Ctrl+Q`, `Ctrl+C`: Quit application
 - `?`: Toggle help
+- `o`: Access configuration/settings
 - `Esc`: Go back to previous step
 
 ### Directory Selection

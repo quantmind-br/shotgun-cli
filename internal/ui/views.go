@@ -8,9 +8,63 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"shotgun-cli/internal/core"
 )
+
+// Translation message types
+type translationCompleteMsg struct {
+	textType   string // "task" or "rules"
+	result     *core.TranslationResult
+	err        error
+}
+
+type translationStartMsg struct {
+	textType string // "task" or "rules"
+}
+
+// Translation commands
+func (m *Model) translateText(textType, text string) tea.Cmd {
+	if m.translator == nil || !m.translator.IsConfigured() {
+		// Translation not available, return the original text
+		return func() tea.Msg {
+			return translationCompleteMsg{
+				textType: textType,
+				result: &core.TranslationResult{
+					OriginalText:   text,
+					TranslatedText: text, // Use original text if translation unavailable
+					TargetLanguage: "en",
+					Timestamp:      time.Now(),
+				},
+				err: nil,
+			}
+		}
+	}
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		var result *core.TranslationResult
+		var err error
+
+		switch textType {
+		case "task":
+			result, err = m.translator.TranslateTask(ctx, text)
+		case "rules":
+			result, err = m.translator.TranslateRules(ctx, text)
+		default:
+			result, err = m.translator.TranslateText(ctx, text, textType)
+		}
+
+		return translationCompleteMsg{
+			textType: textType,
+			result:   result,
+			err:      err,
+		}
+	}
+}
 
 // File Exclusion View
 func (m *Model) updateFileExclusion(msg tea.KeyMsg) (*Model, tea.Cmd) {
@@ -151,9 +205,22 @@ func (m *Model) renderTemplateSelection() string {
 func (m *Model) updateTaskDescription(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
 	case "f5":
-		// Continue to next step when F5 is pressed
-		m.currentView = ViewCustomRules
-		return m, m.rulesInput.Focus()
+		// Capture task text and check if translation is enabled
+		taskText := m.taskInput.Value()
+		m.taskText = taskText
+		
+		config := m.configMgr.Get()
+		if config.Translation.Enabled && strings.TrimSpace(taskText) != "" {
+			// Start translation
+			m.translating = true
+			m.translationStatus = "Translating task..."
+			cmd := m.translateText("task", taskText)
+			return m, cmd
+		} else {
+			// No translation needed, continue to next step
+			m.currentView = ViewCustomRules
+			return m, m.rulesInput.Focus()
+		}
 
 	case "tab":
 		// Toggle focus on the task input (for consistency)
@@ -200,8 +267,15 @@ func (m *Model) renderTaskDescription() string {
 		"",
 		examplesSection,
 		"",
-		helpStyle.Render("Enter: auto-number | Tab: focus field | F5: continue | Esc: back"),
 	}
+
+	// Add translation status if active
+	if m.translating && m.translationStatus != "" {
+		translationStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("33")) // Yellow
+		content = append(content, translationStyle.Render("🔄 "+m.translationStatus), "")
+	}
+
+	content = append(content, helpStyle.Render("Enter: auto-number | Tab: focus field | F5: continue | Esc: back"))
 
 	return strings.Join(content, "\n")
 }
@@ -210,14 +284,26 @@ func (m *Model) renderTaskDescription() string {
 func (m *Model) updateCustomRules(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
 	case "f5":
-		// Generate prompt
+		// Capture both task and rules text
 		m.taskText = m.taskInput.Value()
-		m.rulesText = m.rulesInput.Value()
-		if m.rulesText == "" {
-			m.rulesText = "no additional rules"
+		rulesText := m.rulesInput.Value()
+		if rulesText == "" {
+			rulesText = "no additional rules"
 		}
-		m.currentView = ViewGeneration
-		return m, m.generatePrompt()
+		m.rulesText = rulesText
+		
+		config := m.configMgr.Get()
+		if config.Translation.Enabled && strings.TrimSpace(rulesText) != "" && rulesText != "no additional rules" {
+			// Start translation for rules
+			m.translating = true
+			m.translationStatus = "Translating rules..."
+			cmd := m.translateText("rules", rulesText)
+			return m, cmd
+		} else {
+			// No translation needed, proceed to generation
+			m.currentView = ViewGeneration
+			return m, m.generatePrompt()
+		}
 
 	case "tab":
 		// Toggle focus on the rules input (for consistency)
@@ -265,10 +351,32 @@ Optional: Leave empty if no specific rules needed`)
 		"",
 		examplesSection,
 		"",
-		helpStyle.Render("Tab: focus field | F5: generate | Esc: back"),
 	}
 
+	// Add translation status if active
+	if m.translating && m.translationStatus != "" {
+		translationStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("33")) // Yellow
+		content = append(content, translationStyle.Render("🔄 "+m.translationStatus), "")
+	}
+
+	content = append(content, helpStyle.Render("Tab: focus field | F5: generate | Esc: back"))
+
 	return strings.Join(content, "\n")
+}
+
+// Configuration View
+func (m *Model) updateConfiguration(msg tea.KeyMsg) (*Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Exit configuration, return to file exclusion
+		m.currentView = ViewFileExclusion
+		return m, nil
+	}
+
+	// Let the configuration form handle the message
+	var cmd tea.Cmd
+	m.configForm, cmd = m.configForm.Update(tea.KeyMsg(msg))
+	return m, cmd
 }
 
 // Generation View

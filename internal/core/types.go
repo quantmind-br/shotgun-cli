@@ -3,6 +3,7 @@ package core
 import (
 	"sync"
 	"text/template"
+	"time"
 
 	gitignore "github.com/sabhiram/go-gitignore"
 )
@@ -196,4 +197,56 @@ func (ss *SelectionState) GetExcludedFiles() map[string]bool {
 		result[k] = v
 	}
 	return result
+}
+
+// Configuration types for OpenAI translation integration
+
+// Config represents the application settings
+type Config struct {
+	// OpenAI API Settings
+	OpenAI OpenAIConfig `json:"openai"`
+	
+	// Translation Settings
+	Translation TranslationConfig `json:"translation"`
+	
+	// Application Settings
+	App AppConfig `json:"app"`
+	
+	// Metadata
+	Version     string    `json:"version"`
+	LastUpdated time.Time `json:"lastUpdated"`
+}
+
+// OpenAIConfig contains OpenAI API configuration
+type OpenAIConfig struct {
+	// API Key (stored in keyring, this holds reference/alias)
+	APIKeyAlias string `json:"apiKeyAlias,omitempty"`
+	
+	// API Configuration
+	BaseURL    string `json:"baseUrl"`           // Default: "https://api.openai.com/v1"
+	Model      string `json:"model"`             // Default: "gpt-4o"
+	
+	// Request Settings
+	Timeout         int     `json:"timeout"`         // Seconds, Default: 300 (5 minutes)
+	MaxTokens       int     `json:"maxTokens"`       // Default: 4096
+	Temperature     float64 `json:"temperature"`     // Default: 0.7
+	
+	// Retry Settings
+	MaxRetries      int `json:"maxRetries"`      // Default: 3
+	RetryDelay      int `json:"retryDelay"`      // Seconds, Default: 2
+}
+
+// TranslationConfig contains translation settings
+type TranslationConfig struct {
+	Enabled        bool   `json:"enabled"`         // Default: false
+	TargetLanguage string `json:"targetLanguage"`  // Default: "en"
+	ContextPrompt  string `json:"contextPrompt"`   // Custom translation context
+}
+
+// AppConfig contains application preferences
+type AppConfig struct {
+	Theme           string `json:"theme"`           // Default: "auto" (auto/dark/light)
+	AutoSave        bool   `json:"autoSave"`        // Default: true
+	ShowLineNumbers bool   `json:"showLineNumbers"` // Default: true
+	DefaultTemplate string `json:"defaultTemplate"` // Default: "dev"
 }

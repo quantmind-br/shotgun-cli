@@ -21,6 +21,7 @@ const (
 	ViewTemplateSelection
 	ViewTaskDescription
 	ViewCustomRules
+	ViewConfiguration
 	ViewGeneration
 	ViewComplete
 )
@@ -36,12 +37,16 @@ type Model struct {
 	progressBar progress.Model
 	taskInput   NumberedTextArea
 	rulesInput  NumberedTextArea
+	configForm  ConfigFormModel
 
 	// Business Logic
-	scanner   *core.DirectoryScanner
-	generator *core.ContextGenerator
-	templates *core.SimpleTemplateProcessor
-	selection *core.SelectionState
+	scanner      *core.DirectoryScanner
+	generator    *core.ContextGenerator
+	templates    *core.SimpleTemplateProcessor
+	selection    *core.SelectionState
+	configMgr    *core.ConfigManager
+	keyMgr       *core.SecureKeyManager
+	translator   *core.Translator
 
 	// Application State
 	selectedDir     string
@@ -58,6 +63,13 @@ type Model struct {
 	generationCancel context.CancelFunc
 	progress         core.ProgressUpdate
 	outputPath       string
+
+	// Translation state
+	translating       bool
+	taskTranslated    string
+	rulesTranslated   string
+	translationStatus string
+	translationError  error
 
 	// Error handling
 	lastError error
@@ -94,6 +106,26 @@ func NewModel() (*Model, error) {
 	templates := core.NewTemplateProcessor()
 	selection := core.NewSelectionState()
 
+	// Initialize configuration components
+	configMgr, err := core.NewConfigManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize config manager: %w", err)
+	}
+
+	keyMgr, err := core.NewSecureKeyManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
+	}
+
+	// Initialize translator with current configuration
+	config := configMgr.Get()
+	translator, err := core.NewTranslator(config.OpenAI, config.Translation, keyMgr)
+	if err != nil {
+		// Translator initialization is optional - we can continue without it
+		// This allows the app to work even if translation is not configured
+		translator = nil
+	}
+
 	// Load templates from templates directory
 	templatesDir := "templates"
 	if err := templates.LoadTemplatesFromDirectory(templatesDir); err != nil {
@@ -109,15 +141,22 @@ func NewModel() (*Model, error) {
 		}
 	}
 
+	// Initialize configuration form
+	configForm := NewConfigFormModel(config, keyMgr)
+
 	return &Model{
 		currentView:     ViewFileExclusion,
 		progressBar:     prog,
 		taskInput:       taskInput,
 		rulesInput:      rulesInput,
+		configForm:      configForm,
 		scanner:         scanner,
 		generator:       generator,
 		templates:       templates,
 		selection:       selection,
+		configMgr:       configMgr,
+		keyMgr:          keyMgr,
+		translator:      translator,
 		selectedDir:     currentDir,
 		currentTemplate: core.TemplateDevKey, // Default to dev template
 		templateIndex:   0,                   // Start with first template
@@ -209,6 +248,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 
+		case "o":
+			// Access configuration (options) (only from main views, not during generation)
+			if m.currentView != ViewGeneration && m.currentView != ViewConfiguration {
+				m.currentView = ViewConfiguration
+				return m, nil
+			}
+
 		case "?":
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -234,6 +280,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTaskDescription(msg)
 		case ViewCustomRules:
 			return m.updateCustomRules(msg)
+		case ViewConfiguration:
+			return m.updateConfiguration(msg)
 		case ViewGeneration:
 			return m.updateGeneration(msg)
 		case ViewComplete:
@@ -259,6 +307,55 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastError = msg.err
 		m.generating = false
 		return m, nil
+
+	case translationCompleteMsg:
+		m.translating = false
+		m.translationError = msg.err
+		
+		if msg.err != nil {
+			m.translationStatus = fmt.Sprintf("Translation failed: %s", msg.err.Error())
+			// Continue with original text
+		} else {
+			switch msg.textType {
+			case "task":
+				m.taskTranslated = msg.result.TranslatedText
+				m.translationStatus = "Task translated successfully"
+				// Continue to rules input
+				m.currentView = ViewCustomRules
+				return m, m.rulesInput.Focus()
+			case "rules":
+				m.rulesTranslated = msg.result.TranslatedText
+				m.translationStatus = "Rules translated successfully"
+				// Use translated text for generation
+				if m.taskTranslated != "" {
+					m.taskText = m.taskTranslated
+				}
+				if m.rulesTranslated != "" {
+					m.rulesText = m.rulesTranslated
+				}
+				// Continue to generation
+				m.currentView = ViewGeneration
+				return m, m.generatePrompt()
+			}
+		}
+		return m, nil
+
+	case configSavedMsg:
+		// Configuration was saved successfully
+		// Reload translator with new config if translation settings changed
+		config := m.configMgr.Get()
+		if m.translator != nil {
+			m.translator.UpdateConfig(config.OpenAI, config.Translation)
+		}
+		return m, nil
+
+	case configResetMsg:
+		// Configuration was reset to defaults
+		return m, nil
+
+	case connectionTestMsg:
+		// Handle connection test results
+		return m, nil
 	}
 
 	// Update components
@@ -276,6 +373,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.currentView == ViewCustomRules {
 		m.rulesInput, cmd = m.rulesInput.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	if m.currentView == ViewConfiguration {
+		m.configForm, cmd = m.configForm.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -297,6 +399,8 @@ func (m *Model) View() string {
 		return m.renderTaskDescription()
 	case ViewCustomRules:
 		return m.renderCustomRules()
+	case ViewConfiguration:
+		return m.configForm.View()
 	case ViewGeneration:
 		return m.renderGeneration()
 	case ViewComplete:
@@ -338,6 +442,7 @@ KEYBOARD SHORTCUTS:
   General:
     Ctrl+Q, Ctrl+C    Quit application
     ?            Toggle this help
+    o            Access configuration/settings
     Esc          Go back to previous step
 
   File Exclusion:
