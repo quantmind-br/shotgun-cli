@@ -61,10 +61,10 @@ func (m *Model) renderFileExclusion() string {
 // Prompt Composition View
 func (m *Model) updatePromptComposition(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
-	case "enter", "g":
-		// Generate prompt
-		m.taskText = m.taskInput.Value()
-		m.rulesText = m.rulesInput.Value()
+	case "ctrl+enter":
+		// Generate prompt with numbered content
+		m.taskText = m.taskInput.GetNumberedValue()
+		m.rulesText = m.rulesInput.GetNumberedValue()
 		if m.rulesText == "" {
 			m.rulesText = "no additional rules"
 		}
@@ -72,13 +72,13 @@ func (m *Model) updatePromptComposition(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		return m, m.generatePrompt()
 
 	case "tab":
-		// Switch focus between inputs
+		// Switch focus between numbered text areas
 		if m.taskInput.Focused() {
 			m.taskInput.Blur()
-			m.rulesInput.Focus()
+			return m, m.rulesInput.Focus()
 		} else {
 			m.rulesInput.Blur()
-			m.taskInput.Focus()
+			return m, m.taskInput.Focus()
 		}
 		return m, nil
 
@@ -123,11 +123,23 @@ func (m *Model) renderPromptComposition() string {
 			tmpl.Description)
 	}
 
-	// Task input
-	taskSection := "Task Description:\n" + m.taskInput.View()
+	// Task input with numbering feedback
+	taskValue := m.taskInput.Value()
+	taskNumbered := core.HasNumberedContent(taskValue)
+	taskIndicator := ""
+	if taskNumbered {
+		taskIndicator = " ✓ numbered"
+	}
+	taskSection := fmt.Sprintf("Task Description%s:\n", taskIndicator) + m.taskInput.View()
 
-	// Rules input
-	rulesSection := "Custom Rules:\n" + m.rulesInput.View()
+	// Rules input with numbering feedback
+	rulesValue := m.rulesInput.Value()
+	rulesNumbered := core.HasNumberedContent(rulesValue)
+	rulesIndicator := ""
+	if rulesNumbered {
+		rulesIndicator = " ✓ numbered"
+	}
+	rulesSection := fmt.Sprintf("Custom Rules%s:\n", rulesIndicator) + m.rulesInput.View()
 
 	content := []string{
 		title,
@@ -140,7 +152,7 @@ func (m *Model) renderPromptComposition() string {
 		"",
 		rulesSection,
 		"",
-		helpStyle.Render("Tab: switch fields | 1-4: select template | Enter/g: generate | Esc: back"),
+		helpStyle.Render("Tab: switch fields | Enter: auto-number | 1-4: select template | Ctrl+Enter: generate | Esc: back"),
 	}
 
 	if m.lastError != nil {
@@ -283,12 +295,23 @@ func (m *Model) generatePrompt() tea.Cmd {
 			return errorMsg{err: err}
 		}
 
-		// Generate prompt
+		// Generate prompt with enhanced formatting
+		formattedTask, _ := core.ReformatWithNumbers(m.taskText)
+		formattedRules, _ := core.ReformatWithNumbers(m.rulesText)
+		
 		templateData := core.TemplateData{
+			// Original fields (backward compatibility)
 			Task:          m.taskText,
 			Rules:         m.rulesText,
 			CurrentDate:   time.Now().Format("2006-01-02"),
 			FileStructure: fileContext,
+			
+			// Enhanced formatted fields
+			FormattedTask:     formattedTask,
+			FormattedRules:    formattedRules,
+			FormattingOptions: core.DefaultFormattingOptions(),
+			HasNumberedTasks:  core.HasNumberedContent(m.taskText),
+			HasNumberedRules:  core.HasNumberedContent(m.rulesText),
 		}
 
 		prompt, err := m.templates.GeneratePrompt(m.currentTemplate, templateData)

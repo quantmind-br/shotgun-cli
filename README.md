@@ -140,8 +140,9 @@ shotgun-cli --help       # Show help
 
 ### Prompt Composition
 - `Tab`: Switch between template/task/rules
+- `Enter`: Auto-number current line
 - `1-4`: Select template (1=Dev, 2=Arch, 3=Debug, 4=PM)
-- `Enter` or `g`: Generate prompt
+- `Ctrl+Enter`: Generate prompt
 
 ## Template Types
 

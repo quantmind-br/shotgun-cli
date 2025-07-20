@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -34,8 +32,8 @@ type Model struct {
 	// Components
 	fileTree    FileTreeModel
 	progressBar progress.Model
-	taskInput   textinput.Model
-	rulesInput  textarea.Model
+	taskInput   NumberedTextArea
+	rulesInput  NumberedTextArea
 
 	// Business Logic
 	scanner   *core.DirectoryScanner
@@ -74,16 +72,16 @@ func NewModel() (*Model, error) {
 	// Initialize progress bar
 	prog := progress.New(progress.WithDefaultGradient())
 
-	// Initialize text input for task
-	taskInput := textinput.New()
-	taskInput.Placeholder = "Enter your task description..."
+	// Initialize numbered textarea for task
+	taskInput := NewNumberedTextArea()
+	taskInput.SetPlaceholder("Enter your task description... (Press Enter to auto-number)")
 	taskInput.Focus()
-	taskInput.CharLimit = 500
-	taskInput.Width = 50
+	taskInput.SetWidth(60)
+	taskInput.SetHeight(4)
 
-	// Initialize textarea for rules
-	rulesInput := textarea.New()
-	rulesInput.Placeholder = "Enter custom rules (optional)..."
+	// Initialize numbered textarea for rules
+	rulesInput := NewNumberedTextArea()
+	rulesInput.SetPlaceholder("Enter custom rules (optional)... (Press Enter to auto-number)")
 	rulesInput.SetWidth(60)
 	rulesInput.SetHeight(5)
 
@@ -183,7 +181,6 @@ func (m *Model) GetSelectedDir() string {
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		textinput.Blink,
 		m.scanDirectory(), // Start scanning immediately
 	)
 }
@@ -339,7 +336,8 @@ KEYBOARD SHORTCUTS:
 
   Prompt Composition:
     Tab          Switch between template/task/rules
-    Enter        Confirm and generate
+    Enter        Auto-number current line
+    Ctrl+Enter   Generate prompt
     1-4          Select template (1=Dev, 2=Arch, 3=Debug, 4=PM)
 
 Press ? or Esc to close this help.

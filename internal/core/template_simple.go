@@ -65,10 +65,23 @@ func (stp *SimpleTemplateProcessor) GeneratePrompt(templateKey string, data Temp
 		data.CurrentDate = time.Now().Format("2006-01-02")
 	}
 
-	// Simple string replacement (matching existing JavaScript behavior)
+	// Enhanced string replacement with formatted content support
 	result := templateContent
-	result = strings.ReplaceAll(result, "{TASK}", data.Task)
-	result = strings.ReplaceAll(result, "{RULES}", data.Rules)
+	
+	// Use formatted fields when available, fallback to original fields
+	taskContent := data.Task
+	if data.FormattedTask != "" {
+		taskContent = data.FormattedTask
+	}
+	
+	rulesContent := data.Rules
+	if data.FormattedRules != "" {
+		rulesContent = data.FormattedRules
+	}
+	
+	// Apply replacements
+	result = strings.ReplaceAll(result, "{TASK}", taskContent)
+	result = strings.ReplaceAll(result, "{RULES}", rulesContent)
 	result = strings.ReplaceAll(result, "{FILE_STRUCTURE}", data.FileStructure)
 	result = strings.ReplaceAll(result, "{CURRENT_DATE}", data.CurrentDate)
 

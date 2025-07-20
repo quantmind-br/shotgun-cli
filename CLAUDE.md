@@ -39,15 +39,17 @@ npm run clean            # Clean build artifacts
 ```
 internal/
 ├── core/           # Business logic layer
-│   ├── types.go    # Core data structures and interfaces
+│   ├── types.go    # Core data structures and interfaces (enhanced TemplateData)
 │   ├── scanner.go  # Directory scanning with gitignore support
 │   ├── generator.go # Context generation and file processing
 │   ├── template.go # Template processing (complex templates)
-│   └── template_simple.go # Simple template processing
+│   ├── template_simple.go # Simple template processing (enhanced formatting)
+│   └── formatter.go # Auto-numbering and text formatting logic
 ├── ui/             # BubbleTea UI layer
 │   ├── app.go      # Main application model and state
 │   ├── filetree.go # File tree UI with exclusion controls
-│   └── views.go    # View rendering logic
+│   ├── components.go # NumberedTextArea component with auto-numbering
+│   └── views.go    # View rendering logic (enhanced prompt composition)
 ```
 
 ### Key Components
@@ -67,16 +69,67 @@ internal/
 
 **FileTreeModel**: Interactive TUI component for inverse file selection (exclude rather than include files).
 
+**NumberedTextArea**: Enhanced multiline input component with automatic numbering capabilities for both Task Description and Custom Rules fields. Features include:
+- Auto-numbering on Enter key press (1., 2., 3., etc.)
+- Smart formatting detection and consistency
+- Visual indicators for numbered vs unnumbered content
+- Backward compatibility with existing templates
+
 ### State Management
 - `ViewState` enum tracks current UI step (FileExclusion → PromptComposition → Generation → Complete)
 - `SelectionState` manages file inclusion/exclusion with thread-safe operations
 - Progress updates flow through channels for real-time UI feedback
 
 ### Template System
-Templates use Go's `text/template` with these variables:
-- `{TASK}` - User's task description
-- `{RULES}` - Custom rules or "no additional rules"  
+Templates use enhanced string replacement with automatic numbering support:
+- `{TASK}` - User's task description (automatically uses formatted version when available)
+- `{RULES}` - Custom rules or "no additional rules" (automatically uses formatted version when available)
 - `{FILE_STRUCTURE}` - Generated file structure and content
+- `{CURRENT_DATE}` - Current date in YYYY-MM-DD format
+
+**Enhanced Features:**
+- Automatic numbered list formatting (1., 2., 3., etc.)
+- Smart detection of numbered vs unnumbered content
+- Backward compatibility with existing templates
+- Dual-field approach (original + formatted content)
+
+## Enhanced Input System
+
+### Auto-Numbering Functionality
+The application now supports multiline input with automatic numbering for both Task Description and Custom Rules fields:
+
+**Task Description Examples:**
+```
+Input (press Enter to auto-number):
+Create login form
+Add validation
+Test the feature
+
+Output:
+1. Create login form
+2. Add validation  
+3. Test the feature
+```
+
+**Custom Rules Examples:**
+```
+Input:
+Use PostgreSQL for database
+Focus on backend logic
+Consider performance implications
+
+Output:
+1. Use PostgreSQL for database
+2. Focus on backend logic
+3. Consider performance implications
+```
+
+### Keyboard Shortcuts (Updated)
+- **Enter**: Auto-number current line and create new numbered item
+- **Tab**: Switch between Task Description and Custom Rules fields
+- **1-4**: Select template (1=Dev, 2=Architect, 3=Debug, 4=Project Manager)
+- **Ctrl+Enter**: Generate prompt with numbered content
+- **Esc**: Go back to previous step
 
 ## Build System
 
