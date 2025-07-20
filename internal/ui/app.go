@@ -18,7 +18,9 @@ type ViewState int
 
 const (
 	ViewFileExclusion ViewState = iota
-	ViewPromptComposition
+	ViewTemplateSelection
+	ViewTaskDescription
+	ViewCustomRules
 	ViewGeneration
 	ViewComplete
 )
@@ -44,6 +46,7 @@ type Model struct {
 	// Application State
 	selectedDir     string
 	currentTemplate string
+	templateIndex   int // Index for arrow key navigation
 	taskText        string
 	rulesText       string
 	fileTree_root   *core.FileNode
@@ -72,18 +75,18 @@ func NewModel() (*Model, error) {
 	// Initialize progress bar
 	prog := progress.New(progress.WithDefaultGradient())
 
-	// Initialize numbered textarea for task
+	// Initialize numbered textarea for task (enhanced for full-screen)
 	taskInput := NewNumberedTextArea()
-	taskInput.SetPlaceholder("Enter your task description... (Press Enter to auto-number)")
+	taskInput.SetPlaceholder("Enter your task description...")
 	taskInput.Focus()
-	taskInput.SetWidth(60)
-	taskInput.SetHeight(4)
+	taskInput.SetWidth(80) // Increased width for full-screen
+	taskInput.SetHeight(8) // Increased height for more content
 
-	// Initialize numbered textarea for rules
+	// Initialize numbered textarea for rules (enhanced for full-screen)
 	rulesInput := NewNumberedTextArea()
-	rulesInput.SetPlaceholder("Enter custom rules (optional)... (Press Enter to auto-number)")
-	rulesInput.SetWidth(60)
-	rulesInput.SetHeight(5)
+	rulesInput.SetPlaceholder("Enter custom rules (optional)...")
+	rulesInput.SetWidth(80) // Increased width for full-screen
+	rulesInput.SetHeight(8) // Increased height for more content
 
 	// Initialize core components
 	scanner := core.NewDirectoryScanner()
@@ -117,6 +120,7 @@ func NewModel() (*Model, error) {
 		selection:       selection,
 		selectedDir:     currentDir,
 		currentTemplate: core.TemplateDevKey, // Default to dev template
+		templateIndex:   0,                   // Start with first template
 		rulesText:       "no additional rules",
 	}, nil
 }
@@ -127,12 +131,12 @@ func getCurrentWorkingDirectory() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot get current directory: %w", err)
 	}
-	
+
 	// Validate directory is accessible
 	if err := validateDirectoryAccess(dir); err != nil {
 		return "", fmt.Errorf("current directory validation failed: %w", err)
 	}
-	
+
 	return dir, nil
 }
 
@@ -148,17 +152,17 @@ func validateDirectoryAccess(path string) error {
 		}
 		return fmt.Errorf("cannot access directory %s: %w", path, err)
 	}
-	
+
 	if !info.IsDir() {
 		return fmt.Errorf("path is not a directory: %s", path)
 	}
-	
+
 	// Check read permissions
 	_, err = os.ReadDir(path)
 	if err != nil {
 		return fmt.Errorf("cannot read directory contents: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -197,7 +201,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "ctrl+q":
 			if m.generating {
 				if m.generationCancel != nil {
 					m.generationCancel()
@@ -224,14 +228,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.currentView {
 		case ViewFileExclusion:
 			return m.updateFileExclusion(msg)
-		case ViewPromptComposition:
-			return m.updatePromptComposition(msg)
+		case ViewTemplateSelection:
+			return m.updateTemplateSelection(msg)
+		case ViewTaskDescription:
+			return m.updateTaskDescription(msg)
+		case ViewCustomRules:
+			return m.updateCustomRules(msg)
 		case ViewGeneration:
 			return m.updateGeneration(msg)
 		case ViewComplete:
 			return m.updateComplete(msg)
 		}
-
 
 	case scanCompleteMsg:
 		m.fileTree_root = msg.root
@@ -262,10 +269,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	if m.currentView == ViewPromptComposition {
+	if m.currentView == ViewTaskDescription {
 		m.taskInput, cmd = m.taskInput.Update(msg)
 		cmds = append(cmds, cmd)
+	}
 
+	if m.currentView == ViewCustomRules {
 		m.rulesInput, cmd = m.rulesInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -282,8 +291,12 @@ func (m *Model) View() string {
 	switch m.currentView {
 	case ViewFileExclusion:
 		return m.renderFileExclusion()
-	case ViewPromptComposition:
-		return m.renderPromptComposition()
+	case ViewTemplateSelection:
+		return m.renderTemplateSelection()
+	case ViewTaskDescription:
+		return m.renderTaskDescription()
+	case ViewCustomRules:
+		return m.renderCustomRules()
 	case ViewGeneration:
 		return m.renderGeneration()
 	case ViewComplete:
@@ -319,9 +332,11 @@ func (m *Model) renderHelp() string {
 	help := `
 shotgun-cli - Help
 
+WORKFLOW: File Exclusion → Template Selection → Task Description → Custom Rules → Generation
+
 KEYBOARD SHORTCUTS:
   General:
-    q, Ctrl+C    Quit application
+    Ctrl+Q, Ctrl+C    Quit application
     ?            Toggle this help
     Esc          Go back to previous step
 
@@ -334,11 +349,23 @@ KEYBOARD SHORTCUTS:
     a            Exclude all files
     A            Include all files
 
-  Prompt Composition:
-    Tab          Switch between template/task/rules
-    Enter        Auto-number current line
-    Ctrl+Enter   Generate prompt
-    1-4          Select template (1=Dev, 2=Arch, 3=Debug, 4=PM)
+  Template Selection:
+    ↑/↓ (k/j)    Navigate template options
+    1-4          Quick select template
+    Enter        Confirm selection and continue
+
+  Task Description:
+    Tab          Focus/unfocus input field
+    F5           Continue to next step
+
+  Custom Rules:
+    Tab          Focus/unfocus input field
+    F5           Generate prompt
+
+  Generation/Complete:
+    Ctrl+C       Cancel generation
+    Enter        Quit (when complete)
+    n            Start new prompt (when complete)
 
 Press ? or Esc to close this help.
 `

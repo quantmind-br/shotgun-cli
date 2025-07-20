@@ -114,15 +114,16 @@ shotgun-cli --help       # Show help
 
 ## Workflow
 
-1. **Select Project Directory**: Navigate and select your project folder
-2. **File Exclusion**: Choose files to exclude from the prompt (inverse selection)
-3. **Template & Task**: Select a prompt template and describe your task
-4. **Generate**: Creates and saves the prompt to current directory
+1. **File Exclusion**: Choose files to exclude from the prompt (inverse selection)
+2. **Template Selection**: Select from 4 specialized prompt templates with full descriptions
+3. **Task Description**: Describe your task in dedicated full-screen interface
+4. **Custom Rules**: Add optional rules and constraints in dedicated full-screen interface
+5. **Generate**: Creates and saves the prompt to current directory
 
 ## Keyboard Shortcuts
 
 ### General
-- `q`, `Ctrl+C`: Quit application
+- `Ctrl+Q`, `Ctrl+C`: Quit application
 - `?`: Toggle help
 - `Esc`: Go back to previous step
 
@@ -138,11 +139,18 @@ shotgun-cli --help       # Show help
 - `a`: Exclude all files
 - `A`: Include all files
 
-### Prompt Composition
-- `Tab`: Switch between template/task/rules
-- `Enter`: Auto-number current line
-- `1-4`: Select template (1=Dev, 2=Arch, 3=Debug, 4=PM)
-- `Ctrl+Enter`: Generate prompt
+### Template Selection
+- `↑/↓` (or `k/j`): Navigate template options
+- `1-4`: Quick select template by number
+- `Enter`: Confirm selection and continue
+
+### Task Description
+- `Tab`: Focus/unfocus input field
+- `F5`: Continue to Custom Rules
+
+### Custom Rules
+- `Tab`: Focus/unfocus input field
+- `F5`: Generate prompt
 
 ## Template Types
 

@@ -53,20 +53,10 @@ type TemplateProcessor struct {
 
 // TemplateData contains data for template substitution
 type TemplateData struct {
-	// Original fields (maintained for backward compatibility)
 	Task          string
 	Rules         string
 	CurrentDate   string
 	FileStructure string
-	
-	// Enhanced formatted fields for numbered content
-	FormattedTask  string
-	FormattedRules string
-	
-	// Formatting options and metadata
-	FormattingOptions FormattingOptions
-	HasNumberedTasks  bool
-	HasNumberedRules  bool
 }
 
 // SelectionState manages file inclusion/exclusion state

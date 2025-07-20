@@ -18,7 +18,7 @@ func (m *Model) updateFileExclusion(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	case "c":
 		// Continue to next step
 		m.includedFiles = core.GetIncludedFiles(m.fileTree_root, m.selection)
-		m.currentView = ViewPromptComposition
+		m.currentView = ViewTemplateSelection
 		return m, nil
 	}
 
@@ -30,7 +30,7 @@ func (m *Model) updateFileExclusion(msg tea.KeyMsg) (*Model, tea.Cmd) {
 
 func (m *Model) renderFileExclusion() string {
 	title := titleStyle.Render("shotgun-cli - File Exclusion")
-	
+
 	// Show full current directory path
 	dirPath := m.selectedDir
 	if len(dirPath) > 60 {
@@ -58,88 +58,82 @@ func (m *Model) renderFileExclusion() string {
 	return strings.Join(content, "\n")
 }
 
-// Prompt Composition View
-func (m *Model) updatePromptComposition(msg tea.KeyMsg) (*Model, tea.Cmd) {
+// Template Selection View
+func (m *Model) updateTemplateSelection(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+enter":
-		// Generate prompt with numbered content
-		m.taskText = m.taskInput.GetNumberedValue()
-		m.rulesText = m.rulesInput.GetNumberedValue()
-		if m.rulesText == "" {
-			m.rulesText = "no additional rules"
-		}
-		m.currentView = ViewGeneration
-		return m, m.generatePrompt()
+	case "enter":
+		// Confirm template selection and move to task description
+		m.currentView = ViewTaskDescription
+		return m, m.taskInput.Focus()
 
-	case "tab":
-		// Switch focus between numbered text areas
-		if m.taskInput.Focused() {
-			m.taskInput.Blur()
-			return m, m.rulesInput.Focus()
+	case "up", "k":
+		// Navigate to previous template
+		if m.templateIndex > 0 {
+			m.templateIndex--
 		} else {
-			m.rulesInput.Blur()
-			return m, m.taskInput.Focus()
+			m.templateIndex = len(core.AvailableTemplates) - 1 // Wrap to last
 		}
+		m.currentTemplate = core.AvailableTemplates[m.templateIndex].Key
+		return m, nil
+
+	case "down", "j":
+		// Navigate to next template
+		if m.templateIndex < len(core.AvailableTemplates)-1 {
+			m.templateIndex++
+		} else {
+			m.templateIndex = 0 // Wrap to first
+		}
+		m.currentTemplate = core.AvailableTemplates[m.templateIndex].Key
 		return m, nil
 
 	case "1":
-		m.currentTemplate = core.TemplateDevKey
+		m.templateIndex = 0
+		m.currentTemplate = core.AvailableTemplates[0].Key
 		return m, nil
 	case "2":
-		m.currentTemplate = core.TemplateArchKey
+		if len(core.AvailableTemplates) > 1 {
+			m.templateIndex = 1
+			m.currentTemplate = core.AvailableTemplates[1].Key
+		}
 		return m, nil
 	case "3":
-		m.currentTemplate = core.TemplateBugKey
+		if len(core.AvailableTemplates) > 2 {
+			m.templateIndex = 2
+			m.currentTemplate = core.AvailableTemplates[2].Key
+		}
 		return m, nil
 	case "4":
-		m.currentTemplate = core.TemplateProjectKey
+		if len(core.AvailableTemplates) > 3 {
+			m.templateIndex = 3
+			m.currentTemplate = core.AvailableTemplates[3].Key
+		}
 		return m, nil
 	}
-
-	var cmd tea.Cmd
-	if m.taskInput.Focused() {
-		m.taskInput, cmd = m.taskInput.Update(msg)
-	} else {
-		m.rulesInput, cmd = m.rulesInput.Update(msg)
-	}
-	return m, cmd
+	return m, nil
 }
 
-func (m *Model) renderPromptComposition() string {
-	title := titleStyle.Render("shotgun-cli - Prompt Composition")
-	subtitle := subtitleStyle.Render(fmt.Sprintf("Files selected: %d", len(m.includedFiles)))
+func (m *Model) renderTemplateSelection() string {
+	title := titleStyle.Render("shotgun-cli - Template Selection")
+	subtitle := subtitleStyle.Render(fmt.Sprintf("Files selected: %d | Step 2 of 4", len(m.includedFiles)))
 
-	// Template selection
-	templateSection := "Select Template:\n"
-	for _, tmpl := range core.AvailableTemplates {
-		indicator := " "
-		if tmpl.Key == m.currentTemplate {
-			indicator = ">"
+	// Enhanced template selection with full descriptions
+	templateSection := "Select a template for your prompt:\n\n"
+
+	for i, tmpl := range core.AvailableTemplates {
+		numberPrefix := fmt.Sprintf("%d. ", i+1)
+
+		if i == m.templateIndex {
+			indicator := "▶ "
+			// Highlight selected template with description on same line
+			templateSection += statusStyle.Render(fmt.Sprintf("%s%s%s - %s\n", indicator, numberPrefix, tmpl.Name, tmpl.Description))
+		} else {
+			indicator := "  "
+			// Regular template with description on same line
+			templateSection += fmt.Sprintf("%s%s%s - ", indicator, numberPrefix, tmpl.Name)
+			templateSection += subtitleStyle.Render(tmpl.Description) + "\n"
 		}
-		templateSection += fmt.Sprintf("%s [%s] %s - %s\n",
-			indicator,
-			strings.ToUpper(tmpl.Key[:1]),
-			tmpl.Name,
-			tmpl.Description)
+		templateSection += "\n"
 	}
-
-	// Task input with numbering feedback
-	taskValue := m.taskInput.Value()
-	taskNumbered := core.HasNumberedContent(taskValue)
-	taskIndicator := ""
-	if taskNumbered {
-		taskIndicator = " ✓ numbered"
-	}
-	taskSection := fmt.Sprintf("Task Description%s:\n", taskIndicator) + m.taskInput.View()
-
-	// Rules input with numbering feedback
-	rulesValue := m.rulesInput.Value()
-	rulesNumbered := core.HasNumberedContent(rulesValue)
-	rulesIndicator := ""
-	if rulesNumbered {
-		rulesIndicator = " ✓ numbered"
-	}
-	rulesSection := fmt.Sprintf("Custom Rules%s:\n", rulesIndicator) + m.rulesInput.View()
 
 	content := []string{
 		title,
@@ -147,16 +141,131 @@ func (m *Model) renderPromptComposition() string {
 		subtitle,
 		"",
 		templateSection,
+		helpStyle.Render("↑/↓ (k/j): navigate | 1-4: quick select | Enter: confirm | Esc: back"),
+	}
+
+	return strings.Join(content, "\n")
+}
+
+// Task Description View
+func (m *Model) updateTaskDescription(msg tea.KeyMsg) (*Model, tea.Cmd) {
+	switch msg.String() {
+	case "f5":
+		// Continue to next step when F5 is pressed
+		m.currentView = ViewCustomRules
+		return m, m.rulesInput.Focus()
+
+	case "tab":
+		// Toggle focus on the task input (for consistency)
+		if m.taskInput.Focused() {
+			m.taskInput.Blur()
+		} else {
+			return m, m.taskInput.Focus()
+		}
+		return m, nil
+	}
+
+	// Handle task input updates
+	var cmd tea.Cmd
+	m.taskInput, cmd = m.taskInput.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) renderTaskDescription() string {
+	// Adjust textarea for available screen space
+	if m.width > 0 && m.height > 0 {
+		m.taskInput.SetFullScreenMode(m.width, m.height)
+	}
+
+	title := titleStyle.Render("shotgun-cli - Task Description")
+
+	// Show selected template for context
+	selectedTemplate := core.AvailableTemplates[m.templateIndex]
+	templateInfo := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 3 of 4", selectedTemplate.Name))
+
+	// Task input section with instructions
+	instructions := "Describe what you want to accomplish:"
+
+	taskSection := fmt.Sprintf("%s\n\n%s", instructions, m.taskInput.View())
+
+	// Examples section (more compact for full-screen)
+	examplesSection := helpStyle.Render(`Examples: • Implement user authentication • Add validation to forms • Fix memory leak in data processing`)
+
+	content := []string{
+		title,
+		"",
+		templateInfo,
 		"",
 		taskSection,
 		"",
-		rulesSection,
+		examplesSection,
 		"",
-		helpStyle.Render("Tab: switch fields | Enter: auto-number | 1-4: select template | Ctrl+Enter: generate | Esc: back"),
+		helpStyle.Render("Enter: auto-number | Tab: focus field | F5: continue | Esc: back"),
 	}
 
-	if m.lastError != nil {
-		content = append(content, "", errorStyle.Render("Error: "+m.lastError.Error()))
+	return strings.Join(content, "\n")
+}
+
+// Custom Rules View
+func (m *Model) updateCustomRules(msg tea.KeyMsg) (*Model, tea.Cmd) {
+	switch msg.String() {
+	case "f5":
+		// Generate prompt
+		m.taskText = m.taskInput.Value()
+		m.rulesText = m.rulesInput.Value()
+		if m.rulesText == "" {
+			m.rulesText = "no additional rules"
+		}
+		m.currentView = ViewGeneration
+		return m, m.generatePrompt()
+
+	case "tab":
+		// Toggle focus on the rules input (for consistency)
+		if m.rulesInput.Focused() {
+			m.rulesInput.Blur()
+		} else {
+			return m, m.rulesInput.Focus()
+		}
+		return m, nil
+	}
+
+	// Handle rules input updates
+	var cmd tea.Cmd
+	m.rulesInput, cmd = m.rulesInput.Update(msg)
+	return m, cmd
+}
+
+func (m *Model) renderCustomRules() string {
+	// Adjust textarea for available screen space
+	if m.width > 0 && m.height > 0 {
+		m.rulesInput.SetFullScreenMode(m.width, m.height)
+	}
+
+	title := titleStyle.Render("shotgun-cli - Custom Rules")
+
+	// Show selected template and progress for context
+	selectedTemplate := core.AvailableTemplates[m.templateIndex]
+	templateInfo := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 4 of 4", selectedTemplate.Name))
+
+	// Rules input section with instructions
+	instructions := "Add custom rules and constraints (optional):"
+
+	rulesSection := fmt.Sprintf("%s\n\n%s", instructions, m.rulesInput.View())
+
+	// Examples section for rules (more compact for full-screen)
+	examplesSection := helpStyle.Render(`Examples: • Use TypeScript • Focus on performance • Follow existing patterns • Consider mobile
+Optional: Leave empty if no specific rules needed`)
+
+	content := []string{
+		title,
+		"",
+		templateInfo,
+		"",
+		rulesSection,
+		"",
+		examplesSection,
+		"",
+		helpStyle.Render("Tab: focus field | F5: generate | Esc: back"),
 	}
 
 	return strings.Join(content, "\n")
@@ -209,7 +318,7 @@ func (m *Model) renderGeneration() string {
 // Complete View
 func (m *Model) updateComplete(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
-	case "enter", "q":
+	case "enter":
 		return m, tea.Quit
 	case "v":
 		// View the output file (simplified - just show a message)
@@ -223,6 +332,9 @@ func (m *Model) updateComplete(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		m.rulesInput.SetValue("")
 		m.selection.Reset()
 		m.lastError = nil
+		// Reset template selection to default
+		m.templateIndex = 0
+		m.currentTemplate = core.TemplateDevKey
 		return m, m.scanDirectory()
 	}
 	return m, nil
@@ -256,7 +368,7 @@ func (m *Model) renderComplete() string {
 		"",
 		stats,
 		"",
-		helpStyle.Render("Enter/q: quit | n: new prompt | v: view output"),
+		helpStyle.Render("Enter: quit | n: new prompt | v: view output"),
 	}
 
 	if m.lastError != nil {
@@ -295,23 +407,11 @@ func (m *Model) generatePrompt() tea.Cmd {
 			return errorMsg{err: err}
 		}
 
-		// Generate prompt with enhanced formatting
-		formattedTask, _ := core.ReformatWithNumbers(m.taskText)
-		formattedRules, _ := core.ReformatWithNumbers(m.rulesText)
-		
 		templateData := core.TemplateData{
-			// Original fields (backward compatibility)
 			Task:          m.taskText,
 			Rules:         m.rulesText,
 			CurrentDate:   time.Now().Format("2006-01-02"),
 			FileStructure: fileContext,
-			
-			// Enhanced formatted fields
-			FormattedTask:     formattedTask,
-			FormattedRules:    formattedRules,
-			FormattingOptions: core.DefaultFormattingOptions(),
-			HasNumberedTasks:  core.HasNumberedContent(m.taskText),
-			HasNumberedRules:  core.HasNumberedContent(m.rulesText),
 		}
 
 		prompt, err := m.templates.GeneratePrompt(m.currentTemplate, templateData)
