@@ -1,0 +1,93 @@
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    binary: shotgun-cli
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - templates/*
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: your-username
+    name: shotgun-cli
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: shotgun-cli
+    tap:
+      owner: your-username
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://github.com/your-username/shotgun-cli
+    description: Terminal-based prompt generation tool built with Go and BubbleTea
+    license: MIT
+    test: |
+      system "#{bin}/shotgun-cli --version"
+    install: |
+      bin.install "shotgun-cli"
+      (share/"shotgun-cli").install "templates"
+
+nfpms:
+  - file_name_template: '{{ .ConventionalFileName }}'
+    id: packages
+    homepage: https://github.com/your-username/shotgun-cli
+    description: Terminal-based prompt generation tool built with Go and BubbleTea
+    maintainer: Your Name <your.email@example.com>
+    license: MIT
+    vendor: Your Organization
+    bindir: /usr/bin
+    section: utils
+    contents:
+      - src: ./templates/*
+        dst: /usr/share/shotgun-cli/templates/
+    formats:
+      - apk
+      - deb
+      - rpm
+      - termux.deb
+      - archlinux

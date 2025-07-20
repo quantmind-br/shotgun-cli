@@ -1,0 +1,59 @@
+{
+  "name": "shotgun-cli",
+  "version": "1.0.0",
+  "description": "Terminal-based prompt generation tool built with Go and BubbleTea",
+  "main": "index.js",
+  "bin": {
+    "shotgun-cli": "./bin/shotgun-cli-wrapper.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "build": "node scripts/build.js",
+    "build:local": "go build -o bin/shotgun-cli .",
+    "build:windows": "node scripts/build.js windows",
+    "build:linux": "node scripts/build.js linux", 
+    "build:macos": "node scripts/build.js macos",
+    "build:all": "node scripts/build.js all",
+    "clean": "node scripts/clean.js",
+    "test": "go test ./...",
+    "dev": "go run .",
+    "lint": "go vet ./...",
+    "format": "go fmt ./..."
+  },
+  "files": [
+    "bin/",
+    "templates/",
+    "scripts/",
+    "README.md"
+  ],
+  "keywords": [
+    "cli",
+    "shotgun",
+    "go",
+    "terminal",
+    "prompt-generator",
+    "bubbletea",
+    "tui",
+    "ai",
+    "llm",
+    "context-generation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/shotgun-cli.git"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
