@@ -26,18 +26,34 @@ type translationStartMsg struct {
 
 // Translation commands
 func (m *Model) translateText(textType, text string) tea.Cmd {
-	if m.translator == nil || !m.translator.IsConfigured() {
-		// Translation not available, return the original text
+	if m.translator == nil {
+		// Translator not initialized (likely due to missing API key or config issues)
 		return func() tea.Msg {
 			return translationCompleteMsg{
 				textType: textType,
 				result: &core.TranslationResult{
 					OriginalText:   text,
-					TranslatedText: text, // Use original text if translation unavailable
+					TranslatedText: text, // Use original text when translation unavailable
 					TargetLanguage: "en",
 					Timestamp:      time.Now(),
 				},
-				err: nil,
+				err: fmt.Errorf("translation unavailable: translator not initialized (check API key configuration)"),
+			}
+		}
+	}
+	
+	if !m.translator.IsConfigured() {
+		// Translator exists but is not properly configured
+		return func() tea.Msg {
+			return translationCompleteMsg{
+				textType: textType,
+				result: &core.TranslationResult{
+					OriginalText:   text,
+					TranslatedText: text, // Use original text when translation unavailable
+					TargetLanguage: "en",
+					Timestamp:      time.Now(),
+				},
+				err: fmt.Errorf("translation unavailable: translator not properly configured (check API key)"),
 			}
 		}
 	}

@@ -121,9 +121,10 @@ func NewModel() (*Model, error) {
 	config := configMgr.Get()
 	translator, err := core.NewTranslator(config.OpenAI, config.Translation, keyMgr)
 	if err != nil {
-		// Translator initialization is optional - we can continue without it
-		// This allows the app to work even if translation is not configured
+		// Translator initialization failed - log the reason for debugging
+		// Note: This is not a fatal error, app can work without translation
 		translator = nil
+		// We could add debug logging here: fmt.Printf("Translation disabled: %v\n", err)
 	}
 
 	// Load templates from templates directory
@@ -142,7 +143,7 @@ func NewModel() (*Model, error) {
 	}
 
 	// Initialize configuration form
-	configForm := NewConfigFormModel(config, keyMgr)
+	configForm := NewConfigFormModel(config, configMgr, keyMgr)
 
 	return &Model{
 		currentView:     ViewFileExclusion,
@@ -249,8 +250,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "o":
-			// Access configuration (options) (only from main views, not during generation)
-			if m.currentView != ViewGeneration && m.currentView != ViewConfiguration {
+			// Access configuration (options) (only from file exclusion view)
+			if m.currentView == ViewFileExclusion {
 				m.currentView = ViewConfiguration
 				return m, nil
 			}
@@ -341,20 +342,64 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case configSavedMsg:
-		// Configuration was saved successfully
-		// Reload translator with new config if translation settings changed
-		config := m.configMgr.Get()
-		if m.translator != nil {
-			m.translator.UpdateConfig(config.OpenAI, config.Translation)
+		// Handle configuration save results
+		if msg.success {
+			// Configuration was saved successfully
+			// Reload translator with new config if translation settings changed
+			config := m.configMgr.Get()
+			
+			// Try to initialize/update translator
+			if m.translator != nil {
+				// Update existing translator
+				err := m.translator.UpdateConfig(config.OpenAI, config.Translation)
+				if err != nil {
+					// If update failed, try to create new translator
+					m.translator = nil
+				}
+			}
+			
+			// If translator is nil (failed update or never existed), try to create new one
+			if m.translator == nil {
+				if newTranslator, err := core.NewTranslator(config.OpenAI, config.Translation, m.keyMgr); err == nil {
+					m.translator = newTranslator
+				}
+				// If creation still fails, translator remains nil (translation disabled)
+			}
+			
+			// Update local config reference
+			m.configForm.config = config
+		}
+		// Store status message for display
+		m.configForm.lastOperationStatus = msg.message
+		m.configForm.lastOperationSuccess = msg.success
+		if len(msg.errors) > 0 {
+			m.configForm.errors = msg.errors
 		}
 		return m, nil
 
 	case configResetMsg:
-		// Configuration was reset to defaults
+		// Handle configuration reset results
+		if msg.success {
+			// Configuration was reset to defaults
+			// Reload the form with fresh default values
+			config := m.configMgr.Get()
+			if m.translator != nil {
+				m.translator.UpdateConfig(config.OpenAI, config.Translation)
+			}
+		}
+		// Store status message for display
+		m.configForm.lastOperationStatus = msg.message
+		m.configForm.lastOperationSuccess = msg.success
 		return m, nil
 
 	case connectionTestMsg:
 		// Handle connection test results
+		// Store status message and details for display
+		m.configForm.lastOperationStatus = msg.message
+		m.configForm.lastOperationSuccess = msg.success
+		if msg.details != "" {
+			m.configForm.lastOperationDetails = msg.details
+		}
 		return m, nil
 	}
 
@@ -442,7 +487,6 @@ KEYBOARD SHORTCUTS:
   General:
     Ctrl+Q, Ctrl+C    Quit application
     ?            Toggle this help
-    o            Access configuration/settings
     Esc          Go back to previous step
 
   File Exclusion:
@@ -450,6 +494,7 @@ KEYBOARD SHORTCUTS:
     ↑↓←→         Navigate file tree (arrow keys)
     Space        Toggle file/directory exclusion
     c            Continue to next step
+    o            Access configuration/settings
     r            Reset all exclusions
     a            Exclude all files
     A            Include all files

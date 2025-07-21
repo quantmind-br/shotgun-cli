@@ -27,6 +27,12 @@ func (m ConfigFormModel) View() string {
 	sectionContent := m.renderCurrentSection()
 	content = append(content, sectionContent)
 
+	// Operation status messages
+	if m.lastOperationStatus != "" {
+		statusContent := m.renderOperationStatus()
+		content = append(content, "", statusContent)
+	}
+
 	// Status/error messages
 	if len(m.errors) > 0 {
 		content = append(content, "", m.renderErrors())
@@ -181,6 +187,45 @@ func (m ConfigFormModel) renderErrors() string {
 	return strings.Join(errors, "\n")
 }
 
+// renderOperationStatus shows the result of the last configuration operation
+func (m ConfigFormModel) renderOperationStatus() string {
+	if m.lastOperationStatus == "" {
+		return ""
+	}
+
+	var style lipgloss.Style
+	var icon string
+	
+	if m.lastOperationSuccess {
+		style = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("46")). // Green
+			Bold(true)
+		icon = "✅"
+	} else {
+		style = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")). // Red
+			Bold(true)
+		icon = "❌"
+	}
+	
+	var content []string
+	
+	// Main status message
+	statusLine := style.Render(fmt.Sprintf("%s %s", icon, m.lastOperationStatus))
+	content = append(content, statusLine)
+	
+	// Additional details if available
+	if m.lastOperationDetails != "" {
+		detailStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("244")). // Gray
+			Italic(true)
+		detailLine := detailStyle.Render("   " + m.lastOperationDetails)
+		content = append(content, detailLine)
+	}
+	
+	return strings.Join(content, "\n")
+}
+
 // renderFooter shows available actions and keyboard shortcuts
 func (m ConfigFormModel) renderFooter() string {
 	var controls []string
@@ -195,10 +240,10 @@ func (m ConfigFormModel) renderFooter() string {
 			"↑↓/jk: Navigate fields",
 			"←→/hl: Switch sections",
 			"Enter/Space: Edit field",
-			"s: Save config",
-			"r: Reset",
-			"t: Test connection",
-			"?: Help",
+			"F2: Save config",
+			"F3: Reset",
+			"F4: Test connection",
+			"F1: Help",
 			"Esc: Exit",
 		)
 	}
@@ -217,9 +262,20 @@ func (m ConfigFormModel) renderFooter() string {
 		}
 	}
 	
-	// Translation status
+	// Translation status - show actual availability, not just config setting
 	if m.config.Translation.Enabled {
-		statusItems = append(statusItems, "🌐 Translation: Enabled")
+		// Check if translator is actually available and configured
+		translatorWorking := false
+		if m.keyMgr != nil && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
+			// We have an API key, so translation should work
+			translatorWorking = true
+		}
+		
+		if translatorWorking {
+			statusItems = append(statusItems, "🌐 Translation: Ready")
+		} else {
+			statusItems = append(statusItems, "⚠️  Translation: Enabled but API key missing")
+		}
 	} else {
 		statusItems = append(statusItems, "🌐 Translation: Disabled")
 	}
@@ -276,10 +332,10 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"  • Esc: Cancel editing or exit configuration",
 		"",
 		configHelpStyle.Render("Actions:"),
-		"  • s: Save all configuration changes",
-		"  • r: Reset to default values",
-		"  • t: Test API connection",
-		"  • ?: Toggle this help screen",
+		"  • F2: Save all configuration changes",
+		"  • F3: Reset to default values",
+		"  • F4: Test API connection",
+		"  • F1: Toggle this help screen",
 		"",
 		sectionTitleStyle.Render("🔐 Security:"),
 		"",
@@ -291,7 +347,7 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"",
 		"The API key is never stored in plain text in configuration files.",
 		"",
-		configHelpStyle.Render("Press '?' again to return to configuration"),
+		configHelpStyle.Render("Press 'F1' again to return to configuration"),
 	}
 
 	return strings.Join(helpContent, "\n")
