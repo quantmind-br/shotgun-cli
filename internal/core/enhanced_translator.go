@@ -100,6 +100,11 @@ type TranslationMetrics struct {
 
 // NewEnhancedTranslationService creates a new enhanced translation service
 func NewEnhancedTranslationService(config *EnhancedConfig, keyManager *SecureKeyManager) (*EnhancedTranslationService, error) {
+	// Validate API key alias
+	if config.OpenAI.APIKeyAlias == "" {
+		return nil, fmt.Errorf("API key alias cannot be empty")
+	}
+
 	// Get API key from keyring
 	apiKey, err := keyManager.GetAPIKey(config.OpenAI.APIKeyAlias)
 	if err != nil {
