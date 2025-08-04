@@ -79,3 +79,39 @@ reinstall-and-start.bat
 # Backup files
 *.backup
 *.bak
+
+# AI Assistant Configuration and Cache Directories
+# Claude Code assistant
+.claude/
+CLAUDE.md
+
+# Serena assistant
+.serena/
+*.pkl
+
+# Gemini assistant  
+.gemini/
+
+# Project Requirements and Plans (development docs)
+PRPs/
+
+# AI Assistant cache files
+*_cache_*.pkl
+*.cache
+
+# Configuration files (may contain sensitive data)
+config.json
+settings.json
+.goreleaser.yaml
+project.yml
+
+# Additional log files
+*.log.*
+debug.log
+
+# Keys and secrets
+*.key
+*.pem
+*.cert
+api_keys.txt
+secrets.txt

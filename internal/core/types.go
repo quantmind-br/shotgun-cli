@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"path/filepath"
 	"sync"
 	"text/template"
@@ -233,7 +234,7 @@ func (ss *SelectionState) GetExcludedFiles() map[string]bool {
 
 // Configuration types for OpenAI translation integration
 
-// Config represents the application settings
+// Config represents the application settings (legacy compatibility)
 type Config struct {
 	// OpenAI API Settings
 	OpenAI OpenAIConfig `json:"openai"`
@@ -247,6 +248,87 @@ type Config struct {
 	// Metadata
 	Version     string    `json:"version"`
 	LastUpdated time.Time `json:"lastUpdated"`
+}
+
+// Enhanced configuration types with validation support
+
+// ConfigManagerInterface defines the contract for configuration management
+type ConfigManagerInterface interface {
+	Load() error
+	Save() error
+	Get() *Config
+	Update(config *Config) error
+	Reset() error
+	GetConfigPath() string
+	StartWatching(context.Context) error
+	IsConfigValid() bool
+	GetValidationErrors() map[string]string
+}
+
+// ConfigurationEvent represents configuration change events
+type ConfigurationEvent struct {
+	Type      string                 `json:"type"`   // "changed", "created", "deleted", "error"
+	Source    string                 `json:"source"` // "file", "api", "ui", "default"
+	Timestamp time.Time              `json:"timestamp"`
+	Changes   map[string]interface{} `json:"changes,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+}
+
+// RetryConfig defines retry behavior for API operations
+type RetryConfig struct {
+	MaxRetries    int           `json:"maxRetries"`
+	BaseDelay     time.Duration `json:"baseDelay"`
+	MaxDelay      time.Duration `json:"maxDelay"`
+	BackoffFactor float64       `json:"backoffFactor"`
+	JitterEnabled bool          `json:"jitterEnabled"`
+	TimeoutPerTry time.Duration `json:"timeoutPerTry"`
+}
+
+// DefaultRetryConfig returns sensible retry defaults
+func DefaultRetryConfig() RetryConfig {
+	return RetryConfig{
+		MaxRetries:    3,
+		BaseDelay:     time.Second,
+		MaxDelay:      time.Minute,
+		BackoffFactor: 2.0,
+		JitterEnabled: true,
+		TimeoutPerTry: 30 * time.Second,
+	}
+}
+
+// CircuitBreakerConfig defines circuit breaker behavior
+type CircuitBreakerConfig struct {
+	MaxRequests   uint32                             `json:"maxRequests"` // Max requests in half-open state
+	Interval      time.Duration                      `json:"interval"`    // Statistical window
+	Timeout       time.Duration                      `json:"timeout"`     // Time to stay open
+	OnStateChange func(name string, from, to string) // State change callback
+}
+
+// DefaultCircuitBreakerConfig returns sensible circuit breaker defaults
+func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
+	return CircuitBreakerConfig{
+		MaxRequests: 5,
+		Interval:    time.Minute,
+		Timeout:     2 * time.Minute,
+	}
+}
+
+// TranslationCache represents configuration for translation result caching
+type TranslationCache struct {
+	Enabled         bool          `json:"enabled"`
+	MaxSize         int           `json:"maxSize"`         // Max number of cached translations
+	TTL             time.Duration `json:"ttl"`             // Time to live for cache entries
+	CleanupInterval time.Duration `json:"cleanupInterval"` // How often to clean expired entries
+}
+
+// DefaultTranslationCache returns sensible cache defaults
+func DefaultTranslationCache() TranslationCache {
+	return TranslationCache{
+		Enabled:         true,
+		MaxSize:         1000,
+		TTL:             time.Hour,
+		CleanupInterval: 15 * time.Minute,
+	}
 }
 
 // OpenAIConfig contains OpenAI API configuration

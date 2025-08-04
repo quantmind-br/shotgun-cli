@@ -208,15 +208,21 @@ func (skm *SecureKeyManager) Clear() error {
 	skm.mu.Lock()
 	defer skm.mu.Unlock()
 
-	aliases, err := skm.ListAPIKeys()
+	// Get all keys without calling ListAPIKeys to avoid deadlock
+	keys, err := skm.ring.Keys()
 	if err != nil {
-		return fmt.Errorf("failed to list API keys for clearing: %w", err)
+		return fmt.Errorf("failed to list keys for clearing: %w", err)
 	}
 
 	var errors []error
-	for _, alias := range aliases {
-		if err := skm.ring.Remove(skm.makeKeyName(alias)); err != nil {
-			errors = append(errors, fmt.Errorf("failed to remove key '%s': %w", alias, err))
+	keyPrefix := skm.makeKeyName("")
+
+	for _, key := range keys {
+		// Only remove shotgun-cli keys
+		if len(key) > len(keyPrefix) && key[:len(keyPrefix)] == keyPrefix {
+			if err := skm.ring.Remove(key); err != nil {
+				errors = append(errors, fmt.Errorf("failed to remove key '%s': %w", key, err))
+			}
 		}
 	}
 

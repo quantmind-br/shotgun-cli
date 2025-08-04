@@ -891,8 +891,9 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 			}
 		}
 
-		// 4. Create temporary translator for testing
-		translator, err := core.NewTranslator(testConfig.OpenAI, testConfig.Translation, m.keyMgr)
+		// 4. Create temporary enhanced translator for testing
+		enhancedConfig := mapConfigToEnhanced(testConfig)
+		translator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr)
 		if err != nil {
 			return connectionTestMsg{
 				success: false,
@@ -901,13 +902,26 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 			}
 		}
 
-		// 5. Test API connectivity
-		ctx := context.Background()
-		if err := translator.TestConnection(ctx); err != nil {
+		// 5. Test API connectivity by attempting a simple translation
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Use a simple test translation to verify connectivity
+		testResult, err := translator.TranslateText(ctx, "Test connection", "test")
+		if err != nil {
 			return connectionTestMsg{
 				success: false,
 				message: "Connection test failed",
 				details: fmt.Sprintf("Error: %v", err),
+			}
+		}
+
+		// Check if we got a reasonable response
+		if testResult == nil || testResult.TranslatedText == "" {
+			return connectionTestMsg{
+				success: false,
+				message: "Connection test failed",
+				details: "Received empty response from API",
 			}
 		}
 

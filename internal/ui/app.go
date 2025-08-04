@@ -13,6 +13,22 @@ import (
 	"shotgun-cli/internal/core"
 )
 
+// mapConfigToEnhanced maps old Config structure to EnhancedConfig for compatibility
+func mapConfigToEnhanced(config *core.Config) *core.EnhancedConfig {
+	enhancedConfig := core.DefaultEnhancedConfig()
+	// Map old config to enhanced config
+	enhancedConfig.OpenAI.APIKeyAlias = config.OpenAI.APIKeyAlias
+	enhancedConfig.OpenAI.BaseURL = config.OpenAI.BaseURL
+	enhancedConfig.OpenAI.Model = config.OpenAI.Model
+	enhancedConfig.OpenAI.Timeout = config.OpenAI.Timeout
+	enhancedConfig.OpenAI.MaxTokens = config.OpenAI.MaxTokens
+	enhancedConfig.OpenAI.Temperature = config.OpenAI.Temperature
+	enhancedConfig.Translation.Enabled = config.Translation.Enabled
+	enhancedConfig.Translation.TargetLanguage = config.Translation.TargetLanguage
+	enhancedConfig.Translation.ContextPrompt = config.Translation.ContextPrompt
+	return enhancedConfig
+}
+
 // ViewState represents the current view/step in the application
 type ViewState int
 
@@ -46,7 +62,7 @@ type Model struct {
 	selection  *core.SelectionState
 	configMgr  *core.ConfigManager
 	keyMgr     *core.SecureKeyManager
-	translator *core.Translator
+	translator *core.EnhancedTranslationService
 
 	// Application State
 	selectedDir     string
@@ -119,12 +135,18 @@ func NewModel() (*Model, error) {
 
 	// Initialize translator with current configuration
 	config := configMgr.Get()
-	translator, err := core.NewTranslator(config.OpenAI, config.Translation, keyMgr)
-	if err != nil {
-		// Translator initialization failed - log the reason for debugging
-		// Note: This is not a fatal error, app can work without translation
-		translator = nil
-		// We could add debug logging here: fmt.Printf("Translation disabled: %v\n", err)
+	enhancedConfig := mapConfigToEnhanced(config)
+
+	var translator *core.EnhancedTranslationService
+	if enhancedConfig.OpenAI.APIKeyAlias != "" {
+		var err error
+		translator, err = core.NewEnhancedTranslationService(enhancedConfig, keyMgr)
+		if err != nil {
+			// Translator initialization failed - log the reason for debugging
+			// Note: This is not a fatal error, app can work without translation
+			translator = nil
+			// We could add debug logging here: fmt.Printf("Translation disabled: %v\n", err)
+		}
 	}
 
 	// Load templates from templates directory
@@ -348,22 +370,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Reload translator with new config if translation settings changed
 			config := m.configMgr.Get()
 
-			// Try to initialize/update translator
-			if m.translator != nil {
-				// Update existing translator
-				err := m.translator.UpdateConfig(config.OpenAI, config.Translation)
-				if err != nil {
-					// If update failed, try to create new translator
+			// Create new enhanced translator (EnhancedTranslationService doesn't have UpdateConfig)
+			// We need to recreate it with new configuration
+			enhancedConfig := mapConfigToEnhanced(config)
+
+			// Create new translator with updated configuration
+			if enhancedConfig.OpenAI.APIKeyAlias != "" {
+				if newTranslator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr); err == nil {
+					m.translator = newTranslator
+				} else {
+					// If creation fails, translator remains nil (translation disabled)
 					m.translator = nil
 				}
-			}
-
-			// If translator is nil (failed update or never existed), try to create new one
-			if m.translator == nil {
-				if newTranslator, err := core.NewTranslator(config.OpenAI, config.Translation, m.keyMgr); err == nil {
-					m.translator = newTranslator
-				}
-				// If creation still fails, translator remains nil (translation disabled)
+			} else {
+				// No API key configured, disable translator
+				m.translator = nil
 			}
 
 			// Update local config reference
@@ -383,8 +404,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Configuration was reset to defaults
 			// Reload the form with fresh default values
 			config := m.configMgr.Get()
-			if m.translator != nil {
-				m.translator.UpdateConfig(config.OpenAI, config.Translation)
+
+			// Recreate translator with reset configuration
+			enhancedConfig := mapConfigToEnhanced(config)
+
+			// Create new translator with reset configuration
+			if enhancedConfig.OpenAI.APIKeyAlias != "" {
+				if newTranslator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr); err == nil {
+					m.translator = newTranslator
+				} else {
+					m.translator = nil
+				}
+			} else {
+				m.translator = nil
 			}
 		}
 		// Store status message for display

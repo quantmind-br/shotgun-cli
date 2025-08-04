@@ -16,7 +16,7 @@ import (
 // Translation message types
 type translationCompleteMsg struct {
 	textType string // "task" or "rules"
-	result   *core.TranslationResult
+	result   *core.EnhancedTranslationResult
 	err      error
 }
 
@@ -31,11 +31,17 @@ func (m *Model) translateText(textType, text string) tea.Cmd {
 		return func() tea.Msg {
 			return translationCompleteMsg{
 				textType: textType,
-				result: &core.TranslationResult{
+				result: &core.EnhancedTranslationResult{
 					OriginalText:   text,
 					TranslatedText: text, // Use original text when translation unavailable
 					TargetLanguage: "en",
 					Timestamp:      time.Now(),
+					TokensUsed:     0,
+					Model:          "unavailable",
+					Duration:       0,
+					Cached:         false,
+					AttemptCount:   0,
+					ApiProvider:    "none",
 				},
 				err: fmt.Errorf("translation unavailable: translator not initialized (check API key configuration)"),
 			}
@@ -47,11 +53,17 @@ func (m *Model) translateText(textType, text string) tea.Cmd {
 		return func() tea.Msg {
 			return translationCompleteMsg{
 				textType: textType,
-				result: &core.TranslationResult{
+				result: &core.EnhancedTranslationResult{
 					OriginalText:   text,
 					TranslatedText: text, // Use original text when translation unavailable
 					TargetLanguage: "en",
 					Timestamp:      time.Now(),
+					TokensUsed:     0,
+					Model:          "not_configured",
+					Duration:       0,
+					Cached:         false,
+					AttemptCount:   0,
+					ApiProvider:    "none",
 				},
 				err: fmt.Errorf("translation unavailable: translator not properly configured (check API key)"),
 			}
@@ -62,17 +74,11 @@ func (m *Model) translateText(textType, text string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		var result *core.TranslationResult
+		var result *core.EnhancedTranslationResult
 		var err error
 
-		switch textType {
-		case "task":
-			result, err = m.translator.TranslateTask(ctx, text)
-		case "rules":
-			result, err = m.translator.TranslateRules(ctx, text)
-		default:
-			result, err = m.translator.TranslateText(ctx, text, textType)
-		}
+		// All translation now goes through TranslateText with appropriate context
+		result, err = m.translator.TranslateText(ctx, text, textType)
 
 		return translationCompleteMsg{
 			textType: textType,
