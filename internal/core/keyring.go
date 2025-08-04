@@ -20,33 +20,33 @@ func NewSecureKeyManager() (*SecureKeyManager, error) {
 	// Configure keyring with multiple backends for cross-platform support
 	ring, err := keyring.Open(keyring.Config{
 		ServiceName: "shotgun-cli",
-		
+
 		// macOS Keychain configuration
 		KeychainTrustApplication: true,
 		KeychainName:             "shotgun-cli",
-		
+
 		// Linux Secret Service configuration
 		LibSecretCollectionName: "shotgun-cli",
-		
+
 		// Windows Credential Manager uses default configuration
-		
+
 		// File backend as fallback
-		FileDir: filepath.Join(xdg.ConfigHome, "shotgun-cli", "keyring"),
+		FileDir:          filepath.Join(xdg.ConfigHome, "shotgun-cli", "keyring"),
 		FilePasswordFunc: keyring.FixedStringPrompt("Enter password to encrypt API keys:"),
-		
+
 		// Allow all backends for maximum compatibility
 		AllowedBackends: []keyring.BackendType{
-			keyring.KeychainBackend,     // macOS
+			keyring.KeychainBackend,      // macOS
 			keyring.SecretServiceBackend, // Linux
-			keyring.WinCredBackend,      // Windows
-			keyring.FileBackend,         // Cross-platform fallback
+			keyring.WinCredBackend,       // Windows
+			keyring.FileBackend,          // Cross-platform fallback
 		},
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize secure keyring: %w", err)
 	}
-	
+
 	return &SecureKeyManager{
 		ring: ring,
 	}, nil
@@ -56,26 +56,26 @@ func NewSecureKeyManager() (*SecureKeyManager, error) {
 func (skm *SecureKeyManager) StoreAPIKey(alias, apiKey string) error {
 	skm.mu.Lock()
 	defer skm.mu.Unlock()
-	
+
 	if alias == "" {
 		return fmt.Errorf("API key alias cannot be empty")
 	}
-	
+
 	if apiKey == "" {
 		return fmt.Errorf("API key cannot be empty")
 	}
-	
+
 	item := keyring.Item{
-		Key:  skm.makeKeyName(alias),
-		Data: []byte(apiKey),
-		Label: fmt.Sprintf("shotgun-cli API key: %s", alias),
+		Key:         skm.makeKeyName(alias),
+		Data:        []byte(apiKey),
+		Label:       fmt.Sprintf("shotgun-cli API key: %s", alias),
 		Description: fmt.Sprintf("OpenAI API key for shotgun-cli service (%s)", alias),
 	}
-	
+
 	if err := skm.ring.Set(item); err != nil {
 		return fmt.Errorf("failed to store API key '%s': %w", alias, err)
 	}
-	
+
 	return nil
 }
 
@@ -83,11 +83,11 @@ func (skm *SecureKeyManager) StoreAPIKey(alias, apiKey string) error {
 func (skm *SecureKeyManager) GetAPIKey(alias string) (string, error) {
 	skm.mu.RLock()
 	defer skm.mu.RUnlock()
-	
+
 	if alias == "" {
 		return "", fmt.Errorf("API key alias cannot be empty")
 	}
-	
+
 	item, err := skm.ring.Get(skm.makeKeyName(alias))
 	if err != nil {
 		if err == keyring.ErrKeyNotFound {
@@ -95,7 +95,7 @@ func (skm *SecureKeyManager) GetAPIKey(alias string) (string, error) {
 		}
 		return "", fmt.Errorf("failed to retrieve API key '%s': %w", alias, err)
 	}
-	
+
 	return string(item.Data), nil
 }
 
@@ -103,18 +103,18 @@ func (skm *SecureKeyManager) GetAPIKey(alias string) (string, error) {
 func (skm *SecureKeyManager) DeleteAPIKey(alias string) error {
 	skm.mu.Lock()
 	defer skm.mu.Unlock()
-	
+
 	if alias == "" {
 		return fmt.Errorf("API key alias cannot be empty")
 	}
-	
+
 	if err := skm.ring.Remove(skm.makeKeyName(alias)); err != nil {
 		if err == keyring.ErrKeyNotFound {
 			return fmt.Errorf("API key '%s' not found", alias)
 		}
 		return fmt.Errorf("failed to delete API key '%s': %w", alias, err)
 	}
-	
+
 	return nil
 }
 
@@ -122,15 +122,15 @@ func (skm *SecureKeyManager) DeleteAPIKey(alias string) error {
 func (skm *SecureKeyManager) ListAPIKeys() ([]string, error) {
 	skm.mu.RLock()
 	defer skm.mu.RUnlock()
-	
+
 	keys, err := skm.ring.Keys()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
-	
+
 	var aliases []string
 	prefix := skm.makeKeyName("")
-	
+
 	for _, key := range keys {
 		// Only include keys that belong to shotgun-cli
 		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
@@ -138,7 +138,7 @@ func (skm *SecureKeyManager) ListAPIKeys() ([]string, error) {
 			aliases = append(aliases, alias)
 		}
 	}
-	
+
 	return aliases, nil
 }
 
@@ -146,11 +146,11 @@ func (skm *SecureKeyManager) ListAPIKeys() ([]string, error) {
 func (skm *SecureKeyManager) HasAPIKey(alias string) bool {
 	skm.mu.RLock()
 	defer skm.mu.RUnlock()
-	
+
 	if alias == "" {
 		return false
 	}
-	
+
 	_, err := skm.ring.Get(skm.makeKeyName(alias))
 	return err == nil
 }
@@ -164,12 +164,12 @@ func (skm *SecureKeyManager) UpdateAPIKey(alias, apiKey string) error {
 // TestAPIKey validates that an API key can be stored and retrieved
 func (skm *SecureKeyManager) TestAPIKey(alias, apiKey string) error {
 	testAlias := fmt.Sprintf("test_%s", alias)
-	
+
 	// Store test key
 	if err := skm.StoreAPIKey(testAlias, apiKey); err != nil {
 		return fmt.Errorf("failed to store test API key: %w", err)
 	}
-	
+
 	// Retrieve test key
 	retrievedKey, err := skm.GetAPIKey(testAlias)
 	if err != nil {
@@ -177,19 +177,19 @@ func (skm *SecureKeyManager) TestAPIKey(alias, apiKey string) error {
 		skm.DeleteAPIKey(testAlias)
 		return fmt.Errorf("failed to retrieve test API key: %w", err)
 	}
-	
+
 	// Verify keys match
 	if retrievedKey != apiKey {
 		// Clean up on failure
 		skm.DeleteAPIKey(testAlias)
 		return fmt.Errorf("test API key mismatch: stored and retrieved keys do not match")
 	}
-	
+
 	// Clean up test key
 	if err := skm.DeleteAPIKey(testAlias); err != nil {
 		return fmt.Errorf("failed to clean up test API key: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -207,23 +207,23 @@ func (skm *SecureKeyManager) GetBackendInfo() string {
 func (skm *SecureKeyManager) Clear() error {
 	skm.mu.Lock()
 	defer skm.mu.Unlock()
-	
+
 	aliases, err := skm.ListAPIKeys()
 	if err != nil {
 		return fmt.Errorf("failed to list API keys for clearing: %w", err)
 	}
-	
+
 	var errors []error
 	for _, alias := range aliases {
 		if err := skm.ring.Remove(skm.makeKeyName(alias)); err != nil {
 			errors = append(errors, fmt.Errorf("failed to remove key '%s': %w", alias, err))
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("failed to clear some API keys: %v", errors)
 	}
-	
+
 	return nil
 }
 
@@ -240,19 +240,19 @@ func (skm *SecureKeyManager) IsAvailable() bool {
 	// Test basic functionality with a temporary key
 	testAlias := "availability_test"
 	testKey := "test_key_12345"
-	
+
 	// Try to store and retrieve a test key
 	if err := skm.StoreAPIKey(testAlias, testKey); err != nil {
 		return false
 	}
-	
+
 	retrievedKey, err := skm.GetAPIKey(testAlias)
 	if err != nil || retrievedKey != testKey {
 		return false
 	}
-	
+
 	// Clean up
 	skm.DeleteAPIKey(testAlias)
-	
+
 	return true
 }

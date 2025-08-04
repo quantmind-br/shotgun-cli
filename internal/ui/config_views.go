@@ -54,12 +54,12 @@ func (m ConfigFormModel) renderBreadcrumb() string {
 		if i == m.activeSection {
 			style = fieldActiveStyle
 		}
-		
+
 		title := section.Title
 		if len(title) > 25 {
 			title = title[:22] + "..."
 		}
-		
+
 		items = append(items, style.Render(title))
 	}
 
@@ -82,7 +82,7 @@ func (m ConfigFormModel) renderCurrentSection() string {
 	for i, field := range section.Fields {
 		fieldContent := m.renderField(field, i == m.activeField)
 		content = append(content, fieldContent)
-		
+
 		// Add spacing between fields
 		if i < len(section.Fields)-1 {
 			content = append(content, "")
@@ -101,13 +101,13 @@ func (m ConfigFormModel) renderField(field ConfigField, isActive bool) string {
 	if isActive {
 		labelStyle = labelStyle.Foreground(lipgloss.Color("33")) // Yellow for active
 	}
-	
+
 	label := labelStyle.Render(field.Label + ":")
 	parts = append(parts, label)
 
 	// Field value/input
 	var valueContent string
-	
+
 	if m.editing && isActive {
 		// Show manual text when editing to avoid textinput bugs
 		if field.Type == FieldPassword {
@@ -143,7 +143,7 @@ func (m ConfigFormModel) renderField(field ConfigField, isActive bool) string {
 				valueContent = fieldInactiveStyle.Render("(empty)")
 			}
 		}
-		
+
 		// Apply active/inactive styling
 		if isActive {
 			valueContent = fieldActiveStyle.Render(" " + valueContent + " ")
@@ -179,7 +179,7 @@ func (m ConfigFormModel) renderErrors() string {
 
 	var errors []string
 	errors = append(errors, configErrorStyle.Render("⚠️  Configuration Errors:"))
-	
+
 	for field, msg := range m.errors {
 		errors = append(errors, fmt.Sprintf("  • %s: %s", field, msg))
 	}
@@ -195,7 +195,7 @@ func (m ConfigFormModel) renderOperationStatus() string {
 
 	var style lipgloss.Style
 	var icon string
-	
+
 	if m.lastOperationSuccess {
 		style = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("46")). // Green
@@ -207,13 +207,13 @@ func (m ConfigFormModel) renderOperationStatus() string {
 			Bold(true)
 		icon = "❌"
 	}
-	
+
 	var content []string
-	
+
 	// Main status message
 	statusLine := style.Render(fmt.Sprintf("%s %s", icon, m.lastOperationStatus))
 	content = append(content, statusLine)
-	
+
 	// Additional details if available
 	if m.lastOperationDetails != "" {
 		detailStyle := lipgloss.NewStyle().
@@ -222,7 +222,7 @@ func (m ConfigFormModel) renderOperationStatus() string {
 		detailLine := detailStyle.Render("   " + m.lastOperationDetails)
 		content = append(content, detailLine)
 	}
-	
+
 	return strings.Join(content, "\n")
 }
 
@@ -249,10 +249,10 @@ func (m ConfigFormModel) renderFooter() string {
 	}
 
 	helpText := configHelpStyle.Render(strings.Join(controls, " • "))
-	
+
 	// Add status indicators
 	var statusItems []string
-	
+
 	// Connection status
 	if m.activeSection == 0 { // OpenAI section
 		if m.config.OpenAI.APIKeyAlias != "" && m.keyMgr != nil && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
@@ -261,7 +261,7 @@ func (m ConfigFormModel) renderFooter() string {
 			statusItems = append(statusItems, "⚠️  API Key: Not Set")
 		}
 	}
-	
+
 	// Translation status - show actual availability, not just config setting
 	if m.config.Translation.Enabled {
 		// Check if translator is actually available and configured
@@ -270,7 +270,7 @@ func (m ConfigFormModel) renderFooter() string {
 			// We have an API key, so translation should work
 			translatorWorking = true
 		}
-		
+
 		if translatorWorking {
 			statusItems = append(statusItems, "🌐 Translation: Ready")
 		} else {
@@ -341,7 +341,7 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"",
 		"Your API key is stored securely using your operating system's keyring:",
 		"  • macOS: Keychain",
-		"  • Windows: Credential Manager", 
+		"  • Windows: Credential Manager",
 		"  • Linux: Secret Service (GNOME Keyring, KDE Wallet)",
 		"  • Fallback: Encrypted file in your config directory",
 		"",
@@ -357,7 +357,7 @@ func (m ConfigFormModel) renderConfigHelp() string {
 func (m ConfigFormModel) renderTestResult(success bool, message string) string {
 	var style lipgloss.Style
 	var icon string
-	
+
 	if success {
 		style = lipgloss.NewStyle().Foreground(lipgloss.Color("46")) // Green
 		icon = "✅"
@@ -365,7 +365,7 @@ func (m ConfigFormModel) renderTestResult(success bool, message string) string {
 		style = configErrorStyle
 		icon = "❌"
 	}
-	
+
 	return style.Render(fmt.Sprintf("%s %s", icon, message))
 }
 
@@ -384,7 +384,7 @@ func (m ConfigFormModel) renderSaveStatus(saved bool, message string) string {
 // GetConfigurationData extracts configuration data from the form
 func (m ConfigFormModel) GetConfigurationData() map[string]interface{} {
 	data := make(map[string]interface{})
-	
+
 	for _, section := range m.sections {
 		sectionData := make(map[string]interface{})
 		for _, field := range section.Fields {
@@ -392,20 +392,20 @@ func (m ConfigFormModel) GetConfigurationData() map[string]interface{} {
 		}
 		data[section.Title] = sectionData
 	}
-	
+
 	return data
 }
 
 // ValidateConfiguration checks if all required fields are filled
 func (m *ConfigFormModel) ValidateConfiguration() bool {
 	m.errors = make(map[string]string) // Clear previous errors
-	
+
 	for _, section := range m.sections {
 		for _, field := range section.Fields {
 			if field.Required && strings.TrimSpace(field.Value) == "" {
 				m.errors[field.Label] = "This field is required"
 			}
-			
+
 			// Type-specific validation
 			switch field.Type {
 			case FieldNumber:
@@ -419,7 +419,7 @@ func (m *ConfigFormModel) ValidateConfiguration() bool {
 			}
 		}
 	}
-	
+
 	return len(m.errors) == 0
 }
 

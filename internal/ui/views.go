@@ -15,9 +15,9 @@ import (
 
 // Translation message types
 type translationCompleteMsg struct {
-	textType   string // "task" or "rules"
-	result     *core.TranslationResult
-	err        error
+	textType string // "task" or "rules"
+	result   *core.TranslationResult
+	err      error
 }
 
 type translationStartMsg struct {
@@ -41,7 +41,7 @@ func (m *Model) translateText(textType, text string) tea.Cmd {
 			}
 		}
 	}
-	
+
 	if !m.translator.IsConfigured() {
 		// Translator exists but is not properly configured
 		return func() tea.Msg {
@@ -224,7 +224,7 @@ func (m *Model) updateTaskDescription(msg tea.KeyMsg) (*Model, tea.Cmd) {
 		// Capture task text and check if translation is enabled
 		taskText := m.taskInput.Value()
 		m.taskText = taskText
-		
+
 		config := m.configMgr.Get()
 		if config.Translation.Enabled && strings.TrimSpace(taskText) != "" {
 			// Start translation
@@ -307,7 +307,7 @@ func (m *Model) updateCustomRules(msg tea.KeyMsg) (*Model, tea.Cmd) {
 			rulesText = "no additional rules"
 		}
 		m.rulesText = rulesText
-		
+
 		config := m.configMgr.Get()
 		if config.Translation.Enabled && strings.TrimSpace(rulesText) != "" && rulesText != "no additional rules" {
 			// Start translation for rules

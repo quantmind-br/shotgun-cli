@@ -91,8 +91,15 @@ The application supports multiline input for both Task Description and Custom Ru
 **General Navigation:**
 - **Esc**: Go back to previous step
 - **?**: Toggle help menu
-- **o**: Access configuration/settings
 - **Ctrl+Q, Ctrl+C**: Quit application
+
+**File Exclusion Screen:**
+- **hjkl or ↑↓←→**: Navigate file tree
+- **Space**: Toggle file/directory exclusion
+- **c**: Continue to next step
+- **o**: Access configuration/settings
+- **r**: Reset all exclusions
+- **a/A**: Exclude/include all files
 
 **Template Selection Screen:**
 - **↑/↓ (or k/j)**: Navigate template options

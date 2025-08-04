@@ -21,16 +21,16 @@ type ConfigManager struct {
 // NewConfigManager creates a new configuration manager
 func NewConfigManager() (*ConfigManager, error) {
 	configPath := filepath.Join(xdg.ConfigHome, "shotgun-cli", "config.json")
-	
+
 	cm := &ConfigManager{
 		configPath: configPath,
 	}
-	
+
 	// Ensure config directory exists
 	if err := cm.ensureConfigDir(); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// Load existing config or create default
 	if err := cm.Load(); err != nil {
 		// If load fails, create default config
@@ -39,7 +39,7 @@ func NewConfigManager() (*ConfigManager, error) {
 			return nil, fmt.Errorf("failed to create default config: %w", saveErr)
 		}
 	}
-	
+
 	return cm, nil
 }
 
@@ -75,7 +75,7 @@ func DefaultConfig() *Config {
 func (cm *ConfigManager) Load() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	data, err := os.ReadFile(cm.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -85,15 +85,15 @@ func (cm *ConfigManager) Load() error {
 		}
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("failed to parse config file: %w", err)
 	}
-	
+
 	// Validate and apply defaults for missing fields
 	cm.config = cm.validateAndFillDefaults(&config)
-	
+
 	return nil
 }
 
@@ -101,25 +101,25 @@ func (cm *ConfigManager) Load() error {
 func (cm *ConfigManager) Save() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	if cm.config == nil {
 		return fmt.Errorf("no configuration to save")
 	}
-	
+
 	// Update timestamp
 	cm.config.LastUpdated = time.Now()
-	
+
 	// Marshal to JSON with indentation
 	data, err := json.MarshalIndent(cm.config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	// Write to file
 	if err := os.WriteFile(cm.configPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -127,11 +127,11 @@ func (cm *ConfigManager) Save() error {
 func (cm *ConfigManager) Get() *Config {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
-	
+
 	if cm.config == nil {
 		return DefaultConfig()
 	}
-	
+
 	// Return a deep copy to prevent external modifications
 	return cm.copyConfig(cm.config)
 }
@@ -140,16 +140,16 @@ func (cm *ConfigManager) Get() *Config {
 func (cm *ConfigManager) Update(config *Config) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
-	
+
 	// Validate configuration
 	if err := cm.validateConfig(config); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
-	
+
 	cm.config = cm.copyConfig(config)
 	return nil
 }
@@ -164,11 +164,11 @@ func (cm *ConfigManager) GetOpenAI() OpenAIConfig {
 func (cm *ConfigManager) UpdateOpenAI(openaiConfig OpenAIConfig) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	if cm.config == nil {
 		cm.config = DefaultConfig()
 	}
-	
+
 	cm.config.OpenAI = openaiConfig
 	return nil
 }
@@ -183,11 +183,11 @@ func (cm *ConfigManager) GetTranslation() TranslationConfig {
 func (cm *ConfigManager) UpdateTranslation(translationConfig TranslationConfig) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	if cm.config == nil {
 		cm.config = DefaultConfig()
 	}
-	
+
 	cm.config.Translation = translationConfig
 	return nil
 }
@@ -202,11 +202,11 @@ func (cm *ConfigManager) GetApp() AppConfig {
 func (cm *ConfigManager) UpdateApp(appConfig AppConfig) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	if cm.config == nil {
 		cm.config = DefaultConfig()
 	}
-	
+
 	cm.config.App = appConfig
 	return nil
 }
@@ -220,7 +220,7 @@ func (cm *ConfigManager) GetConfigPath() string {
 func (cm *ConfigManager) Reset() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-	
+
 	cm.config = DefaultConfig()
 	return nil
 }
@@ -255,30 +255,30 @@ func (cm *ConfigManager) validateConfig(config *Config) error {
 	if config.OpenAI.RetryDelay < 0 {
 		return fmt.Errorf("OpenAI retry delay cannot be negative")
 	}
-	
+
 	// Validate Translation config
 	if config.Translation.TargetLanguage == "" {
 		return fmt.Errorf("translation target language cannot be empty")
 	}
-	
+
 	// Validate App config
 	validThemes := map[string]bool{"auto": true, "dark": true, "light": true}
 	if !validThemes[config.App.Theme] {
 		return fmt.Errorf("invalid theme: %s (must be auto, dark, or light)", config.App.Theme)
 	}
-	
+
 	validTemplates := map[string]bool{"dev": true, "architect": true, "debug": true, "project-manager": true}
 	if !validTemplates[config.App.DefaultTemplate] {
 		return fmt.Errorf("invalid default template: %s", config.App.DefaultTemplate)
 	}
-	
+
 	return nil
 }
 
 // validateAndFillDefaults validates config and fills missing fields with defaults
 func (cm *ConfigManager) validateAndFillDefaults(config *Config) *Config {
 	defaults := DefaultConfig()
-	
+
 	// Fill missing OpenAI fields
 	if config.OpenAI.BaseURL == "" {
 		config.OpenAI.BaseURL = defaults.OpenAI.BaseURL
@@ -301,7 +301,7 @@ func (cm *ConfigManager) validateAndFillDefaults(config *Config) *Config {
 	if config.OpenAI.RetryDelay < 0 {
 		config.OpenAI.RetryDelay = defaults.OpenAI.RetryDelay
 	}
-	
+
 	// Fill missing Translation fields
 	if config.Translation.TargetLanguage == "" {
 		config.Translation.TargetLanguage = defaults.Translation.TargetLanguage
@@ -309,7 +309,7 @@ func (cm *ConfigManager) validateAndFillDefaults(config *Config) *Config {
 	if config.Translation.ContextPrompt == "" {
 		config.Translation.ContextPrompt = defaults.Translation.ContextPrompt
 	}
-	
+
 	// Fill missing App fields
 	validThemes := map[string]bool{"auto": true, "dark": true, "light": true}
 	if !validThemes[config.App.Theme] {
@@ -319,12 +319,12 @@ func (cm *ConfigManager) validateAndFillDefaults(config *Config) *Config {
 	if !validTemplates[config.App.DefaultTemplate] {
 		config.App.DefaultTemplate = defaults.App.DefaultTemplate
 	}
-	
+
 	// Fill missing metadata
 	if config.Version == "" {
 		config.Version = defaults.Version
 	}
-	
+
 	return config
 }
 

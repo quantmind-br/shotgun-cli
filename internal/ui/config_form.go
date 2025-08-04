@@ -59,7 +59,7 @@ type ConfigFormModel struct {
 	errors        map[string]string
 	showHelp      bool
 	// Manual text tracking to avoid textinput bugs
-	editingText   string
+	editingText string
 	// Operation status tracking
 	lastOperationStatus  string
 	lastOperationSuccess bool
@@ -107,13 +107,13 @@ func (m *ConfigFormModel) initializeSections() {
 				Help:        "OpenAI API base URL. Use default for OpenAI, or custom URL for compatible services.",
 			},
 			{
-				Label:       "Model",
-				Value:       m.config.OpenAI.Model,
-				Type:        FieldSelect,
-				Options:     []string{"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"},
-				Required:    true,
-				Input:       m.createTextInput("Model name", false),
-				Help:        "The OpenAI model to use for translation. GPT-4o recommended for best results.",
+				Label:    "Model",
+				Value:    m.config.OpenAI.Model,
+				Type:     FieldSelect,
+				Options:  []string{"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"},
+				Required: true,
+				Input:    m.createTextInput("Model name", false),
+				Help:     "The OpenAI model to use for translation. GPT-4o recommended for best results.",
 			},
 			{
 				Label:       "Timeout (seconds)",
@@ -158,13 +158,13 @@ func (m *ConfigFormModel) initializeSections() {
 				Help:     "Enable automatic translation of tasks and rules to English.",
 			},
 			{
-				Label:       "Target Language",
-				Value:       m.config.Translation.TargetLanguage,
-				Type:        FieldSelect,
-				Options:     []string{"en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"},
-				Required:    false,
-				Input:       m.createTextInput("Target language code", false),
-				Help:        "Target language for translations. Default: en (English).",
+				Label:    "Target Language",
+				Value:    m.config.Translation.TargetLanguage,
+				Type:     FieldSelect,
+				Options:  []string{"en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"},
+				Required: false,
+				Input:    m.createTextInput("Target language code", false),
+				Help:     "Target language for translations. Default: en (English).",
 			},
 			{
 				Label:       "Custom Translation Prompt",
@@ -236,14 +236,14 @@ func (m *ConfigFormModel) createTextInput(placeholder string, password bool) tex
 		input.EchoMode = textinput.EchoPassword
 		input.EchoCharacter = '*'
 	}
-	
+
 	// Windows workaround for first character bug
 	// Multiple resets to ensure clean state
 	input.Reset()
 	input.SetValue("")
 	input.Reset()
 	input.Blur() // Ensure not focused initially
-	
+
 	return input
 }
 
@@ -336,10 +336,10 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 					m.toggleField()
 				} else {
 					m.editing = true
-					
+
 					// Windows workaround: Use manual text tracking instead of relying on textinput
 					isPassword := field.Type == FieldPassword
-					
+
 					// Initialize editing text manually
 					if isPassword && field.Value == "••••••••••••••••" {
 						// For password fields with existing key, start with empty
@@ -348,7 +348,7 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 						// For other fields, load the actual value
 						m.editingText = field.Value
 					}
-					
+
 					// Create fresh textinput but don't rely on its internal state
 					field.Input = m.createTextInput(field.Placeholder, isPassword)
 					field.Input.Focus()
@@ -377,7 +377,7 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 			if !m.editing {
 				return m, m.testConnection()
 			}
-			
+
 		case "ctrl+x":
 			if m.editing {
 				// Force clear current field (workaround for phantom characters)
@@ -390,7 +390,7 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 		// Handle input updates when editing - use manual text tracking
 		if m.editing {
 			field := m.getCurrentField()
-			
+
 			// Process keyboard input manually to avoid textinput bugs
 			switch msg.String() {
 			case "backspace":
@@ -405,7 +405,7 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 					m.editingText += msg.String()
 				}
 			}
-			
+
 			// Keep textinput focused but don't rely on its state
 			field.Input.Focus()
 			return m, nil
@@ -454,10 +454,10 @@ func (m *ConfigFormModel) getCurrentField() *ConfigField {
 func (m *ConfigFormModel) forceFieldReset(field *ConfigField) {
 	isPassword := field.Type == FieldPassword
 	wasFocused := field.Input.Focused()
-	
+
 	// Completely recreate the input
 	field.Input = m.createTextInput(field.Placeholder, isPassword)
-	
+
 	// Restore focus if it was focused
 	if wasFocused {
 		field.Input.Focus()
@@ -478,10 +478,10 @@ func (m *ConfigFormModel) toggleField() {
 
 func (m *ConfigFormModel) saveCurrentField() {
 	field := m.getCurrentField()
-	
+
 	// Use manual text tracking instead of textinput value
 	inputValue := m.editingText
-	
+
 	// Special handling for password fields (API Key)
 	if field.Type == FieldPassword && field.Label == "API Key" {
 		// If input is empty and we already have a key, keep the existing key
@@ -494,10 +494,10 @@ func (m *ConfigFormModel) saveCurrentField() {
 	} else {
 		field.Value = inputValue
 	}
-	
+
 	// Clear any previous error for this field
 	delete(m.errors, field.Label)
-	
+
 	// Validate field
 	if field.Required && strings.TrimSpace(field.Value) == "" {
 		m.errors[field.Label] = "This field is required"
@@ -512,7 +512,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		Version:     "1.0",
 		LastUpdated: time.Now(),
 	}
-	
+
 	// Helper function to get field value by label within a section
 	getFieldValue := func(sectionIdx int, label string) string {
 		for _, field := range m.sections[sectionIdx].Fields {
@@ -522,7 +522,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		}
 		return ""
 	}
-	
+
 	// Helper function to parse integer with fallback
 	parseInt := func(value string, fallback int) int {
 		if parsed, err := strconv.Atoi(value); err == nil {
@@ -530,7 +530,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		}
 		return fallback
 	}
-	
+
 	// Helper function to parse float with fallback
 	parseFloat := func(value string, fallback float64) float64 {
 		if parsed, err := strconv.ParseFloat(value, 64); err == nil {
@@ -538,7 +538,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		}
 		return fallback
 	}
-	
+
 	// Helper function to parse boolean with fallback
 	parseBool := func(value string, fallback bool) bool {
 		if parsed, err := strconv.ParseBool(value); err == nil {
@@ -546,26 +546,26 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		}
 		return fallback
 	}
-	
+
 	// Extract OpenAI Configuration (section 0)
 	config.OpenAI = core.OpenAIConfig{
-		APIKeyAlias:     "shotgun-cli-openai-key", // Standard alias
-		BaseURL:         getFieldValue(0, "Base URL"),
-		Model:           getFieldValue(0, "Model"),
-		Timeout:         parseInt(getFieldValue(0, "Timeout (seconds)"), 300),
-		MaxTokens:       parseInt(getFieldValue(0, "Max Tokens"), 4096),
-		Temperature:     parseFloat(getFieldValue(0, "Temperature"), 0.7),
-		MaxRetries:      3, // Default value
-		RetryDelay:      2, // Default value
+		APIKeyAlias: "shotgun-cli-openai-key", // Standard alias
+		BaseURL:     getFieldValue(0, "Base URL"),
+		Model:       getFieldValue(0, "Model"),
+		Timeout:     parseInt(getFieldValue(0, "Timeout (seconds)"), 300),
+		MaxTokens:   parseInt(getFieldValue(0, "Max Tokens"), 4096),
+		Temperature: parseFloat(getFieldValue(0, "Temperature"), 0.7),
+		MaxRetries:  3, // Default value
+		RetryDelay:  2, // Default value
 	}
-	
+
 	// Extract Translation Configuration (section 1)
 	config.Translation = core.TranslationConfig{
 		Enabled:        parseBool(getFieldValue(1, "Enable Translation"), false),
 		TargetLanguage: getFieldValue(1, "Target Language"),
 		ContextPrompt:  getFieldValue(1, "Custom Translation Prompt"),
 	}
-	
+
 	// Extract App Configuration (section 2)
 	config.App = core.AppConfig{
 		Theme:           getFieldValue(2, "Theme"),
@@ -573,7 +573,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 		ShowLineNumbers: parseBool(getFieldValue(2, "Show Line Numbers"), true),
 		DefaultTemplate: getFieldValue(2, "Default Template"),
 	}
-	
+
 	return config, nil
 }
 
@@ -599,7 +599,7 @@ func (m *ConfigFormModel) extractAPIKeyData() (string, error) {
 // validateFormData performs comprehensive validation of all form fields
 func (m *ConfigFormModel) validateFormData() map[string]string {
 	errors := make(map[string]string)
-	
+
 	// Helper function to get field value by label within a section
 	getFieldValue := func(sectionIdx int, label string) string {
 		for _, field := range m.sections[sectionIdx].Fields {
@@ -609,7 +609,7 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 		}
 		return ""
 	}
-	
+
 	// Validate OpenAI Configuration
 	baseURL := strings.TrimSpace(getFieldValue(0, "Base URL"))
 	if baseURL == "" {
@@ -617,12 +617,12 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 	} else if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
 		errors["Base URL"] = "Base URL must start with http:// or https://"
 	}
-	
+
 	model := strings.TrimSpace(getFieldValue(0, "Model"))
 	if model == "" {
 		errors["Model"] = "Model is required"
 	}
-	
+
 	timeoutStr := getFieldValue(0, "Timeout (seconds)")
 	if timeout, err := strconv.Atoi(timeoutStr); err != nil {
 		errors["Timeout (seconds)"] = "Timeout must be a valid number"
@@ -631,7 +631,7 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 	} else if timeout > 3600 {
 		errors["Timeout (seconds)"] = "Timeout cannot exceed 3600 seconds (1 hour)"
 	}
-	
+
 	maxTokensStr := getFieldValue(0, "Max Tokens")
 	if maxTokens, err := strconv.Atoi(maxTokensStr); err != nil {
 		errors["Max Tokens"] = "Max Tokens must be a valid number"
@@ -640,14 +640,14 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 	} else if maxTokens > 128000 {
 		errors["Max Tokens"] = "Max Tokens cannot exceed 128000"
 	}
-	
+
 	temperatureStr := getFieldValue(0, "Temperature")
 	if temperature, err := strconv.ParseFloat(temperatureStr, 64); err != nil {
 		errors["Temperature"] = "Temperature must be a valid number"
 	} else if temperature < 0.0 || temperature > 2.0 {
 		errors["Temperature"] = "Temperature must be between 0.0 and 2.0"
 	}
-	
+
 	// Validate Translation Configuration
 	targetLang := getFieldValue(1, "Target Language")
 	if targetLang != "" {
@@ -663,7 +663,7 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 			errors["Target Language"] = "Invalid target language"
 		}
 	}
-	
+
 	// Validate App Configuration
 	theme := getFieldValue(2, "Theme")
 	if theme != "" {
@@ -679,7 +679,7 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 			errors["Theme"] = "Invalid theme"
 		}
 	}
-	
+
 	defaultTemplate := getFieldValue(2, "Default Template")
 	if defaultTemplate != "" {
 		validTemplates := []string{"dev", "architect", "debug", "project-manager"}
@@ -694,7 +694,7 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 			errors["Default Template"] = "Invalid default template"
 		}
 	}
-	
+
 	return errors
 }
 
@@ -710,7 +710,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				errors:  errors,
 			}
 		}
-		
+
 		// 2. Extract configuration and API key
 		config, err := m.extractConfigurationData()
 		if err != nil {
@@ -720,7 +720,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				errors:  make(map[string]string),
 			}
 		}
-		
+
 		apiKey, err := m.extractAPIKeyData()
 		if err != nil {
 			return configSavedMsg{
@@ -729,7 +729,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				errors:  make(map[string]string),
 			}
 		}
-		
+
 		// 3. Store API key in keyring if provided
 		if apiKey != "" {
 			if err := m.keyMgr.StoreAPIKey(config.OpenAI.APIKeyAlias, apiKey); err != nil {
@@ -740,7 +740,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				}
 			}
 		}
-		
+
 		// 4. Update ConfigManager
 		if err := m.configMgr.Update(config); err != nil {
 			return configSavedMsg{
@@ -749,7 +749,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				errors:  make(map[string]string),
 			}
 		}
-		
+
 		// 5. Save configuration file
 		if err := m.configMgr.Save(); err != nil {
 			return configSavedMsg{
@@ -758,7 +758,7 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 				errors:  make(map[string]string),
 			}
 		}
-		
+
 		// 6. Return success message
 		return configSavedMsg{
 			success: true,
@@ -772,28 +772,28 @@ func (m *ConfigFormModel) resetConfiguration() tea.Cmd {
 	return func() tea.Msg {
 		// 1. Load default configuration
 		defaultConfig := core.DefaultConfig()
-		
+
 		// 2. Check if we should preserve API key
 		preserveAPIKey := false
 		currentAPIKey := ""
-		
+
 		// Check if there's currently a valid API key stored
 		if m.config.OpenAI.APIKeyAlias != "" && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
 			preserveAPIKey = true
 			currentAPIKey = "••••••••••••••••" // Display masked value
 		}
-		
+
 		// 3. Update the local config reference
 		m.config = defaultConfig
-		
+
 		// 4. Preserve API key reference if it exists
 		if preserveAPIKey {
 			m.config.OpenAI.APIKeyAlias = "shotgun-cli-openai-key"
 		}
-		
+
 		// 5. Reinitialize form sections with default values
 		m.initializeSections()
-		
+
 		// 6. Set API key display value if preserving
 		if preserveAPIKey {
 			// Find and update the API Key field to show it's set
@@ -807,18 +807,18 @@ func (m *ConfigFormModel) resetConfiguration() tea.Cmd {
 				}
 			}
 		}
-		
+
 		// 7. Clear any validation errors
 		m.errors = make(map[string]string)
-		
+
 		// 8. Reset editing state
 		m.editing = false
 		m.editingText = ""
-		
+
 		// 9. Reset form navigation to first field
 		m.activeSection = 0
 		m.activeField = 0
-		
+
 		return configResetMsg{
 			success: true,
 			message: "Configuration reset to defaults successfully",
@@ -855,7 +855,7 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				}
 			}
 		}
-		
+
 		// 2. Extract configuration for testing
 		testConfig, err := m.extractConfigurationData()
 		if err != nil {
@@ -865,7 +865,7 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				details: fmt.Sprintf("Error: %v", err),
 			}
 		}
-		
+
 		// 3. Check API key availability
 		apiKey, err := m.extractAPIKeyData()
 		if err != nil {
@@ -875,14 +875,14 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				details: fmt.Sprintf("Error: %v", err),
 			}
 		}
-		
+
 		// For testing, if API key is empty but we have a keyring key, get it
 		if apiKey == "" && testConfig.OpenAI.APIKeyAlias != "" {
 			if storedKey, err := m.keyMgr.GetAPIKey(testConfig.OpenAI.APIKeyAlias); err == nil {
 				apiKey = storedKey
 			}
 		}
-		
+
 		if apiKey == "" {
 			return connectionTestMsg{
 				success: false,
@@ -890,7 +890,7 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				details: "Please enter an API key or ensure one is stored in the keyring",
 			}
 		}
-		
+
 		// 4. Create temporary translator for testing
 		translator, err := core.NewTranslator(testConfig.OpenAI, testConfig.Translation, m.keyMgr)
 		if err != nil {
@@ -900,7 +900,7 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				details: fmt.Sprintf("Error: %v", err),
 			}
 		}
-		
+
 		// 5. Test API connectivity
 		ctx := context.Background()
 		if err := translator.TestConnection(ctx); err != nil {
@@ -910,12 +910,12 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				details: fmt.Sprintf("Error: %v", err),
 			}
 		}
-		
+
 		// 6. Return success with connection details
 		return connectionTestMsg{
 			success: true,
 			message: "Connection test successful",
-			details: fmt.Sprintf("Successfully connected to %s using model %s", 
+			details: fmt.Sprintf("Successfully connected to %s using model %s",
 				testConfig.OpenAI.BaseURL, testConfig.OpenAI.Model),
 		}
 	}
@@ -968,6 +968,6 @@ var (
 				Bold(true)
 
 	configHelpStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
-				Italic(true)
+			Foreground(lipgloss.Color("244")).
+			Italic(true)
 )

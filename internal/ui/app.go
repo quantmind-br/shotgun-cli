@@ -40,13 +40,13 @@ type Model struct {
 	configForm  ConfigFormModel
 
 	// Business Logic
-	scanner      *core.DirectoryScanner
-	generator    *core.ContextGenerator
-	templates    *core.SimpleTemplateProcessor
-	selection    *core.SelectionState
-	configMgr    *core.ConfigManager
-	keyMgr       *core.SecureKeyManager
-	translator   *core.Translator
+	scanner    *core.DirectoryScanner
+	generator  *core.ContextGenerator
+	templates  *core.SimpleTemplateProcessor
+	selection  *core.SelectionState
+	configMgr  *core.ConfigManager
+	keyMgr     *core.SecureKeyManager
+	translator *core.Translator
 
 	// Application State
 	selectedDir     string
@@ -312,7 +312,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case translationCompleteMsg:
 		m.translating = false
 		m.translationError = msg.err
-		
+
 		if msg.err != nil {
 			m.translationStatus = fmt.Sprintf("Translation failed: %s", msg.err.Error())
 			// Continue with original text
@@ -347,7 +347,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Configuration was saved successfully
 			// Reload translator with new config if translation settings changed
 			config := m.configMgr.Get()
-			
+
 			// Try to initialize/update translator
 			if m.translator != nil {
 				// Update existing translator
@@ -357,7 +357,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.translator = nil
 				}
 			}
-			
+
 			// If translator is nil (failed update or never existed), try to create new one
 			if m.translator == nil {
 				if newTranslator, err := core.NewTranslator(config.OpenAI, config.Translation, m.keyMgr); err == nil {
@@ -365,7 +365,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				// If creation still fails, translator remains nil (translation disabled)
 			}
-			
+
 			// Update local config reference
 			m.configForm.config = config
 		}

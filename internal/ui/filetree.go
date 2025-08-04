@@ -133,7 +133,7 @@ func (m FileTreeModel) View() string {
 	lines = append(lines, "")
 	lines = append(lines, statusStyle.Render(stats))
 	lines = append(lines, "")
-	lines = append(lines, helpStyle.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | c: continue"))
+	lines = append(lines, helpStyle.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | c: continue | o: options"))
 
 	return strings.Join(lines, "\n")
 }

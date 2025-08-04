@@ -125,7 +125,6 @@ shotgun-cli --help       # Show help
 ### General
 - `Ctrl+Q`, `Ctrl+C`: Quit application
 - `?`: Toggle help
-- `o`: Access configuration/settings
 - `Esc`: Go back to previous step
 
 ### Directory Selection
@@ -136,6 +135,7 @@ shotgun-cli --help       # Show help
 - `hjkl` or `↑↓←→`: Navigate file tree
 - `Space`: Toggle file/directory exclusion
 - `c`: Continue to next step
+- `o`: Access configuration/settings
 - `r`: Reset all exclusions
 - `a`: Exclude all files
 - `A`: Include all files
