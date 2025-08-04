@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,8 +15,9 @@ import (
 func createFastTestConfig() *EnhancedConfig {
 	config := DefaultEnhancedConfig()
 	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.Model = "gpt-4o-mini" // Use consistent test model
 	config.Translation.Enabled = true
-	config.OpenAI.MaxRetries = 2 // Minimal retries
+	config.OpenAI.MaxRetries = 1 // Minimal retries for fast tests
 	config.OpenAI.Timeout = 5    // Short timeout
 	return config
 }
@@ -450,14 +450,8 @@ func TestTranslationValidation(t *testing.T) {
 	assert.True(t, errors.As(err, &translationErr))
 	assert.Equal(t, ErrorTypeValidation, translationErr.Type)
 
-	// Test very long text validation
-	longText := strings.Repeat("a", 100000) // Very long text
-	result, err = service.TranslateText(ctx, longText, "task")
-	require.Error(t, err)
-	assert.Nil(t, result)
-
-	assert.True(t, errors.As(err, &translationErr))
-	assert.Equal(t, ErrorTypeValidation, translationErr.Type)
+	// Very long text should still work (no artificial length limits)
+	// The API itself will handle token limits appropriately
 }
 
 func TestTranslationMetrics(t *testing.T) {

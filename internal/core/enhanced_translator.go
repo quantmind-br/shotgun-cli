@@ -143,11 +143,21 @@ func NewEnhancedTranslationService(config *EnhancedConfig, keyManager *SecureKey
 		ErrorsByType: make(map[string]int64),
 	}
 
+	// Create retry config based on configuration
+	retryConfig := RetryConfig{
+		MaxRetries:    config.OpenAI.MaxRetries,
+		BaseDelay:     time.Duration(config.OpenAI.RetryDelay) * time.Second,
+		MaxDelay:      time.Minute,
+		BackoffFactor: 2.0,
+		JitterEnabled: true,
+		TimeoutPerTry: time.Duration(config.OpenAI.Timeout) * time.Second,
+	}
+
 	service := &EnhancedTranslationService{
 		client:      wrappedClient,
 		config:      config,
 		keyManager:  keyManager,
-		retryConfig: DefaultRetryConfig(),
+		retryConfig: retryConfig,
 		breaker:     breaker,
 		cache:       cache,
 		rateLimiter: rateLimiter,
@@ -603,14 +613,25 @@ func (s *EnhancedTranslationService) GetMetrics() *TranslationMetrics {
 	s.metrics.mu.RLock()
 	defer s.metrics.mu.RUnlock()
 
-	// Return a copy to avoid race conditions
-	metricsCopy := *s.metrics
-	metricsCopy.ErrorsByType = make(map[string]int64)
+	// Return a copy to avoid race conditions - manually copy fields to avoid copying mutex
+	metricsCopy := &TranslationMetrics{
+		TotalRequests:       s.metrics.TotalRequests,
+		SuccessfulRequests:  s.metrics.SuccessfulRequests,
+		FailedRequests:      s.metrics.FailedRequests,
+		CacheHits:           s.metrics.CacheHits,
+		CacheMisses:         s.metrics.CacheMisses,
+		AverageLatency:      s.metrics.AverageLatency,
+		TotalTokensUsed:     s.metrics.TotalTokensUsed,
+		CircuitBreakerTrips: s.metrics.CircuitBreakerTrips,
+		ErrorsByType:        make(map[string]int64),
+	}
+
+	// Copy error map
 	for k, v := range s.metrics.ErrorsByType {
 		metricsCopy.ErrorsByType[k] = v
 	}
 
-	return &metricsCopy
+	return metricsCopy
 }
 
 // IsConfigured checks if the translation service is properly configured

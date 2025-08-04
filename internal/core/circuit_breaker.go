@@ -236,9 +236,19 @@ func (ecb *EnhancedCircuitBreaker) GetMetrics() *CircuitBreakerMetrics {
 	ecb.metrics.mu.RLock()
 	defer ecb.metrics.mu.RUnlock()
 
-	// Return a copy to avoid race conditions
-	metricsCopy := *ecb.metrics
-	return &metricsCopy
+	// Return a copy to avoid race conditions - manually copy fields to avoid copying mutex
+	metricsCopy := &CircuitBreakerMetrics{
+		TotalRequests:      ecb.metrics.TotalRequests,
+		SuccessfulRequests: ecb.metrics.SuccessfulRequests,
+		FailedRequests:     ecb.metrics.FailedRequests,
+		TimeoutRequests:    ecb.metrics.TimeoutRequests,
+		CircuitOpenCount:   ecb.metrics.CircuitOpenCount,
+		CircuitCloseCount:  ecb.metrics.CircuitCloseCount,
+		LastStateChange:    ecb.metrics.LastStateChange,
+		AverageLatency:     ecb.metrics.AverageLatency,
+	}
+
+	return metricsCopy
 }
 
 // GetSuccessRate returns the current success rate

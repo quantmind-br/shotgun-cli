@@ -230,26 +230,6 @@ func (ec *EnhancedConfig) Validate(validator *validator.Validate) *ConfigValidat
 	}
 }
 
-// generateErrorMessage creates user-friendly error messages from validation tags
-func generateErrorMessage(tag, field, param string) string {
-	switch tag {
-	case "required":
-		return field + " is required"
-	case "url":
-		return field + " must be a valid URL"
-	case "min":
-		return field + " must be at least " + param
-	case "max":
-		return field + " must be at most " + param
-	case "oneof":
-		return field + " must be one of: " + param
-	case "email":
-		return field + " must be a valid email address"
-	default:
-		return field + " validation failed: " + tag
-	}
-}
-
 // SetupEnhancedValidator creates and configures a validator with custom rules
 func SetupEnhancedValidator() *validator.Validate {
 	validate := validator.New()
