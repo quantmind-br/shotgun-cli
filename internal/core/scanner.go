@@ -299,7 +299,13 @@ func walkFileTree(node *FileNode, selection *SelectionState, result *[]string) {
 			*result = append(*result, node.Path)
 		}
 	} else {
-		// It's a directory, recurse through children
+		// It's a directory - check if the directory is excluded before recursing
+		if selection.IsPathExcluded(node.RelPath) {
+			// Directory is excluded, skip all children (MAJOR OPTIMIZATION)
+			return
+		}
+
+		// Directory is not excluded, recurse through children
 		for _, child := range node.Children {
 			walkFileTree(child, selection, result)
 		}

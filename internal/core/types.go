@@ -1,6 +1,7 @@
 package core
 
 import (
+	"path/filepath"
 	"sync"
 	"text/template"
 	"time"
@@ -60,12 +61,18 @@ type TemplateData struct {
 	FileStructure string
 }
 
+// SelectionStatus represents the selection state of a path
+type SelectionStatus int
+
+const (
+	StatusInherit  SelectionStatus = iota // Inherit from parent (default)
+	StatusExcluded                        // Explicitly excluded
+)
+
 // SelectionState manages file inclusion/exclusion state
 type SelectionState struct {
-	included map[string]bool
-	excluded map[string]bool
-	patterns []string
-	mu       sync.RWMutex
+	selection map[string]SelectionStatus // Only explicit decisions (new hierarchical system)
+	mu        sync.RWMutex               // Thread safety (preserve existing)
 }
 
 // ShotgunError provides structured error information
@@ -135,24 +142,43 @@ func NewTemplateProcessor() *SimpleTemplateProcessor {
 // NewSelectionState creates a new selection state
 func NewSelectionState() *SelectionState {
 	return &SelectionState{
-		included: make(map[string]bool),
-		excluded: make(map[string]bool),
-		patterns: make([]string, 0),
+		selection: make(map[string]SelectionStatus),
 	}
+}
+
+// IsPathExcluded checks if a path is excluded, checking parent hierarchy
+func (ss *SelectionState) IsPathExcluded(path string) bool {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+
+	// Clean path for cross-platform compatibility
+	cleanPath := filepath.Clean(path)
+
+	// Check each parent level for exclusions
+	currentPath := cleanPath
+	for {
+		// Check explicit exclusion at this level
+		if status, exists := ss.selection[currentPath]; exists {
+			return status == StatusExcluded
+		}
+
+		// Move to parent directory
+		parentPath := filepath.Dir(currentPath)
+		if parentPath == currentPath {
+			// Reached root without finding exclusion
+			break
+		}
+		currentPath = parentPath
+	}
+
+	// Default: included (no exclusions found)
+	return false
 }
 
 // IsFileIncluded checks if a file should be included in the final output
 func (ss *SelectionState) IsFileIncluded(path string) bool {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-
-	// Check explicit exclusion first
-	if ss.excluded[path] {
-		return false
-	}
-
-	// Default to included
-	return true
+	// Use the new hierarchical exclusion checking
+	return !ss.IsPathExcluded(path)
 }
 
 // ToggleFile toggles the exclusion state of a file
@@ -160,10 +186,14 @@ func (ss *SelectionState) ToggleFile(path string) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	if ss.excluded[path] {
-		delete(ss.excluded, path)
+	cleanPath := filepath.Clean(path)
+
+	// Simple state cycling: inherit -> excluded -> inherit
+	current := ss.selection[cleanPath] // Zero value is StatusInherit
+	if current == StatusInherit {
+		ss.selection[cleanPath] = StatusExcluded
 	} else {
-		ss.excluded[path] = true
+		delete(ss.selection, cleanPath) // Return to inherit state
 	}
 }
 
@@ -171,21 +201,21 @@ func (ss *SelectionState) ToggleFile(path string) {
 func (ss *SelectionState) ExcludeFile(path string) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.excluded[path] = true
+	ss.selection[filepath.Clean(path)] = StatusExcluded
 }
 
 // IncludeFile explicitly includes a file (removes from excluded)
 func (ss *SelectionState) IncludeFile(path string) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	delete(ss.excluded, path)
+	delete(ss.selection, filepath.Clean(path))
 }
 
 // Reset clears all exclusions
 func (ss *SelectionState) Reset() {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.excluded = make(map[string]bool)
+	ss.selection = make(map[string]SelectionStatus)
 }
 
 // GetExcludedFiles returns a copy of excluded files
@@ -193,8 +223,10 @@ func (ss *SelectionState) GetExcludedFiles() map[string]bool {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
 	result := make(map[string]bool)
-	for k, v := range ss.excluded {
-		result[k] = v
+	for k, v := range ss.selection {
+		if v == StatusExcluded {
+			result[k] = true
+		}
 	}
 	return result
 }

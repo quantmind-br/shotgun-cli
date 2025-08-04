@@ -10,24 +10,36 @@ import (
 	"shotgun-cli/internal/core"
 )
 
+// DirectoryStats holds cached statistics for a directory
+type DirectoryStats struct {
+	Total    int
+	Included int
+	Excluded int
+	Filtered int
+}
+
 // FileTreeModel represents the file tree component with exclusion capabilities
 type FileTreeModel struct {
-	root      *core.FileNode
-	selection *core.SelectionState
-	cursor    int
-	expanded  map[string]bool
-	viewport  []string               // Flattened view of the tree
-	nodeMap   map[int]*core.FileNode // Maps viewport index to node
+	root            *core.FileNode
+	selection       *core.SelectionState
+	cursor          int
+	expanded        map[string]bool
+	viewport        []string                  // Flattened view of the tree
+	nodeMap         map[int]*core.FileNode    // Maps viewport index to node
+	cachedStats     map[string]DirectoryStats // NEW: Cache stats by path
+	statsCacheValid bool                      // NEW: Cache validity flag
 }
 
 // NewFileTreeModel creates a new file tree model
 func NewFileTreeModel(root *core.FileNode, selection *core.SelectionState) FileTreeModel {
 	m := FileTreeModel{
-		root:      root,
-		selection: selection,
-		cursor:    0,
-		expanded:  make(map[string]bool),
-		nodeMap:   make(map[int]*core.FileNode),
+		root:            root,
+		selection:       selection,
+		cursor:          0,
+		expanded:        make(map[string]bool),
+		nodeMap:         make(map[int]*core.FileNode),
+		cachedStats:     make(map[string]DirectoryStats),
+		statsCacheValid: false,
 	}
 
 	// Expand root by default
@@ -37,6 +49,12 @@ func NewFileTreeModel(root *core.FileNode, selection *core.SelectionState) FileT
 
 	m.rebuildViewport()
 	return m
+}
+
+// invalidateStatsCache invalidates the statistics cache
+func (m *FileTreeModel) invalidateStatsCache() {
+	m.statsCacheValid = false
+	m.cachedStats = make(map[string]DirectoryStats)
 }
 
 // Update handles file tree events
@@ -67,10 +85,8 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 		case " ": // Space to toggle exclusion
 			if node, exists := m.nodeMap[m.cursor]; exists {
 				m.selection.ToggleFile(node.RelPath)
-				// If it's a directory, toggle all children
-				if node.IsDir {
-					m.toggleDirectoryChildren(node)
-				}
+				// Invalidate cache since selection changed
+				m.invalidateStatsCache()
 			}
 		case "enter":
 			// Toggle expansion for directories
@@ -81,12 +97,15 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 		case "r":
 			// Reset all exclusions
 			m.selection.Reset()
+			m.invalidateStatsCache()
 		case "a":
 			// Exclude all files
 			m.excludeAll()
+			m.invalidateStatsCache()
 		case "A":
 			// Include all files (clear exclusions)
 			m.selection.Reset()
+			m.invalidateStatsCache()
 		}
 	}
 
@@ -131,9 +150,14 @@ func (m FileTreeModel) View() string {
 	// Add statistics
 	stats := m.getStats()
 	lines = append(lines, "")
-	lines = append(lines, statusStyle.Render(stats))
+
+	// Define styles locally
+	statusStyleLocal := lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
+	helpStyleLocal := lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
+
+	lines = append(lines, statusStyleLocal.Render(stats))
 	lines = append(lines, "")
-	lines = append(lines, helpStyle.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | c: continue | o: options"))
+	lines = append(lines, helpStyleLocal.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | c: continue | o: options"))
 
 	return strings.Join(lines, "\n")
 }
@@ -197,14 +221,11 @@ func (m *FileTreeModel) getStatusIndicator(node *core.FileNode) string {
 	}
 
 	if node.IsDir {
-		// For directories, check if any children are included/excluded
-		included, excluded := m.getDirectoryStats(node)
-		if included > 0 && excluded > 0 {
-			return "[-]" // Partially excluded
-		} else if excluded > 0 {
-			return "[x]" // Fully excluded
+		// Use hierarchical logic instead of recursive stats
+		if m.selection.IsPathExcluded(node.RelPath) {
+			return "[x]" // Directory explicitly excluded
 		} else {
-			return "[ ]" // Fully included
+			return "[ ]" // Directory included (hierarchical system handles children)
 		}
 	} else {
 		// For files, check individual status
@@ -216,64 +237,11 @@ func (m *FileTreeModel) getStatusIndicator(node *core.FileNode) string {
 	}
 }
 
-// getDirectoryStats gets inclusion/exclusion stats for a directory
-func (m *FileTreeModel) getDirectoryStats(dir *core.FileNode) (included, excluded int) {
-	if !dir.IsDir {
-		return 0, 0
-	}
-
-	for _, child := range dir.Children {
-		if child.IsDir {
-			childIncluded, childExcluded := m.getDirectoryStats(child)
-			included += childIncluded
-			excluded += childExcluded
-		} else {
-			if !child.IsGitignored && !child.IsCustomIgnored {
-				if m.selection.IsFileIncluded(child.RelPath) {
-					included++
-				} else {
-					excluded++
-				}
-			}
-		}
-	}
-
-	return included, excluded
-}
-
-// toggleDirectoryChildren toggles exclusion for all children of a directory
-func (m *FileTreeModel) toggleDirectoryChildren(dir *core.FileNode) {
-	if !dir.IsDir {
-		return
-	}
-
-	// Determine if we should exclude or include based on current state
-	shouldExclude := m.selection.IsFileIncluded(dir.RelPath)
-
-	m.toggleDirectoryChildrenRecursive(dir, shouldExclude)
-}
-
-// toggleDirectoryChildrenRecursive recursively toggles children
-func (m *FileTreeModel) toggleDirectoryChildrenRecursive(node *core.FileNode, shouldExclude bool) {
-	for _, child := range node.Children {
-		if child.IsDir {
-			m.toggleDirectoryChildrenRecursive(child, shouldExclude)
-		} else {
-			if !child.IsGitignored && !child.IsCustomIgnored {
-				if shouldExclude {
-					m.selection.ExcludeFile(child.RelPath)
-				} else {
-					m.selection.IncludeFile(child.RelPath)
-				}
-			}
-		}
-	}
-}
-
 // excludeAll excludes all files in the tree
 func (m *FileTreeModel) excludeAll() {
 	if m.root != nil {
 		m.excludeAllRecursive(m.root)
+		m.invalidateStatsCache()
 	}
 }
 
@@ -296,42 +264,67 @@ func (m *FileTreeModel) getStats() string {
 		return "No files"
 	}
 
-	total, included, excluded, filtered := m.getStatsRecursive(m.root)
+	stats := m.getCachedGlobalStats()
 
 	return lipgloss.JoinHorizontal(lipgloss.Left,
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#17a2b8")).Render("Total: "),
 		lipgloss.NewStyle().Bold(true).Render(lipgloss.JoinHorizontal(lipgloss.Left,
-			lipgloss.NewStyle().Render(fmt.Sprintf("%d", total)),
+			lipgloss.NewStyle().Render(fmt.Sprintf("%d", stats.Total)),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("#6c757d")).Render(" | "),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#28a745")).Render(fmt.Sprintf("Included: %d", included)),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#28a745")).Render(fmt.Sprintf("Included: %d", stats.Included)),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("#6c757d")).Render(" | "),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#dc3545")).Render(fmt.Sprintf("Excluded: %d", excluded)),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#dc3545")).Render(fmt.Sprintf("Excluded: %d", stats.Excluded)),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("#6c757d")).Render(" | "),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#6c757d")).Render(fmt.Sprintf("Filtered: %d", filtered)),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#6c757d")).Render(fmt.Sprintf("Filtered: %d", stats.Filtered)),
 		)),
 	)
 }
 
-// getStatsRecursive recursively counts file statistics
-func (m *FileTreeModel) getStatsRecursive(node *core.FileNode) (total, included, excluded, filtered int) {
-	if node.IsDir {
-		for _, child := range node.Children {
-			childTotal, childIncluded, childExcluded, childFiltered := m.getStatsRecursive(child)
-			total += childTotal
-			included += childIncluded
-			excluded += childExcluded
-			filtered += childFiltered
-		}
-	} else {
-		total++
-		if node.IsGitignored || node.IsCustomIgnored {
-			filtered++
-		} else if m.selection.IsFileIncluded(node.RelPath) {
-			included++
-		} else {
-			excluded++
+// getCachedGlobalStats returns cached global statistics, calculating if needed
+func (m *FileTreeModel) getCachedGlobalStats() DirectoryStats {
+	const globalKey = "__global__"
+
+	if m.statsCacheValid {
+		if stats, exists := m.cachedStats[globalKey]; exists {
+			return stats
 		}
 	}
 
-	return total, included, excluded, filtered
+	// Calculate fresh statistics
+	stats := m.calculateStatsRecursive(m.root)
+
+	// Cache the result
+	if m.cachedStats == nil {
+		m.cachedStats = make(map[string]DirectoryStats)
+	}
+	m.cachedStats[globalKey] = stats
+	m.statsCacheValid = true
+
+	return stats
+}
+
+// calculateStatsRecursive calculates file statistics (only called when cache invalid)
+func (m *FileTreeModel) calculateStatsRecursive(node *core.FileNode) DirectoryStats {
+	stats := DirectoryStats{}
+
+	if node.IsDir {
+		for _, child := range node.Children {
+			childStats := m.calculateStatsRecursive(child)
+			stats.Total += childStats.Total
+			stats.Included += childStats.Included
+			stats.Excluded += childStats.Excluded
+			stats.Filtered += childStats.Filtered
+		}
+	} else {
+		stats.Total++
+		if node.IsGitignored || node.IsCustomIgnored {
+			stats.Filtered++
+		} else if m.selection.IsFileIncluded(node.RelPath) {
+			stats.Included++
+		} else {
+			stats.Excluded++
+		}
+	}
+
+	return stats
 }
