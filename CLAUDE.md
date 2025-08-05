@@ -38,18 +38,29 @@ npm run clean            # Clean build artifacts
 ### Core Structure
 ```
 internal/
-├── core/           # Business logic layer
-│   ├── types.go    # Core data structures and interfaces (enhanced TemplateData)
-│   ├── scanner.go  # Directory scanning with gitignore support
-│   ├── generator.go # Context generation and file processing
-│   ├── template.go # Template processing (complex templates)
-│   ├── template_simple.go # Simple template processing (enhanced formatting)
-│   └── formatter.go # Text formatting logic (legacy)
-├── ui/             # BubbleTea UI layer
-│   ├── app.go      # Main application model and state
-│   ├── filetree.go # File tree UI with exclusion controls
-│   ├── components.go # TextArea component for user input
-│   └── views.go    # View rendering logic (enhanced prompt composition)
+├── core/                      # Business logic layer
+│   ├── types.go              # Core data structures and interfaces
+│   ├── scanner.go            # Directory scanning with gitignore support
+│   ├── generator.go          # Context generation and file processing
+│   ├── template.go           # Template processing (complex templates)
+│   ├── template_simple.go    # Simple template processing
+│   ├── config.go             # Basic configuration management
+│   ├── config_manager.go     # Enhanced configuration with Koanf
+│   ├── enhanced_config.go    # Enhanced config structures with validation
+│   ├── keyring.go            # Secure API key management
+│   ├── enhanced_translator.go # Production translation service
+│   ├── translation_errors.go # Structured translation error types
+│   ├── retry_handler.go      # Retry logic with exponential backoff
+│   └── circuit_breaker.go    # Circuit breaker for fault tolerance
+├── ui/                       # BubbleTea UI layer
+│   ├── app.go               # Main application model and state
+│   ├── filetree.go          # File tree UI with exclusion controls
+│   ├── components.go        # TextArea component for user input
+│   ├── views.go             # View rendering logic
+│   ├── enhanced_config_form.go # Advanced configuration UI
+│   ├── translation_views.go  # Translation UI with progress indicators
+│   ├── config_sections.go    # Configuration form sections
+│   └── windows_input.go      # Windows-specific input handling
 ```
 
 ### Key Components
@@ -70,6 +81,43 @@ internal/
 **FileTreeModel**: Interactive TUI component for inverse file selection (exclude rather than include files).
 
 **NumberedTextArea**: Simple multiline input component for Task Description and Custom Rules fields.
+
+### Enhanced Configuration System
+
+**EnhancedConfigManager**: Advanced configuration management using Koanf with:
+- Multi-source configuration (files, environment variables, defaults)
+- Real-time configuration validation with structured error reporting
+- File watching for live configuration updates
+- XDG Base Directory specification compliance for cross-platform config storage
+
+**SecureKeyManager**: Secure API key management with:
+- Windows Credential Manager integration for encrypted storage
+- Cross-platform keyring support with filesystem fallback
+- Configurable API key aliases for multiple service providers
+
+**Configuration Hierarchy** (highest to lowest priority):
+1. Environment variables (`SHOTGUN_*` prefix)
+2. Configuration file (`~/.config/shotgun-cli/config.json`)
+3. Built-in defaults
+
+### Translation System Architecture
+
+**EnhancedTranslationService**: Production-ready translation service with:
+- Circuit breaker pattern for fault tolerance
+- Intelligent retry logic with exponential backoff and jitter
+- LRU caching with TTL for performance optimization
+- Rate limiting to respect API quotas
+- Comprehensive metrics and monitoring
+
+**Translation Flow**:
+1. Input validation and preprocessing
+2. Cache lookup for existing translations
+3. Rate limiting and circuit breaker checks
+4. API request with retry logic
+5. Response processing and cache storage
+6. Metrics collection and error tracking
+
+**Error Handling**: Structured error types (Network, Auth, RateLimit, Validation, etc.) with automatic classification and retry eligibility determination.
 
 ### State Management
 - `ViewState` enum tracks current UI step (FileExclusion → PromptComposition → Generation → Complete)
@@ -136,6 +184,12 @@ Binary outputs:
 - **Lipgloss**: Styling and layout for terminal UI
 - **Bubbles**: Pre-built UI components (progress bars, text inputs)
 - **go-gitignore**: Gitignore pattern matching
+- **Koanf**: Configuration management with multi-source support
+- **go-playground/validator**: Configuration validation with struct tags
+- **go-keyring**: Cross-platform secure credential storage
+- **sony/gobreaker**: Circuit breaker implementation for fault tolerance
+- **golang.org/x/time/rate**: Token bucket rate limiting
+- **sashabaranov/go-openai**: OpenAI API client for translation services
 
 ## Development Guidelines
 
@@ -157,3 +211,49 @@ Binary outputs:
 
 ### Template Development
 Templates must output valid git diff format for Dev template, or structured markdown for others. Use `{TASK}`, `{RULES}`, and `{FILE_STRUCTURE}` placeholders.
+
+## Configuration Management
+
+### Configuration File Location
+- **Primary**: `~/.config/shotgun-cli/config.json` (XDG standard)
+- **Windows**: `%LOCALAPPDATA%\shotgun-cli\config.json`
+- **macOS**: `~/Library/Application Support/shotgun-cli/config.json`
+- **Linux**: `~/.config/shotgun-cli/config.json`
+
+### API Key Storage
+- **Windows**: Windows Credential Manager (encrypted)
+- **macOS**: Keychain (encrypted)
+- **Linux**: Secret Service API or filesystem fallback
+- **Fallback**: `~/.config/shotgun-cli/keyring/` directory
+
+### Environment Variables
+All configuration can be overridden via environment variables with `SHOTGUN_` prefix:
+- `SHOTGUN_OPENAI_MODEL=gpt-4o`
+- `SHOTGUN_TRANSLATION_ENABLED=true`
+- `SHOTGUN_APP_THEME=dark`
+
+### Configuration Validation
+The system validates all configuration on load with detailed error reporting. Common validation rules:
+- Model names must be from supported OpenAI models list
+- URLs must be valid HTTP/HTTPS endpoints
+- Numeric ranges enforced (timeouts, token limits, etc.)
+- Language codes must be supported for translation
+
+## Testing Architecture
+
+### Test Structure
+- **Unit Tests**: `*_test.go` files alongside source code
+- **Integration Tests**: Complex workflows testing multiple components
+- **Benchmark Tests**: Performance validation for critical paths
+
+### Mock Strategy
+- **Translation Service**: Mock OpenAI client with configurable responses and error simulation
+- **Configuration**: In-memory configuration for isolated testing
+- **Keyring**: Mock key manager to avoid credential dependencies
+
+### Windows Compatibility Testing
+Special attention to Windows-specific behaviors:
+- Path handling with backslashes vs forward slashes
+- CRLF line endings in git operations
+- Windows Credential Manager integration
+- File permissions and temporary file creation

@@ -80,18 +80,6 @@ reinstall-and-start.bat
 *.backup
 *.bak
 
-# AI Assistant Configuration and Cache Directories
-# Claude Code assistant
-.claude/
-CLAUDE.md
-
-# Serena assistant
-.serena/
-*.pkl
-
-# Gemini assistant  
-.gemini/
-
 # Project Requirements and Plans (development docs)
 PRPs/
 

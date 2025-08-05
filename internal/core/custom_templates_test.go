@@ -12,10 +12,10 @@ import (
 // Test parseFrontmatter function
 func TestParseFrontmatter(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
-		expectError bool
-		expectedKey string
+		name         string
+		content      string
+		expectError  bool
+		expectedKey  string
 		expectedName string
 		expectedDesc string
 	}{
@@ -125,7 +125,7 @@ description: "Template with no content"
 				assert.Equal(t, tt.expectedKey, result.Metadata.Key, "Key mismatch")
 				assert.Equal(t, tt.expectedName, result.Metadata.Name, "Name mismatch")
 				assert.Equal(t, tt.expectedDesc, result.Metadata.Description, "Description mismatch")
-				
+
 				// Special case: empty content is valid for templates with no body
 				if tt.name != "Empty content after frontmatter" {
 					assert.NotEmpty(t, result.Content, "Content should not be empty")
@@ -367,10 +367,10 @@ func TestValidateTemplateKeyConflicts(t *testing.T) {
 
 	// Mock custom templates with some conflicts
 	customTemplates := []TemplateInfo{
-		{Key: "dev", Name: "Custom Dev Template", Source: TemplateSourceCustom},           // Conflict
+		{Key: "dev", Name: "Custom Dev Template", Source: TemplateSourceCustom},             // Conflict
 		{Key: "architect", Name: "Custom Architect Template", Source: TemplateSourceCustom}, // Conflict
-		{Key: "custom-1", Name: "Custom Template 1", Source: TemplateSourceCustom},         // No conflict
-		{Key: "custom-2", Name: "Custom Template 2", Source: TemplateSourceCustom},         // No conflict
+		{Key: "custom-1", Name: "Custom Template 1", Source: TemplateSourceCustom},          // No conflict
+		{Key: "custom-2", Name: "Custom Template 2", Source: TemplateSourceCustom},          // No conflict
 	}
 
 	validCustomTemplates := validateTemplateKeyConflicts(builtinTemplates, customTemplates)
@@ -420,14 +420,14 @@ func TestSimpleTemplateProcessorIntegration(t *testing.T) {
 	// Create all required builtin template files (from AvailableTemplates)
 	builtinContent := `Test builtin template with {TASK} and {RULES}.
 File structure: {FILE_STRUCTURE}`
-	
+
 	builtinFiles := []string{
 		"prompt_makeDiffGitFormat.md",
-		"prompt_makePlan.md", 
+		"prompt_makePlan.md",
 		"prompt_analyzeBug.md",
 		"prompt_projectManager.md",
 	}
-	
+
 	for _, filename := range builtinFiles {
 		err = os.WriteFile(filepath.Join(builtinDir, filename), []byte(builtinContent), 0644)
 		require.NoError(t, err)
@@ -453,7 +453,7 @@ Files: {FILE_STRUCTURE}`
 	allTemplates := processor.GetAllTemplateInfos()
 	builtinTemplates := processor.GetBuiltinTemplateInfos()
 	customTemplates := processor.GetCustomTemplateInfos()
-	
+
 	// We expect 4 builtin templates (from AvailableTemplates) and 1 custom template
 	assert.Len(t, builtinTemplates, 4, "Should have 4 builtin templates")
 	assert.Len(t, customTemplates, 1, "Should have 1 custom template")
@@ -470,7 +470,7 @@ Files: {FILE_STRUCTURE}`
 		Rules:         "Test rules",
 		FileStructure: "Test file structure",
 	}
-	
+
 	prompt, err := processor.GeneratePrompt("custom-test", data)
 	assert.NoError(t, err)
 	assert.Contains(t, prompt, "Test task")

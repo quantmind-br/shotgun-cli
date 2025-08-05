@@ -11,10 +11,10 @@ Terminal-based prompt generation tool built with Go and BubbleTea. A command-lin
   - Built-in ignore patterns for common file types
   - Custom ignore rules
 - **Multiple Prompt Templates**: 
-  - **Dev**: Generate git diffs for code changes
-  - **Architect**: Create design plans and architecture
-  - **Debug**: Bug analysis and debugging
-  - **Project Manager**: Documentation sync and task management
+  - **Built-in Templates**: 4 specialized templates for different use cases
+  - **Custom Templates**: Create your own templates with YAML frontmatter
+  - **Dynamic Loading**: Templates are loaded dynamically with conflict resolution
+  - **Extensible System**: Easy to add new templates without code changes
 - **Progress Tracking**: Real-time progress bars for large projects
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 
@@ -115,7 +115,7 @@ shotgun-cli --help       # Show help
 ## Workflow
 
 1. **File Exclusion**: Choose files to exclude from the prompt (inverse selection)
-2. **Template Selection**: Select from 4 specialized prompt templates with full descriptions
+2. **Template Selection**: Select from built-in and custom templates with full descriptions
 3. **Task Description**: Describe your task in dedicated full-screen interface
 4. **Custom Rules**: Add optional rules and constraints in dedicated full-screen interface
 5. **Generate**: Creates and saves the prompt to current directory
@@ -142,7 +142,7 @@ shotgun-cli --help       # Show help
 
 ### Template Selection
 - `↑/↓` (or `k/j`): Navigate template options
-- `1-4`: Quick select template by number
+- `1-4`: Quick select built-in template by number
 - `Enter`: Confirm selection and continue
 
 ### Task Description
@@ -153,27 +153,120 @@ shotgun-cli --help       # Show help
 - `Tab`: Focus/unfocus input field
 - `F5`: Generate prompt
 
-## Template Types
+## Template System
 
-### 1. Dev Template (`prompt_makeDiffGitFormat.md`)
+shotgun-cli features an extensible template system supporting both built-in and custom templates.
+
+### Built-in Templates
+
+#### 1. Dev Template (`dev`)
 - **Purpose**: Generate git diff formatted code changes
 - **Output**: Standard unified git diff format
 - **Use Case**: Code implementation requests
 
-### 2. Architect Template (`prompt_makePlan.md`)
+#### 2. Architect Template (`architect`)
 - **Purpose**: Create refactoring and design plans
 - **Output**: Structured Markdown planning document
 - **Use Case**: Architecture and planning tasks
 
-### 3. Debug Template (`prompt_analyzeBug.md`)
+#### 3. Debug Template (`debug`)
 - **Purpose**: Debug analysis and root cause identification
 - **Output**: Comprehensive bug analysis report
 - **Use Case**: Debugging and troubleshooting
 
-### 4. Project Manager Template (`prompt_projectManager.md`)
+#### 4. Project Manager Template (`project`)
 - **Purpose**: Documentation synchronization and task management
 - **Output**: Git diff for documentation updates
 - **Use Case**: Project management and documentation
+
+### Custom Templates
+
+Create your own templates to match specific workflows and requirements.
+
+#### Template Directory
+
+Custom templates are stored in:
+- **Windows**: `%LOCALAPPDATA%\shotgun-cli\templates\`
+- **macOS**: `~/Library/Application Support/shotgun-cli/templates/`
+- **Linux**: `~/.config/shotgun-cli/templates/`
+
+#### Template Format
+
+Create `.md` files with YAML frontmatter:
+
+```markdown
+---
+key: "my-template"
+name: "My Custom Template"
+description: "Description of what this template does"
+---
+
+# My Custom Template
+
+This template will help with {TASK}.
+
+## Specific Rules
+{RULES}
+
+## File Structure
+{FILE_STRUCTURE}
+
+## Generated On
+{CURRENT_DATE}
+```
+
+#### Required Fields
+
+- **`key`**: Unique identifier (no spaces, use hyphens)
+- **`name`**: Display name shown in the interface
+- **`description`**: Description shown in template selection
+
+#### Available Variables
+
+- **`{TASK}`**: User's task description
+- **`{RULES}`**: Custom rules (or "no additional rules")
+- **`{FILE_STRUCTURE}`**: Selected files content and structure
+- **`{CURRENT_DATE}`**: Current date (YYYY-MM-DD format)
+
+#### Example: Code Review Template
+
+Create `code-review.md`:
+
+```markdown
+---
+key: "code-review"
+name: "Code Review"
+description: "Template for thorough code reviews"
+---
+
+# Code Review Request
+
+## Task Description
+{TASK}
+
+## Review Guidelines
+{RULES}
+
+## Files to Review
+{FILE_STRUCTURE}
+
+## Review Checklist
+- [ ] Code follows project conventions
+- [ ] Logic is clear and well-structured
+- [ ] Error handling is appropriate
+- [ ] Tests are included and comprehensive
+- [ ] Documentation is updated
+
+Generated on: {CURRENT_DATE}
+```
+
+#### Template Features
+
+- **Conflict Resolution**: Custom templates with keys matching built-in templates are ignored
+- **Dynamic Loading**: Templates are loaded at startup without requiring restarts
+- **Validation**: YAML frontmatter and required fields are automatically validated
+- **Grouping**: Templates are displayed in separate Built-in and Custom sections
+- **Error Handling**: Invalid templates are skipped with informative logging
 
 ## File Filtering
 
@@ -194,10 +287,21 @@ The application uses a three-layer filtering system:
 
 ## Configuration
 
+### Application Configuration
+
 Configuration is stored in:
-- **Windows**: `%APPDATA%\shotgun-code\settings.json`
-- **macOS**: `~/Library/Application Support/shotgun-code/settings.json`
-- **Linux**: `~/.config/shotgun-code/settings.json`
+- **Windows**: `%LOCALAPPDATA%\shotgun-cli\config.json`
+- **macOS**: `~/Library/Application Support/shotgun-cli/config.json`
+- **Linux**: `~/.config/shotgun-cli/config.json`
+
+### Custom Templates
+
+Custom templates are stored in:
+- **Windows**: `%LOCALAPPDATA%\shotgun-cli\templates\`
+- **macOS**: `~/Library/Application Support/shotgun-cli/templates/`
+- **Linux**: `~/.config/shotgun-cli/templates/`
+
+The application automatically creates these directories on first run if they don't exist.
 
 ## Output
 
@@ -239,21 +343,26 @@ go vet ./...
 
 ```
 shotgun-cli/
-├── main.go                   # Application entry point
+├── main.go                      # Application entry point
 ├── internal/
-│   ├── ui/                   # BubbleTea UI components
-│   │   ├── app.go           # Main application model
-│   │   ├── filetree.go      # File tree with exclusion
-│   │   └── views.go         # View handlers
-│   ├── core/                # Business logic
-│   │   ├── scanner.go       # Directory scanning
-│   │   ├── generator.go     # Context generation
-│   │   ├── template.go      # Template processing
-│   │   └── types.go         # Core data structures
-│   └── config/              # Configuration
-├── templates/               # Prompt templates
-├── package.json            # NPM configuration
-└── .goreleaser.yaml        # Release configuration
+│   ├── ui/                      # BubbleTea UI components
+│   │   ├── app.go              # Main application model
+│   │   ├── filetree.go         # File tree with exclusion
+│   │   ├── views.go            # View handlers
+│   │   └── components.go       # UI components
+│   ├── core/                   # Business logic
+│   │   ├── scanner.go          # Directory scanning
+│   │   ├── generator.go        # Context generation
+│   │   ├── template.go         # Template metadata structures
+│   │   ├── template_simple.go  # Template processor
+│   │   ├── custom_templates.go # Custom template loading
+│   │   ├── config.go           # Configuration management
+│   │   ├── keyring.go          # Secure key management
+│   │   └── types.go            # Core data structures
+├── templates/                  # Built-in prompt templates
+├── package.json               # NPM configuration
+├── scripts/                   # Build scripts
+└── .goreleaser.yaml           # Release configuration
 ```
 
 ## License
@@ -272,11 +381,17 @@ MIT License - see LICENSE file for details.
 
 ### Common Issues
 
-**Template not found**: Ensure templates are in the correct path relative to the executable.
+**Template not found**: Ensure built-in templates are in the `templates/` directory relative to the executable.
 
-**Permission denied**: Make sure you have read access to the project directory.
+**Custom template ignored**: Check that your custom template doesn't use a key that conflicts with built-in templates (`dev`, `architect`, `debug`, `project`).
 
-**Out of memory**: Large projects may exceed the 10MB context limit. Use file exclusion to reduce size.
+**Invalid YAML**: Ensure your custom template has valid YAML frontmatter with required fields (`key`, `name`, `description`).
+
+**Template directory not created**: The application automatically creates `~/.config/shotgun-cli/templates/` on first run. Check file permissions if it fails.
+
+**Permission denied**: Make sure you have read access to the project directory and template directories.
+
+**Out of memory**: Large projects may consume significant memory. Use file exclusion to reduce size.
 
 **Binary not found**: After npm install, ensure your PATH includes npm global binaries.
 

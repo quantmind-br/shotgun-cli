@@ -11,7 +11,7 @@ import (
 
 // SimpleTemplateProcessor handles template loading and processing with string replacement
 type SimpleTemplateProcessor struct {
-	templates     map[string]string      // Raw template content
+	templates     map[string]string       // Raw template content
 	templateInfos map[string]TemplateInfo // Template metadata
 	mu            sync.RWMutex
 }
@@ -212,14 +212,14 @@ func (stp *SimpleTemplateProcessor) GetCustomTemplateInfos() []TemplateInfo {
 
 	var customInfos []TemplateInfo
 	var keys []string
-	
+
 	// First collect all custom template keys
 	for key, info := range stp.templateInfos {
 		if info.Source == TemplateSourceCustom {
 			keys = append(keys, key)
 		}
 	}
-	
+
 	// Sort keys to ensure consistent ordering
 	for i := 0; i < len(keys); i++ {
 		for j := i + 1; j < len(keys); j++ {
@@ -228,11 +228,11 @@ func (stp *SimpleTemplateProcessor) GetCustomTemplateInfos() []TemplateInfo {
 			}
 		}
 	}
-	
+
 	// Add templates in sorted key order
 	for _, key := range keys {
 		customInfos = append(customInfos, stp.templateInfos[key])
 	}
-	
+
 	return customInfos
 }

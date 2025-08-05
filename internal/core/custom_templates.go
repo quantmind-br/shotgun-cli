@@ -20,7 +20,7 @@ type FrontmatterParseResult struct {
 // parseFrontmatter parses YAML frontmatter from a Markdown file
 func parseFrontmatter(content string) (*FrontmatterParseResult, error) {
 	lines := strings.Split(content, "\n")
-	
+
 	// Check if file starts with YAML frontmatter delimiter
 	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
 		return nil, fmt.Errorf("no YAML frontmatter found - file must start with '---'")
@@ -41,7 +41,7 @@ func parseFrontmatter(content string) (*FrontmatterParseResult, error) {
 
 	// Extract YAML content (between the delimiters)
 	yamlContent := strings.Join(lines[1:yamlEndIndex], "\n")
-	
+
 	// Extract markdown content (after the closing delimiter)
 	var markdownContent string
 	if yamlEndIndex+1 < len(lines) {

@@ -219,7 +219,7 @@ func (m *Model) renderTemplateSelection() string {
 
 	// Enhanced template selection with grouping and full descriptions
 	templateSection := "Select a template for your prompt:\n\n"
-	
+
 	currentIndex := 0
 
 	// Built-in Templates Section
