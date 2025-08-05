@@ -3,9 +3,11 @@ package ui
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,6 +29,32 @@ func mapConfigToEnhanced(config *core.Config) *core.EnhancedConfig {
 	enhancedConfig.Translation.TargetLanguage = config.Translation.TargetLanguage
 	enhancedConfig.Translation.ContextPrompt = config.Translation.ContextPrompt
 	return enhancedConfig
+}
+
+// getUserTemplatesDir returns the user's custom templates directory using XDG standards
+func getUserTemplatesDir() (string, error) {
+	// Use XDG config directory following the standard: ~/.config/shotgun-cli/templates/
+	templatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
+	return templatesDir, nil
+}
+
+// ensureTemplatesDirectory creates the custom templates directory if it doesn't exist
+func ensureTemplatesDirectory(templatesDir string) error {
+	// Check if directory already exists
+	if _, err := os.Stat(templatesDir); err == nil {
+		log.Printf("Custom templates directory already exists: %s", templatesDir)
+		return nil // Directory already exists
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check templates directory %s: %w", templatesDir, err)
+	}
+
+	// Create the directory with appropriate permissions
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create templates directory %s: %w", templatesDir, err)
+	}
+
+	log.Printf("Created custom templates directory: %s", templatesDir)
+	return nil
 }
 
 // ViewState represents the current view/step in the application
@@ -149,14 +177,26 @@ func NewModel() (*Model, error) {
 		}
 	}
 
-	// Load templates from templates directory
-	templatesDir := "templates"
-	if err := templates.LoadTemplatesFromDirectory(templatesDir); err != nil {
-		// Try relative path from executable
+	// Get custom templates directory and ensure it exists
+	customTemplatesDir, err := getUserTemplatesDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get custom templates directory: %w", err)
+	}
+
+	// Ensure custom templates directory exists (non-breaking)
+	if err := ensureTemplatesDirectory(customTemplatesDir); err != nil {
+		log.Printf("Warning: Failed to create custom templates directory: %v", err)
+		// Continue execution - this is not a fatal error
+	}
+
+	// Load templates from both builtin and custom directories
+	builtinTemplatesDir := "templates"
+	if err := templates.LoadTemplates(builtinTemplatesDir, customTemplatesDir); err != nil {
+		// Try relative path from executable for builtin templates
 		if ex, err := os.Executable(); err == nil {
 			exPath := filepath.Dir(ex)
-			templatesDir = filepath.Join(exPath, "..", "templates")
-			if err := templates.LoadTemplatesFromDirectory(templatesDir); err != nil {
+			builtinTemplatesDir = filepath.Join(exPath, "..", "templates")
+			if err := templates.LoadTemplates(builtinTemplatesDir, customTemplatesDir); err != nil {
 				return nil, fmt.Errorf("failed to load templates: %v", err)
 			}
 		} else {

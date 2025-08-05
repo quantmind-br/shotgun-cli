@@ -136,79 +136,144 @@ func (m *Model) renderFileExclusion() string {
 
 // Template Selection View
 func (m *Model) updateTemplateSelection(msg tea.KeyMsg) (*Model, tea.Cmd) {
+	// Get current template lists
+	builtinTemplates := m.templates.GetBuiltinTemplateInfos()
+	customTemplates := m.templates.GetCustomTemplateInfos()
+	totalTemplates := len(builtinTemplates) + len(customTemplates)
+
+	if totalTemplates == 0 {
+		// No templates available, can't navigate
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "enter":
 		// Confirm template selection and move to task description
-		m.currentView = ViewTaskDescription
-		return m, m.taskInput.Focus()
+		templateKey := m.getTemplateKeyByIndex(m.templateIndex)
+		if templateKey != "" {
+			m.currentTemplate = templateKey
+			m.currentView = ViewTaskDescription
+			return m, m.taskInput.Focus()
+		}
+		return m, nil
 
 	case "up", "k":
 		// Navigate to previous template
 		if m.templateIndex > 0 {
 			m.templateIndex--
 		} else {
-			m.templateIndex = len(core.AvailableTemplates) - 1 // Wrap to last
+			m.templateIndex = totalTemplates - 1 // Wrap to last
 		}
-		m.currentTemplate = core.AvailableTemplates[m.templateIndex].Key
+		m.currentTemplate = m.getTemplateKeyByIndex(m.templateIndex)
 		return m, nil
 
 	case "down", "j":
 		// Navigate to next template
-		if m.templateIndex < len(core.AvailableTemplates)-1 {
+		if m.templateIndex < totalTemplates-1 {
 			m.templateIndex++
 		} else {
 			m.templateIndex = 0 // Wrap to first
 		}
-		m.currentTemplate = core.AvailableTemplates[m.templateIndex].Key
+		m.currentTemplate = m.getTemplateKeyByIndex(m.templateIndex)
 		return m, nil
 
-	case "1":
-		m.templateIndex = 0
-		m.currentTemplate = core.AvailableTemplates[0].Key
-		return m, nil
-	case "2":
-		if len(core.AvailableTemplates) > 1 {
-			m.templateIndex = 1
-			m.currentTemplate = core.AvailableTemplates[1].Key
-		}
-		return m, nil
-	case "3":
-		if len(core.AvailableTemplates) > 2 {
-			m.templateIndex = 2
-			m.currentTemplate = core.AvailableTemplates[2].Key
-		}
-		return m, nil
-	case "4":
-		if len(core.AvailableTemplates) > 3 {
-			m.templateIndex = 3
-			m.currentTemplate = core.AvailableTemplates[3].Key
+	// Number key shortcuts for builtin templates only (1-9)
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		keyNum := int(msg.String()[0] - '0') // Convert '1'-'9' to 1-9
+		if keyNum <= len(builtinTemplates) {
+			m.templateIndex = keyNum - 1 // Convert to 0-based index
+			m.currentTemplate = builtinTemplates[keyNum-1].Key
 		}
 		return m, nil
 	}
 	return m, nil
 }
 
+// getTemplateKeyByIndex returns the template key for a given index in the combined list
+func (m *Model) getTemplateKeyByIndex(index int) string {
+	builtinTemplates := m.templates.GetBuiltinTemplateInfos()
+	customTemplates := m.templates.GetCustomTemplateInfos()
+
+	// Check if index is in builtin templates range
+	if index < len(builtinTemplates) {
+		return builtinTemplates[index].Key
+	}
+
+	// Check if index is in custom templates range
+	customIndex := index - len(builtinTemplates)
+	if customIndex >= 0 && customIndex < len(customTemplates) {
+		return customTemplates[customIndex].Key
+	}
+
+	// Invalid index
+	return ""
+}
+
 func (m *Model) renderTemplateSelection() string {
 	title := titleStyle.Render("shotgun-cli - Template Selection")
 	subtitle := subtitleStyle.Render(fmt.Sprintf("Files selected: %d | Step 2 of 4", len(m.includedFiles)))
 
-	// Enhanced template selection with full descriptions
+	// Get all template information from the processor
+	builtinTemplates := m.templates.GetBuiltinTemplateInfos()
+	customTemplates := m.templates.GetCustomTemplateInfos()
+
+	// Enhanced template selection with grouping and full descriptions
 	templateSection := "Select a template for your prompt:\n\n"
+	
+	currentIndex := 0
 
-	for i, tmpl := range core.AvailableTemplates {
-		numberPrefix := fmt.Sprintf("%d. ", i+1)
+	// Built-in Templates Section
+	if len(builtinTemplates) > 0 {
+		templateSection += subtitleStyle.Render("Built-in Templates:") + "\n"
+		for i, tmpl := range builtinTemplates {
+			numberPrefix := ""
+			if i < 9 { // Only show numbers for first 9 templates (1-9 keys)
+				numberPrefix = fmt.Sprintf("%d. ", i+1)
+			} else {
+				numberPrefix = "   " // Align with numbered items
+			}
 
-		if i == m.templateIndex {
-			indicator := "▶ "
-			// Highlight selected template with description on same line
-			templateSection += statusStyle.Render(fmt.Sprintf("%s%s%s - %s\n", indicator, numberPrefix, tmpl.Name, tmpl.Description))
-		} else {
-			indicator := "  "
-			// Regular template with description on same line
-			templateSection += fmt.Sprintf("%s%s%s - ", indicator, numberPrefix, tmpl.Name)
-			templateSection += subtitleStyle.Render(tmpl.Description) + "\n"
+			var indicator string
+			if currentIndex == m.templateIndex {
+				indicator = "▶ "
+			} else {
+				indicator = "  "
+			}
+			line := fmt.Sprintf("%s%s%s - %s\n", indicator, numberPrefix, tmpl.Name, tmpl.Description)
+			templateSection += line
+			currentIndex++
 		}
 		templateSection += "\n"
+	}
+
+	// Custom Templates Section
+	if len(customTemplates) > 0 {
+		templateSection += subtitleStyle.Render("Custom Templates:") + "\n"
+		for _, tmpl := range customTemplates {
+			numberPrefix := "   " // Custom templates don't get number shortcuts
+
+			var indicator string
+			if currentIndex == m.templateIndex {
+				indicator = "▶ "
+			} else {
+				indicator = "  "
+			}
+			line := fmt.Sprintf("%s%s%s - %s\n", indicator, numberPrefix, tmpl.Name, tmpl.Description)
+			templateSection += line
+			currentIndex++
+		}
+		templateSection += "\n"
+	}
+
+	// Dynamic help text based on available templates
+	totalTemplates := len(builtinTemplates) + len(customTemplates)
+	var helpText string
+	if totalTemplates == 0 {
+		helpText = "No templates available | Esc: back"
+	} else if len(builtinTemplates) <= 9 {
+		helpText = fmt.Sprintf("↑/↓ (k/j): navigate | 1-%d: quick select builtin | Enter: confirm | Esc: back", len(builtinTemplates))
+	} else {
+		helpText = "↑/↓ (k/j): navigate | 1-9: quick select builtin | Enter: confirm | Esc: back"
 	}
 
 	content := []string{
@@ -217,7 +282,7 @@ func (m *Model) renderTemplateSelection() string {
 		subtitle,
 		"",
 		templateSection,
-		helpStyle.Render("↑/↓ (k/j): navigate | 1-4: quick select | Enter: confirm | Esc: back"),
+		helpStyle.Render(helpText),
 	}
 
 	return strings.Join(content, "\n")
@@ -269,8 +334,14 @@ func (m *Model) renderTaskDescription() string {
 	title := titleStyle.Render("shotgun-cli - Task Description")
 
 	// Show selected template for context
-	selectedTemplate := core.AvailableTemplates[m.templateIndex]
-	templateInfo := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 3 of 4", selectedTemplate.Name))
+	templateInfo, found := m.templates.GetTemplateInfo(m.currentTemplate)
+	var templateDisplay string
+	if found {
+		templateDisplay = templateInfo.Name
+	} else {
+		templateDisplay = "Unknown Template"
+	}
+	templateInfoText := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 3 of 4", templateDisplay))
 
 	// Task input section with instructions
 	instructions := "Describe what you want to accomplish:"
@@ -283,7 +354,7 @@ func (m *Model) renderTaskDescription() string {
 	content := []string{
 		title,
 		"",
-		templateInfo,
+		templateInfoText,
 		"",
 		taskSection,
 		"",
@@ -352,8 +423,14 @@ func (m *Model) renderCustomRules() string {
 	title := titleStyle.Render("shotgun-cli - Custom Rules")
 
 	// Show selected template and progress for context
-	selectedTemplate := core.AvailableTemplates[m.templateIndex]
-	templateInfo := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 4 of 4", selectedTemplate.Name))
+	templateInfo, found := m.templates.GetTemplateInfo(m.currentTemplate)
+	var templateDisplay string
+	if found {
+		templateDisplay = templateInfo.Name
+	} else {
+		templateDisplay = "Unknown Template"
+	}
+	templateInfoText := subtitleStyle.Render(fmt.Sprintf("Template: %s | Step 4 of 4", templateDisplay))
 
 	// Rules input section with instructions
 	instructions := "Add custom rules and constraints (optional):"
@@ -367,7 +444,7 @@ Optional: Leave empty if no specific rules needed`)
 	content := []string{
 		title,
 		"",
-		templateInfo,
+		templateInfoText,
 		"",
 		rulesSection,
 		"",

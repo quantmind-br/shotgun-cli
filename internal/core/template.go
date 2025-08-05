@@ -17,12 +17,55 @@ const (
 	TemplateProjectKey = "project"
 )
 
+// TemplateSource represents the source of a template
+type TemplateSource int
+
+const (
+	TemplateSourceBuiltin TemplateSource = iota
+	TemplateSourceCustom
+)
+
+// String returns the string representation of TemplateSource
+func (ts TemplateSource) String() string {
+	switch ts {
+	case TemplateSourceBuiltin:
+		return "builtin"
+	case TemplateSourceCustom:
+		return "custom"
+	default:
+		return "unknown"
+	}
+}
+
+// CustomTemplateMetadata represents the YAML frontmatter metadata
+type CustomTemplateMetadata struct {
+	Key         string `yaml:"key"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+// ValidateCustomTemplateMetadata validates that required fields are present
+func ValidateCustomTemplateMetadata(metadata CustomTemplateMetadata) error {
+	if strings.TrimSpace(metadata.Key) == "" {
+		return fmt.Errorf("template key is required")
+	}
+	if strings.TrimSpace(metadata.Name) == "" {
+		return fmt.Errorf("template name is required")
+	}
+	if strings.TrimSpace(metadata.Description) == "" {
+		return fmt.Errorf("template description is required")
+	}
+	return nil
+}
+
 // Template metadata
 type TemplateInfo struct {
 	Key         string
 	Name        string
 	Description string
 	Filename    string
+	Source      TemplateSource
+	FilePath    string // Full path to the template file
 }
 
 var AvailableTemplates = []TemplateInfo{
@@ -31,24 +74,32 @@ var AvailableTemplates = []TemplateInfo{
 		Name:        "Dev (makeDiffGitFormat)",
 		Description: "Generate git diffs for code changes",
 		Filename:    "prompt_makeDiffGitFormat.md",
+		Source:      TemplateSourceBuiltin,
+		FilePath:    "", // Will be set during loading
 	},
 	{
 		Key:         TemplateArchKey,
 		Name:        "Architect (makePlan)",
 		Description: "Create design plans and architecture",
 		Filename:    "prompt_makePlan.md",
+		Source:      TemplateSourceBuiltin,
+		FilePath:    "", // Will be set during loading
 	},
 	{
 		Key:         TemplateBugKey,
 		Name:        "Debug (analyzeBug)",
 		Description: "Bug analysis and debugging",
 		Filename:    "prompt_analyzeBug.md",
+		Source:      TemplateSourceBuiltin,
+		FilePath:    "", // Will be set during loading
 	},
 	{
 		Key:         TemplateProjectKey,
 		Name:        "Project Manager",
 		Description: "Documentation sync and task management",
 		Filename:    "prompt_projectManager.md",
+		Source:      TemplateSourceBuiltin,
+		FilePath:    "", // Will be set during loading
 	},
 }
 
