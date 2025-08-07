@@ -333,8 +333,8 @@ func DefaultTranslationCache() TranslationCache {
 
 // OpenAIConfig contains OpenAI API configuration
 type OpenAIConfig struct {
-	// API Key (stored in keyring, this holds reference/alias)
-	APIKeyAlias string `json:"apiKeyAlias,omitempty"`
+	// API Key stored directly in config
+	APIKey string `json:"apiKey,omitempty"` // Direct API key stored in config
 
 	// API Configuration
 	BaseURL string `json:"baseUrl"` // Default: "https://api.openai.com/v1"
@@ -359,8 +359,6 @@ type TranslationConfig struct {
 
 // AppConfig contains application preferences
 type AppConfig struct {
-	Theme           string `json:"theme"`           // Default: "auto" (auto/dark/light)
-	AutoSave        bool   `json:"autoSave"`        // Default: true
-	ShowLineNumbers bool   `json:"showLineNumbers"` // Default: true
-	DefaultTemplate string `json:"defaultTemplate"` // Default: "dev"
+	AutoSave        bool `json:"autoSave"`        // Default: true
+	ShowLineNumbers bool `json:"showLineNumbers"` // Default: true
 }

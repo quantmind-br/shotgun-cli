@@ -104,9 +104,9 @@ func (m *EnhancedConfigFormModel) initializeEnhancedSections() {
 			Description: "Configure OpenAI API settings and authentication",
 			Icon:        "🤖",
 			Fields: []EnhancedConfigField{
-				m.createEnhancedField("API Key Alias", "openai.apiKeyAlias", FieldText, m.config.OpenAI.APIKeyAlias, false, true, "Enter a name for this API key"),
+				m.createEnhancedField("API Key", "openai.apiKey", FieldText, m.config.OpenAI.APIKey, true, false, "Enter your API key (saved locally in config file)"),
 				m.createEnhancedField("Base URL", "openai.baseUrl", FieldText, m.config.OpenAI.BaseURL, true, false, "OpenAI API base URL"),
-				m.createEnhancedField("Model", "openai.model", FieldSelect, m.config.OpenAI.Model, true, false, "GPT model to use"),
+				m.createEnhancedField("Model", "openai.model", FieldText, m.config.OpenAI.Model, true, false, "GPT model to use"),
 				m.createEnhancedField("Timeout (seconds)", "openai.timeout", FieldNumber, fmt.Sprintf("%d", m.config.OpenAI.Timeout), true, false, "Request timeout in seconds"),
 				m.createEnhancedField("Max Tokens", "openai.maxTokens", FieldNumber, fmt.Sprintf("%d", m.config.OpenAI.MaxTokens), true, false, "Maximum tokens per request"),
 				m.createEnhancedField("Temperature", "openai.temperature", FieldNumber, fmt.Sprintf("%.1f", m.config.OpenAI.Temperature), true, false, "Randomness (0.0-2.0)"),
@@ -120,7 +120,7 @@ func (m *EnhancedConfigFormModel) initializeEnhancedSections() {
 			Icon:        "🌐",
 			Fields: []EnhancedConfigField{
 				m.createEnhancedToggleField("Enable Translation", "translation.enabled", m.config.Translation.Enabled, "Enable automatic translation"),
-				m.createEnhancedField("Target Language", "translation.targetLanguage", FieldSelect, m.config.Translation.TargetLanguage, true, false, "Target language for translation"),
+				m.createEnhancedField("Target Language", "translation.targetLanguage", FieldText, m.config.Translation.TargetLanguage, true, false, "Target language for translation (e.g., en, es, fr, de)"),
 				m.createEnhancedField("Context Prompt", "translation.contextPrompt", FieldText, m.config.Translation.ContextPrompt, false, false, "Custom translation context"),
 				m.createEnhancedToggleField("Enable Cache", "translation.cacheEnabled", m.config.Translation.CacheEnabled, "Cache translation results"),
 				m.createEnhancedField("Cache Size", "translation.cacheSize", FieldNumber, fmt.Sprintf("%d", m.config.Translation.CacheSize), true, false, "Maximum cached translations"),
@@ -132,10 +132,9 @@ func (m *EnhancedConfigFormModel) initializeEnhancedSections() {
 			Description: "Configure application preferences and behavior",
 			Icon:        "⚙️",
 			Fields: []EnhancedConfigField{
-				m.createEnhancedField("Theme", "app.theme", FieldSelect, m.config.App.Theme, true, false, "UI color theme"),
+
 				m.createEnhancedToggleField("Auto Save", "app.autoSave", m.config.App.AutoSave, "Automatically save configuration changes"),
 				m.createEnhancedToggleField("Show Line Numbers", "app.showLineNumbers", m.config.App.ShowLineNumbers, "Show line numbers in UI"),
-				m.createEnhancedField("Default Template", "app.defaultTemplate", FieldSelect, m.config.App.DefaultTemplate, true, false, "Default prompt template"),
 				m.createEnhancedField("Max File Size (MB)", "app.maxFileSize", FieldNumber, fmt.Sprintf("%.1f", float64(m.config.App.MaxFileSize)/1024/1024), true, false, "Maximum file size to process"),
 				m.createEnhancedField("Max Directory Depth", "app.maxDirectoryDepth", FieldNumber, fmt.Sprintf("%d", m.config.App.MaxDirectoryDepth), true, false, "Maximum directory scan depth"),
 				m.createEnhancedField("Worker Pool Size", "app.workerPoolSize", FieldNumber, fmt.Sprintf("%d", m.config.App.WorkerPoolSize), true, false, "Number of parallel workers"),
@@ -197,24 +196,9 @@ func (m *EnhancedConfigFormModel) createEnhancedToggleField(label, key string, v
 	return field
 }
 
-// setupSelectOptions configures options for select fields
+// setupSelectOptions configures options for select fields (deprecated - now using text fields)
 func (m *EnhancedConfigFormModel) setupSelectOptions() {
-	for sectionIdx := range m.sections {
-		for fieldIdx := range m.sections[sectionIdx].Fields {
-			field := &m.sections[sectionIdx].Fields[fieldIdx]
-
-			switch field.Key {
-			case "openai.model":
-				field.Options = []string{"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"}
-			case "translation.targetLanguage":
-				field.Options = []string{"en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"}
-			case "app.theme":
-				field.Options = []string{"auto", "dark", "light"}
-			case "app.defaultTemplate":
-				field.Options = []string{"dev", "architect", "debug", "project-manager"}
-			}
-		}
-	}
+	// No longer needed - all former select fields are now text fields
 }
 
 // getFieldValidator returns a validation function for the given field
@@ -273,8 +257,8 @@ func (m *EnhancedConfigFormModel) applyValueToConfig(config *core.EnhancedConfig
 // Helper methods to apply values to specific config sections
 func (m *EnhancedConfigFormModel) applyOpenAIValue(config *core.EnhancedConfig, field, value string) error {
 	switch field {
-	case "apiKeyAlias":
-		config.OpenAI.APIKeyAlias = value
+	case "apiKey":
+		config.OpenAI.APIKey = value
 	case "baseUrl":
 		config.OpenAI.BaseURL = value
 	case "model":
@@ -327,14 +311,11 @@ func (m *EnhancedConfigFormModel) applyTranslationValue(config *core.EnhancedCon
 
 func (m *EnhancedConfigFormModel) applyAppValue(config *core.EnhancedConfig, field, value string) error {
 	switch field {
-	case "theme":
-		config.App.Theme = value
 	case "autoSave":
 		config.App.AutoSave = value == "true"
 	case "showLineNumbers":
 		config.App.ShowLineNumbers = value == "true"
-	case "defaultTemplate":
-		config.App.DefaultTemplate = value
+
 	case "maxFileSize":
 		var sizeMB float64
 		if val, err := fmt.Sscanf(value, "%f", &sizeMB); err != nil || val != 1 {
@@ -365,7 +346,33 @@ func (m EnhancedConfigFormModel) Update(msg tea.Msg) (EnhancedConfigFormModel, t
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		return m.handleKeyInput(msg)
+		// Handle navigation and control keys first, but allow text input when editing
+		if handled, newModel, newCmd := m.handleKeyInputConditional(msg); handled {
+			return newModel, newCmd
+		}
+
+		// If not handled by navigation and we're editing, pass to textinput
+		if m.editing {
+			field := m.getCurrentField()
+			if field != nil {
+				field.Input, cmd = field.Input.Update(msg)
+
+				// Sync manual tracking with textinput value
+				if field.Input.Value() != field.ManualValue {
+					field.ManualValue = field.Input.Value()
+					m.editingText = field.ManualValue
+
+					// Trigger real-time validation
+					if m.realTimeValidation {
+						if err := field.Validator(field.ManualValue); err != nil {
+							m.errors[field.Key] = err.Error()
+						} else {
+							delete(m.errors, field.Key)
+						}
+					}
+				}
+			}
+		}
 
 	case connectionTestCompleteMsg:
 		m.connectionTesting = false
@@ -378,42 +385,17 @@ func (m EnhancedConfigFormModel) Update(msg tea.Msg) (EnhancedConfigFormModel, t
 		return m, nil
 	}
 
-	// Update the current field if not in custom input mode
-	if m.editing && !m.pasteDetected {
-		field := m.getCurrentField()
-		if field != nil {
-			field.Input, cmd = field.Input.Update(msg)
-
-			// Sync manual tracking with textinput value
-			if field.Input.Value() != field.ManualValue {
-				field.ManualValue = field.Input.Value()
-				m.editingText = field.ManualValue
-
-				// Trigger real-time validation
-				if m.realTimeValidation {
-					if err := field.Validator(field.ManualValue); err != nil {
-						m.errors[field.Key] = err.Error()
-					} else {
-						delete(m.errors, field.Key)
-					}
-				}
-			}
-		}
-	}
-
 	return m, cmd
 }
 
-// handleKeyInput processes enhanced keyboard input with Windows compatibility
-func (m *EnhancedConfigFormModel) handleKeyInput(msg tea.KeyMsg) (EnhancedConfigFormModel, tea.Cmd) {
-	var cmd tea.Cmd
-
+// handleKeyInputConditional handles navigation and control keys, returns whether the key was handled
+func (m *EnhancedConfigFormModel) handleKeyInputConditional(msg tea.KeyMsg) (handled bool, model EnhancedConfigFormModel, cmd tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "esc":
 		if m.editing {
 			m.stopEditing()
 		}
-		return *m, tea.Quit
+		return true, *m, tea.Quit
 
 	case "tab", "shift+tab":
 		if msg.String() == "tab" {
@@ -421,91 +403,103 @@ func (m *EnhancedConfigFormModel) handleKeyInput(msg tea.KeyMsg) (EnhancedConfig
 		} else {
 			m.prevField()
 		}
-		return *m, nil
+		return true, *m, nil
 
 	case "up", "k":
 		if !m.editing {
 			m.prevField()
+			return true, *m, nil
 		}
-		return *m, nil
+		return false, *m, nil
 
 	case "down", "j":
 		if !m.editing {
 			m.nextField()
+			return true, *m, nil
 		}
-		return *m, nil
+		return false, *m, nil
 
 	case "left", "h":
 		if !m.editing {
 			m.prevSection()
+			return true, *m, nil
 		}
-		return *m, nil
+		return false, *m, nil
 
 	case "right", "l":
 		if !m.editing {
 			m.nextSection()
+			return true, *m, nil
 		}
-		return *m, nil
+		return false, *m, nil
 
 	case "enter":
 		if !m.editing {
-			m.startEditing()
+			field := m.getCurrentField()
+			if field != nil && field.Type == FieldToggle {
+				// Toggle boolean field
+				if field.ManualValue == "true" || field.Value == "true" {
+					field.ManualValue = "false"
+					field.Value = "false"
+				} else {
+					field.ManualValue = "true"
+					field.Value = "true"
+				}
+				if m.autoSave {
+					cmd = m.saveConfiguration()
+				}
+			} else {
+				m.startEditing()
+			}
 		} else {
 			m.stopEditing()
 			if m.autoSave {
 				cmd = m.saveConfiguration()
 			}
 		}
-		return *m, cmd
+		return true, *m, cmd
+
+	case " ":
+		if !m.editing {
+			field := m.getCurrentField()
+			if field != nil && field.Type == FieldToggle {
+				// Toggle boolean field with space key
+				if field.ManualValue == "true" || field.Value == "true" {
+					field.ManualValue = "false"
+					field.Value = "false"
+				} else {
+					field.ManualValue = "true"
+					field.Value = "true"
+				}
+				if m.autoSave {
+					cmd = m.saveConfiguration()
+				}
+				return true, *m, cmd
+			}
+		}
+		return false, *m, nil
 
 	case "ctrl+s":
 		cmd = m.saveConfiguration()
-		return *m, cmd
+		return true, *m, cmd
 
 	case "ctrl+t":
 		if !m.connectionTesting {
 			cmd = m.testConnection()
 		}
-		return *m, cmd
+		return true, *m, cmd
 
 	case "ctrl+r":
 		cmd = m.resetConfiguration()
-		return *m, cmd
+		return true, *m, cmd
 
 	case "?":
 		m.showHelp = !m.showHelp
-		return *m, nil
-
-	case "backspace":
-		if m.editing && len(m.editingText) > 0 {
-			m.editingText = m.editingText[:len(m.editingText)-1]
-			if field := m.getCurrentField(); field != nil {
-				field.ManualValue = m.editingText
-				field.Input.SetValue(m.editingText)
-			}
-		}
-		return *m, nil
-
-	default:
-		if m.editing {
-			// Enhanced character input handling
-			m.editingText += msg.String()
-			if field := m.getCurrentField(); field != nil {
-				field.ManualValue = m.editingText
-				field.Input.SetValue(m.editingText)
-
-				// Real-time validation
-				if m.realTimeValidation {
-					if err := field.Validator(m.editingText); err != nil {
-						m.errors[field.Key] = err.Error()
-					} else {
-						delete(m.errors, field.Key)
-					}
-				}
-			}
-		}
-		return *m, nil
+		return true, *m, nil
 	}
+
+	// Key not handled by navigation/control logic
+	return false, *m, nil
 }
 
 // Navigation methods
@@ -684,7 +678,9 @@ var (
 
 	enhancedFieldLabelStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("14")).
-				Bold(true)
+				Bold(true).
+				Width(25).
+				Align(lipgloss.Right)
 
 	enhancedFieldActiveStyle = lipgloss.NewStyle().
 					Border(lipgloss.RoundedBorder()).

@@ -14,7 +14,7 @@ import (
 // createFastTestConfig creates configuration with minimal delays for fast testing
 func createFastTestConfig() *EnhancedConfig {
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.OpenAI.Model = "gpt-4o-mini" // Use consistent test model
 	config.Translation.Enabled = true
 	config.OpenAI.MaxRetries = 1 // Minimal retries for fast tests
@@ -119,7 +119,7 @@ func (m *mockOpenAIClient) CreateChatCompletion(ctx context.Context, request ope
 func TestEnhancedTranslationServiceCreation(t *testing.T) {
 	// Create test configuration
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 
 	// Create key manager
@@ -157,13 +157,13 @@ func TestEnhancedTranslationServiceNotConfigured(t *testing.T) {
 	service, err := NewEnhancedTranslationService(config, keyManager)
 	require.Error(t, err)
 	assert.Nil(t, service)
-	assert.Contains(t, err.Error(), "API key alias cannot be empty")
+	assert.Contains(t, err.Error(), "no API key configured")
 }
 
 func TestTranslateTextSuccess(t *testing.T) {
 	// Create test configuration
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.TargetLanguage = "es"
 	config.Translation.CacheEnabled = false // Disable cache for this test
@@ -208,7 +208,7 @@ func TestTranslateTextSuccess(t *testing.T) {
 func TestTranslateTextWithCache(t *testing.T) {
 	// Create test configuration with cache enabled
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.TargetLanguage = "fr"
 	config.Translation.CacheEnabled = true
@@ -316,7 +316,7 @@ func TestTranslateTextNetworkError(t *testing.T) {
 func TestTranslateTextTimeout(t *testing.T) {
 	// Create test configuration with very short timeout for fast testing
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.OpenAI.Timeout = 1 // 1 second timeout
 
@@ -349,7 +349,7 @@ func TestTranslateTextTimeout(t *testing.T) {
 func TestTranslateSpecializedMethods(t *testing.T) {
 	// Create test configuration
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.TargetLanguage = "es"
 
@@ -387,7 +387,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 	t.Skip("Skipping slow circuit breaker test - functionality validated in other tests")
 	// Create test configuration with fast circuit breaker for testing
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 
 	keyManager, err := NewSecureKeyManager()
@@ -426,7 +426,7 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 func TestTranslationValidation(t *testing.T) {
 	// Create test configuration
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 
 	keyManager, err := NewSecureKeyManager()
@@ -455,7 +455,7 @@ func TestTranslationValidation(t *testing.T) {
 func TestTranslationMetrics(t *testing.T) {
 	// Create test configuration
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.CacheEnabled = true
 
@@ -529,7 +529,7 @@ func TestTranslationMetrics(t *testing.T) {
 func TestTranslationCacheEviction(t *testing.T) {
 	// Create test configuration with small cache
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.CacheEnabled = true
 	config.Translation.CacheSize = 2 // Very small cache for testing eviction
@@ -594,7 +594,7 @@ func TestTranslationCacheEviction(t *testing.T) {
 // Benchmark tests for performance validation
 func BenchmarkTranslateTextWithoutCache(b *testing.B) {
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.CacheEnabled = false
 
@@ -630,7 +630,7 @@ func BenchmarkTranslateTextWithoutCache(b *testing.B) {
 
 func BenchmarkTranslateTextWithCache(b *testing.B) {
 	config := DefaultEnhancedConfig()
-	config.OpenAI.APIKeyAlias = "test-key"
+	config.OpenAI.APIKey = "test-key"
 	config.Translation.Enabled = true
 	config.Translation.CacheEnabled = true
 

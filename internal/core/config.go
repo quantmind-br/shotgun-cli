@@ -47,6 +47,7 @@ func NewConfigManager() (*ConfigManager, error) {
 func DefaultConfig() *Config {
 	return &Config{
 		OpenAI: OpenAIConfig{
+			APIKey:      "",
 			BaseURL:     "https://api.openai.com/v1",
 			Model:       "gpt-4o",
 			Timeout:     300,
@@ -61,10 +62,8 @@ func DefaultConfig() *Config {
 			ContextPrompt:  "Translate the following text to English, preserving technical terms and maintaining the original meaning:",
 		},
 		App: AppConfig{
-			Theme:           "auto",
 			AutoSave:        true,
 			ShowLineNumbers: true,
-			DefaultTemplate: "dev",
 		},
 		Version:     "1.0.0",
 		LastUpdated: time.Now(),
@@ -262,15 +261,6 @@ func (cm *ConfigManager) validateConfig(config *Config) error {
 	}
 
 	// Validate App config
-	validThemes := map[string]bool{"auto": true, "dark": true, "light": true}
-	if !validThemes[config.App.Theme] {
-		return fmt.Errorf("invalid theme: %s (must be auto, dark, or light)", config.App.Theme)
-	}
-
-	validTemplates := map[string]bool{"dev": true, "architect": true, "debug": true, "project-manager": true}
-	if !validTemplates[config.App.DefaultTemplate] {
-		return fmt.Errorf("invalid default template: %s", config.App.DefaultTemplate)
-	}
 
 	return nil
 }
@@ -311,14 +301,6 @@ func (cm *ConfigManager) validateAndFillDefaults(config *Config) *Config {
 	}
 
 	// Fill missing App fields
-	validThemes := map[string]bool{"auto": true, "dark": true, "light": true}
-	if !validThemes[config.App.Theme] {
-		config.App.Theme = defaults.App.Theme
-	}
-	validTemplates := map[string]bool{"dev": true, "architect": true, "debug": true, "project-manager": true}
-	if !validTemplates[config.App.DefaultTemplate] {
-		config.App.DefaultTemplate = defaults.App.DefaultTemplate
-	}
 
 	// Fill missing metadata
 	if config.Version == "" {

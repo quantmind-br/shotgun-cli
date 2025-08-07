@@ -17,12 +17,10 @@ type EnhancedConfig struct {
 
 // EnhancedOpenAIConfig contains enhanced OpenAI API configuration with validation
 type EnhancedOpenAIConfig struct {
-	// API Key (stored in keyring, this holds reference/alias)
-	APIKeyAlias string `koanf:"apiKeyAlias" validate:"omitempty,min=1"`
-
-	// API Configuration
-	BaseURL string `koanf:"baseUrl" validate:"required,url"`
-	Model   string `koanf:"model" validate:"required,oneof=gpt-4o gpt-4o-mini gpt-4-turbo gpt-4 gpt-3.5-turbo gpt-3.5-turbo-16k"`
+	// Authentication
+	APIKey  string `koanf:"apiKey" validate:"omitempty"`     // Direct API key stored in config
+	BaseURL string `koanf:"baseUrl" validate:"required,url"` // API endpoint URL
+	Model   string `koanf:"model" validate:"required"`       // Model name - now allows any model
 
 	// Request Settings
 	Timeout     int     `koanf:"timeout" validate:"min=1,max=3600"`     // Seconds, Range: 1-3600 (1 hour)
@@ -46,10 +44,8 @@ type EnhancedTranslationConfig struct {
 
 // EnhancedAppConfig contains enhanced application preferences with validation
 type EnhancedAppConfig struct {
-	Theme           string `koanf:"theme" validate:"required,oneof=auto dark light"`                               // UI theme
-	AutoSave        bool   `koanf:"autoSave"`                                                                      // Auto-save configuration
-	ShowLineNumbers bool   `koanf:"showLineNumbers"`                                                               // Show line numbers in UI
-	DefaultTemplate string `koanf:"defaultTemplate" validate:"required,oneof=dev architect debug project-manager"` // Default prompt template
+	AutoSave        bool `koanf:"autoSave"`        // Auto-save configuration
+	ShowLineNumbers bool `koanf:"showLineNumbers"` // Show line numbers in UI
 
 	// Performance Settings
 	MaxFileSize       int64 `koanf:"maxFileSize" validate:"min=1024,max=104857600"` // 1KB - 100MB
@@ -89,7 +85,7 @@ func DefaultEnhancedConfig() *EnhancedConfig {
 // DefaultEnhancedOpenAIConfig returns default enhanced OpenAI configuration
 func DefaultEnhancedOpenAIConfig() EnhancedOpenAIConfig {
 	return EnhancedOpenAIConfig{
-		APIKeyAlias: "",
+		APIKey:      "",
 		BaseURL:     "https://api.openai.com/v1",
 		Model:       "gpt-4o",
 		Timeout:     300,
@@ -115,10 +111,8 @@ func DefaultEnhancedTranslationConfig() EnhancedTranslationConfig {
 // DefaultEnhancedAppConfig returns default enhanced application configuration
 func DefaultEnhancedAppConfig() EnhancedAppConfig {
 	return EnhancedAppConfig{
-		Theme:             "auto",
 		AutoSave:          true,
 		ShowLineNumbers:   true,
-		DefaultTemplate:   "dev",
 		MaxFileSize:       10485760, // 10MB
 		MaxDirectoryDepth: 10,
 		WorkerPoolSize:    10,
@@ -131,7 +125,7 @@ func DefaultEnhancedAppConfig() EnhancedAppConfig {
 func (ec *EnhancedConfig) ToLegacyConfig() *Config {
 	return &Config{
 		OpenAI: OpenAIConfig{
-			APIKeyAlias: ec.OpenAI.APIKeyAlias,
+			APIKey:      ec.OpenAI.APIKey,
 			BaseURL:     ec.OpenAI.BaseURL,
 			Model:       ec.OpenAI.Model,
 			Timeout:     ec.OpenAI.Timeout,
@@ -146,10 +140,8 @@ func (ec *EnhancedConfig) ToLegacyConfig() *Config {
 			ContextPrompt:  ec.Translation.ContextPrompt,
 		},
 		App: AppConfig{
-			Theme:           ec.App.Theme,
 			AutoSave:        ec.App.AutoSave,
 			ShowLineNumbers: ec.App.ShowLineNumbers,
-			DefaultTemplate: ec.App.DefaultTemplate,
 		},
 		Version:     ec.Version,
 		LastUpdated: ec.LastUpdated,
@@ -163,7 +155,7 @@ func FromLegacyConfig(legacy *Config) *EnhancedConfig {
 	if legacy != nil {
 		// Convert OpenAI config
 		enhanced.OpenAI = EnhancedOpenAIConfig{
-			APIKeyAlias: legacy.OpenAI.APIKeyAlias,
+			APIKey:      legacy.OpenAI.APIKey,
 			BaseURL:     legacy.OpenAI.BaseURL,
 			Model:       legacy.OpenAI.Model,
 			Timeout:     legacy.OpenAI.Timeout,
@@ -185,15 +177,12 @@ func FromLegacyConfig(legacy *Config) *EnhancedConfig {
 
 		// Convert App config
 		enhanced.App = EnhancedAppConfig{
-			Theme:             legacy.App.Theme,
-			AutoSave:          legacy.App.AutoSave,
-			ShowLineNumbers:   legacy.App.ShowLineNumbers,
-			DefaultTemplate:   legacy.App.DefaultTemplate,
-			MaxFileSize:       10485760, // Default enhanced value (10MB)
-			MaxDirectoryDepth: 10,       // Default enhanced value
-			WorkerPoolSize:    10,       // Default enhanced value
-			RefreshInterval:   1000,     // Default enhanced value (1 second)
-			EnableHotReload:   true,     // Default enhanced value
+			AutoSave:        legacy.App.AutoSave,
+			ShowLineNumbers: legacy.App.ShowLineNumbers, MaxFileSize: 10485760, // Default enhanced value (10MB)
+			MaxDirectoryDepth: 10,   // Default enhanced value
+			WorkerPoolSize:    10,   // Default enhanced value
+			RefreshInterval:   1000, // Default enhanced value (1 second)
+			EnableHotReload:   true, // Default enhanced value
 		}
 
 		enhanced.Version = legacy.Version
@@ -261,14 +250,6 @@ func SetupEnhancedValidator() *validator.Validate {
 			"pt": true, "ru": true, "ja": true, "ko": true, "zh": true,
 		}
 		return validLanguages[fl.Field().String()]
-	})
-
-	// Register custom validation for theme values
-	validate.RegisterValidation("theme_value", func(fl validator.FieldLevel) bool {
-		validThemes := map[string]bool{
-			"auto": true, "dark": true, "light": true,
-		}
-		return validThemes[fl.Field().String()]
 	})
 
 	return validate

@@ -89,13 +89,13 @@ func (m *ConfigFormModel) initializeSections() {
 		Fields: []ConfigField{
 			{
 				Label:       "API Key",
-				Value:       m.getAPIKeyDisplayValue(),
-				Type:        FieldPassword,
+				Value:       m.config.OpenAI.APIKey,
+				Type:        FieldText,
 				Placeholder: "sk-...",
 				Required:    true,
-				Masked:      true,
-				Input:       m.createTextInput("Enter your OpenAI API key", true),
-				Help:        "Your OpenAI API key. Will be stored securely in your system keyring.",
+				Masked:      false,
+				Input:       m.createTextInput("Enter your OpenAI API key", false),
+				Help:        "Your OpenAI API key. Will be stored directly in the configuration file.",
 			},
 			{
 				Label:       "Base URL",
@@ -107,13 +107,13 @@ func (m *ConfigFormModel) initializeSections() {
 				Help:        "OpenAI API base URL. Use default for OpenAI, or custom URL for compatible services.",
 			},
 			{
-				Label:    "Model",
-				Value:    m.config.OpenAI.Model,
-				Type:     FieldSelect,
-				Options:  []string{"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"},
-				Required: true,
-				Input:    m.createTextInput("Model name", false),
-				Help:     "The OpenAI model to use for translation. GPT-4o recommended for best results.",
+				Label:       "Model",
+				Value:       m.config.OpenAI.Model,
+				Type:        FieldText,
+				Placeholder: "gpt-4o",
+				Required:    true,
+				Input:       m.createTextInput("Model name", false),
+				Help:        "The OpenAI model to use for translation. Enter any model name (e.g., gpt-4o, claude-3-sonnet).",
 			},
 			{
 				Label:       "Timeout (seconds)",
@@ -158,13 +158,13 @@ func (m *ConfigFormModel) initializeSections() {
 				Help:     "Enable automatic translation of tasks and rules to English.",
 			},
 			{
-				Label:    "Target Language",
-				Value:    m.config.Translation.TargetLanguage,
-				Type:     FieldSelect,
-				Options:  []string{"en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh"},
-				Required: false,
-				Input:    m.createTextInput("Target language code", false),
-				Help:     "Target language for translations. Default: en (English).",
+				Label:       "Target Language",
+				Value:       m.config.Translation.TargetLanguage,
+				Type:        FieldText,
+				Placeholder: "en",
+				Required:    false,
+				Input:       m.createTextInput("Target language code", false),
+				Help:        "Target language for translations. Common codes: en, es, fr, de, it, pt, ru, ja, ko, zh",
 			},
 			{
 				Label:       "Custom Translation Prompt",
@@ -183,14 +183,7 @@ func (m *ConfigFormModel) initializeSections() {
 		Title:       "Application Settings",
 		Description: "Configure general application behavior",
 		Fields: []ConfigField{
-			{
-				Label:   "Theme",
-				Value:   m.config.App.Theme,
-				Type:    FieldSelect,
-				Options: []string{"auto", "dark", "light"},
-				Input:   m.createTextInput("UI theme", false),
-				Help:    "Application color theme. Auto detects system preference.",
-			},
+
 			{
 				Label: "Auto Save Config",
 				Value: fmt.Sprintf("%t", m.config.App.AutoSave),
@@ -202,14 +195,6 @@ func (m *ConfigFormModel) initializeSections() {
 				Value: fmt.Sprintf("%t", m.config.App.ShowLineNumbers),
 				Type:  FieldToggle,
 				Help:  "Show line numbers in text input areas.",
-			},
-			{
-				Label:   "Default Template",
-				Value:   m.config.App.DefaultTemplate,
-				Type:    FieldSelect,
-				Options: []string{"dev", "architect", "debug", "project-manager"},
-				Input:   m.createTextInput("Default template", false),
-				Help:    "Default prompt template to select on startup.",
 			},
 		},
 	}
@@ -245,16 +230,6 @@ func (m *ConfigFormModel) createTextInput(placeholder string, password bool) tex
 	input.Blur() // Ensure not focused initially
 
 	return input
-}
-
-// getAPIKeyDisplayValue returns a display value for the API key
-func (m *ConfigFormModel) getAPIKeyDisplayValue() string {
-	if m.config.OpenAI.APIKeyAlias != "" && m.keyMgr != nil {
-		if m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
-			return "••••••••••••••••" // Show masked key if it exists
-		}
-	}
-	return ""
 }
 
 // Update handles form updates
@@ -340,14 +315,8 @@ func (m ConfigFormModel) Update(msg tea.Msg) (ConfigFormModel, tea.Cmd) {
 					// Windows workaround: Use manual text tracking instead of relying on textinput
 					isPassword := field.Type == FieldPassword
 
-					// Initialize editing text manually
-					if isPassword && field.Value == "••••••••••••••••" {
-						// For password fields with existing key, start with empty
-						m.editingText = ""
-					} else {
-						// For other fields, load the actual value
-						m.editingText = field.Value
-					}
+					// Initialize editing text with the actual value
+					m.editingText = field.Value
 
 					// Create fresh textinput but don't rely on its internal state
 					field.Input = m.createTextInput(field.Placeholder, isPassword)
@@ -482,18 +451,7 @@ func (m *ConfigFormModel) saveCurrentField() {
 	// Use manual text tracking instead of textinput value
 	inputValue := m.editingText
 
-	// Special handling for password fields (API Key)
-	if field.Type == FieldPassword && field.Label == "API Key" {
-		// If input is empty and we already have a key, keep the existing key
-		if strings.TrimSpace(inputValue) == "" && field.Value == "••••••••••••••••" {
-			// Don't change the existing key
-			return
-		}
-		// If user entered a new key, use it
-		field.Value = inputValue
-	} else {
-		field.Value = inputValue
-	}
+	field.Value = inputValue
 
 	// Clear any previous error for this field
 	delete(m.errors, field.Label)
@@ -549,7 +507,7 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 
 	// Extract OpenAI Configuration (section 0)
 	config.OpenAI = core.OpenAIConfig{
-		APIKeyAlias: "shotgun-cli-openai-key", // Standard alias
+		APIKey:      getFieldValue(0, "API Key"),
 		BaseURL:     getFieldValue(0, "Base URL"),
 		Model:       getFieldValue(0, "Model"),
 		Timeout:     parseInt(getFieldValue(0, "Timeout (seconds)"), 300),
@@ -568,10 +526,8 @@ func (m *ConfigFormModel) extractConfigurationData() (*core.Config, error) {
 
 	// Extract App Configuration (section 2)
 	config.App = core.AppConfig{
-		Theme:           getFieldValue(2, "Theme"),
 		AutoSave:        parseBool(getFieldValue(2, "Auto Save Config"), true),
 		ShowLineNumbers: parseBool(getFieldValue(2, "Show Line Numbers"), true),
-		DefaultTemplate: getFieldValue(2, "Default Template"),
 	}
 
 	return config, nil
@@ -582,10 +538,6 @@ func (m *ConfigFormModel) extractAPIKeyData() (string, error) {
 	// Look for API Key field in OpenAI section (section 0)
 	for _, field := range m.sections[0].Fields {
 		if field.Label == "API Key" {
-			if field.Value == "••••••••••••••••" {
-				// Masked value means we should keep existing key
-				return "", nil
-			}
 			apiKey := strings.TrimSpace(field.Value)
 			if apiKey == "" {
 				return "", fmt.Errorf("API key is required")
@@ -665,35 +617,6 @@ func (m *ConfigFormModel) validateFormData() map[string]string {
 	}
 
 	// Validate App Configuration
-	theme := getFieldValue(2, "Theme")
-	if theme != "" {
-		validThemes := []string{"auto", "dark", "light"}
-		valid := false
-		for _, t := range validThemes {
-			if theme == t {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			errors["Theme"] = "Invalid theme"
-		}
-	}
-
-	defaultTemplate := getFieldValue(2, "Default Template")
-	if defaultTemplate != "" {
-		validTemplates := []string{"dev", "architect", "debug", "project-manager"}
-		valid := false
-		for _, tmpl := range validTemplates {
-			if defaultTemplate == tmpl {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			errors["Default Template"] = "Invalid default template"
-		}
-	}
 
 	return errors
 }
@@ -730,15 +653,9 @@ func (m *ConfigFormModel) saveConfiguration() tea.Cmd {
 			}
 		}
 
-		// 3. Store API key in keyring if provided
+		// 3. Store API key directly in config (no keyring needed)
 		if apiKey != "" {
-			if err := m.keyMgr.StoreAPIKey(config.OpenAI.APIKeyAlias, apiKey); err != nil {
-				return configSavedMsg{
-					success: false,
-					message: fmt.Sprintf("Failed to store API key: %v", err),
-					errors:  make(map[string]string),
-				}
-			}
+			config.OpenAI.APIKey = apiKey
 		}
 
 		// 4. Update ConfigManager
@@ -773,49 +690,20 @@ func (m *ConfigFormModel) resetConfiguration() tea.Cmd {
 		// 1. Load default configuration
 		defaultConfig := core.DefaultConfig()
 
-		// 2. Check if we should preserve API key
-		preserveAPIKey := false
-		currentAPIKey := ""
-
-		// Check if there's currently a valid API key stored
-		if m.config.OpenAI.APIKeyAlias != "" && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
-			preserveAPIKey = true
-			currentAPIKey = "••••••••••••••••" // Display masked value
-		}
-
-		// 3. Update the local config reference
+		// 2. Update the local config reference
 		m.config = defaultConfig
 
-		// 4. Preserve API key reference if it exists
-		if preserveAPIKey {
-			m.config.OpenAI.APIKeyAlias = "shotgun-cli-openai-key"
-		}
-
-		// 5. Reinitialize form sections with default values
+		// 3. Reinitialize form sections with default values
 		m.initializeSections()
 
-		// 6. Set API key display value if preserving
-		if preserveAPIKey {
-			// Find and update the API Key field to show it's set
-			for sectionIdx := range m.sections {
-				for fieldIdx := range m.sections[sectionIdx].Fields {
-					field := &m.sections[sectionIdx].Fields[fieldIdx]
-					if field.Label == "API Key" {
-						field.Value = currentAPIKey
-						break
-					}
-				}
-			}
-		}
-
-		// 7. Clear any validation errors
+		// 4. Clear any validation errors
 		m.errors = make(map[string]string)
 
-		// 8. Reset editing state
+		// 5. Reset editing state
 		m.editing = false
 		m.editingText = ""
 
-		// 9. Reset form navigation to first field
+		// 6. Reset form navigation to first field
 		m.activeSection = 0
 		m.activeField = 0
 
@@ -835,16 +723,7 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 				for _, required := range requiredFields {
 					if field.Label == required && field.Required {
 						value := field.Value
-						if field.Label == "API Key" && value == "••••••••••••••••" {
-							// Masked API key means we need to check keyring
-							if !m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
-								return connectionTestMsg{
-									success: false,
-									message: "API key not found in keyring",
-									details: "Please enter a valid API key",
-								}
-							}
-						} else if strings.TrimSpace(value) == "" {
+						if strings.TrimSpace(value) == "" {
 							return connectionTestMsg{
 								success: false,
 								message: fmt.Sprintf("Missing required field: %s", field.Label),
@@ -876,23 +755,21 @@ func (m *ConfigFormModel) testConnection() tea.Cmd {
 			}
 		}
 
-		// For testing, if API key is empty but we have a keyring key, get it
-		if apiKey == "" && testConfig.OpenAI.APIKeyAlias != "" {
-			if storedKey, err := m.keyMgr.GetAPIKey(testConfig.OpenAI.APIKeyAlias); err == nil {
-				apiKey = storedKey
-			}
+		// Use direct API key from config if available
+		if apiKey == "" && testConfig.OpenAI.APIKey != "" {
+			apiKey = testConfig.OpenAI.APIKey
 		}
 
 		if apiKey == "" {
 			return connectionTestMsg{
 				success: false,
 				message: "No API key available for testing",
-				details: "Please enter an API key or ensure one is stored in the keyring",
+				details: "Please enter an API key",
 			}
 		}
 
 		// 4. Create temporary enhanced translator for testing
-		enhancedConfig := mapConfigToEnhanced(testConfig)
+		enhancedConfig := core.FromLegacyConfig(testConfig)
 		translator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr)
 		if err != nil {
 			return connectionTestMsg{

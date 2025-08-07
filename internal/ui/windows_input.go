@@ -120,9 +120,6 @@ func (w WindowsCompatibleTextArea) Focused() bool {
 // Update handles textarea updates with Windows compatibility
 func (w WindowsCompatibleTextArea) Update(msg tea.Msg) (WindowsCompatibleTextArea, tea.Cmd) {
 	switch msg := msg.(type) {
-	// Note: PasteMsg handling removed due to version compatibility
-	// Paste operations will be handled through key detection and manual input
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab":
@@ -287,9 +284,6 @@ func (w WindowsCompatibleTextInput) Focused() bool {
 // Update handles input updates with Windows compatibility
 func (w WindowsCompatibleTextInput) Update(msg tea.Msg) (WindowsCompatibleTextInput, tea.Cmd) {
 	switch msg := msg.(type) {
-	// Note: PasteMsg handling removed due to version compatibility
-	// Paste operations will be handled through key detection and manual input
-
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab":

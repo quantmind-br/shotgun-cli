@@ -15,22 +15,6 @@ import (
 	"shotgun-cli/internal/core"
 )
 
-// mapConfigToEnhanced maps old Config structure to EnhancedConfig for compatibility
-func mapConfigToEnhanced(config *core.Config) *core.EnhancedConfig {
-	enhancedConfig := core.DefaultEnhancedConfig()
-	// Map old config to enhanced config
-	enhancedConfig.OpenAI.APIKeyAlias = config.OpenAI.APIKeyAlias
-	enhancedConfig.OpenAI.BaseURL = config.OpenAI.BaseURL
-	enhancedConfig.OpenAI.Model = config.OpenAI.Model
-	enhancedConfig.OpenAI.Timeout = config.OpenAI.Timeout
-	enhancedConfig.OpenAI.MaxTokens = config.OpenAI.MaxTokens
-	enhancedConfig.OpenAI.Temperature = config.OpenAI.Temperature
-	enhancedConfig.Translation.Enabled = config.Translation.Enabled
-	enhancedConfig.Translation.TargetLanguage = config.Translation.TargetLanguage
-	enhancedConfig.Translation.ContextPrompt = config.Translation.ContextPrompt
-	return enhancedConfig
-}
-
 // getUserTemplatesDir returns the user's custom templates directory using XDG standards
 func getUserTemplatesDir() (string, error) {
 	// Use XDG config directory following the standard: ~/.config/shotgun-cli/templates/
@@ -81,14 +65,14 @@ type Model struct {
 	progressBar progress.Model
 	taskInput   NumberedTextArea
 	rulesInput  NumberedTextArea
-	configForm  ConfigFormModel
+	configForm  EnhancedConfigFormModel
 
 	// Business Logic
 	scanner    *core.DirectoryScanner
 	generator  *core.ContextGenerator
 	templates  *core.SimpleTemplateProcessor
 	selection  *core.SelectionState
-	configMgr  *core.ConfigManager
+	configMgr  *core.EnhancedConfigManager
 	keyMgr     *core.SecureKeyManager
 	translator *core.EnhancedTranslationService
 
@@ -118,6 +102,7 @@ type Model struct {
 	// Error handling
 	lastError error
 	showHelp  bool
+	ready     bool
 }
 
 // NewModel creates a new application model
@@ -151,9 +136,12 @@ func NewModel() (*Model, error) {
 	selection := core.NewSelectionState()
 
 	// Initialize configuration components
-	configMgr, err := core.NewConfigManager()
+	configMgr, err := core.NewEnhancedConfigManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize config manager: %w", err)
+	}
+	if err := configMgr.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	keyMgr, err := core.NewSecureKeyManager()
@@ -162,13 +150,12 @@ func NewModel() (*Model, error) {
 	}
 
 	// Initialize translator with current configuration
-	config := configMgr.Get()
-	enhancedConfig := mapConfigToEnhanced(config)
+	config := configMgr.GetEnhanced()
 
 	var translator *core.EnhancedTranslationService
-	if enhancedConfig.OpenAI.APIKeyAlias != "" {
+	if config.OpenAI.APIKey != "" {
 		var err error
-		translator, err = core.NewEnhancedTranslationService(enhancedConfig, keyMgr)
+		translator, err = core.NewEnhancedTranslationService(config, keyMgr)
 		if err != nil {
 			// Translator initialization failed - log the reason for debugging
 			// Note: This is not a fatal error, app can work without translation
@@ -205,7 +192,7 @@ func NewModel() (*Model, error) {
 	}
 
 	// Initialize configuration form
-	configForm := NewConfigFormModel(config, configMgr, keyMgr)
+	configForm := *NewEnhancedConfigFormModel(configMgr, keyMgr)
 
 	return &Model{
 		currentView:     ViewFileExclusion,
@@ -224,6 +211,7 @@ func NewModel() (*Model, error) {
 		currentTemplate: core.TemplateDevKey, // Default to dev template
 		templateIndex:   0,                   // Start with first template
 		rulesText:       "no additional rules",
+		ready:           false,
 	}, nil
 }
 
@@ -300,6 +288,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.progressBar.Width = msg.Width - 4
+		m.configForm.SetSize(m.width, m.height)
+		m.ready = true
+
+		// Dynamically set the size of text areas for task and rules views
+		// This is an approximation based on the static elements in those views.
+		// Header: Title(1) + blank(1) + subtitle(1) + blank(1) + instructions(1) + blank(1) = 6 lines
+		// Footer: blank(1) + examples(2) + blank(1) + help(1) = 5 lines
+		// Translation status can add 2 more lines to the footer area.
+		headerHeight := 6
+		footerHeight := 7 // Assume translation might be active
+		verticalMargin := 2
+
+		textAreaHeight := m.height - headerHeight - footerHeight - verticalMargin
+		if textAreaHeight < 5 {
+			textAreaHeight = 5 // Minimum height
+		}
+
+		// Leave some horizontal margin
+		textAreaWidth := m.width - 10
+		if textAreaWidth < 40 {
+			textAreaWidth = 40
+		}
+		m.taskInput.SetHeight(textAreaHeight)
+		m.taskInput.SetWidth(textAreaWidth)
+		m.rulesInput.SetHeight(textAreaHeight)
+		m.rulesInput.SetWidth(textAreaWidth)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -329,6 +343,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.currentView > ViewFileExclusion {
 				m.currentView--
+
+				// If returning from config view, reload translator
+				if m.currentView == ViewFileExclusion {
+					config := m.configMgr.GetEnhanced()
+					if config.OpenAI.APIKey != "" {
+						if newTranslator, err := core.NewEnhancedTranslationService(config, m.keyMgr); err == nil {
+							m.translator = newTranslator
+						} else {
+							m.translator = nil
+						}
+					} else {
+						m.translator = nil
+					}
+				}
 				return m, nil
 			}
 		}
@@ -403,76 +431,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case configSavedMsg:
-		// Handle configuration save results
-		if msg.success {
-			// Configuration was saved successfully
-			// Reload translator with new config if translation settings changed
-			config := m.configMgr.Get()
-
-			// Create new enhanced translator (EnhancedTranslationService doesn't have UpdateConfig)
-			// We need to recreate it with new configuration
-			enhancedConfig := mapConfigToEnhanced(config)
-
-			// Create new translator with updated configuration
-			if enhancedConfig.OpenAI.APIKeyAlias != "" {
-				if newTranslator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr); err == nil {
-					m.translator = newTranslator
-				} else {
-					// If creation fails, translator remains nil (translation disabled)
-					m.translator = nil
-				}
-			} else {
-				// No API key configured, disable translator
-				m.translator = nil
-			}
-
-			// Update local config reference
-			m.configForm.config = config
-		}
-		// Store status message for display
-		m.configForm.lastOperationStatus = msg.message
-		m.configForm.lastOperationSuccess = msg.success
-		if len(msg.errors) > 0 {
-			m.configForm.errors = msg.errors
-		}
-		return m, nil
-
-	case configResetMsg:
-		// Handle configuration reset results
-		if msg.success {
-			// Configuration was reset to defaults
-			// Reload the form with fresh default values
-			config := m.configMgr.Get()
-
-			// Recreate translator with reset configuration
-			enhancedConfig := mapConfigToEnhanced(config)
-
-			// Create new translator with reset configuration
-			if enhancedConfig.OpenAI.APIKeyAlias != "" {
-				if newTranslator, err := core.NewEnhancedTranslationService(enhancedConfig, m.keyMgr); err == nil {
-					m.translator = newTranslator
-				} else {
-					m.translator = nil
-				}
-			} else {
-				m.translator = nil
-			}
-		}
-		// Store status message for display
-		m.configForm.lastOperationStatus = msg.message
-		m.configForm.lastOperationSuccess = msg.success
-		return m, nil
-
-	case connectionTestMsg:
-		// Handle connection test results
-		// Store status message and details for display
-		m.configForm.lastOperationStatus = msg.message
-		m.configForm.lastOperationSuccess = msg.success
-		if msg.details != "" {
-			m.configForm.lastOperationDetails = msg.details
-		}
-		return m, nil
 	}
 
 	// Update components
@@ -503,6 +461,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the application
 func (m *Model) View() string {
+	if !m.ready {
+		return "Initializing, please wait..."
+	}
+
 	if m.showHelp {
 		return m.renderHelp()
 	}

@@ -30,10 +30,8 @@ func TestEnhancedConfigDefaults(t *testing.T) {
 	assert.Equal(t, 3600, config.Translation.CacheTTL)
 
 	// Test App defaults
-	assert.Equal(t, "auto", config.App.Theme)
 	assert.True(t, config.App.AutoSave)
 	assert.True(t, config.App.ShowLineNumbers)
-	assert.Equal(t, "dev", config.App.DefaultTemplate)
 	assert.Equal(t, int64(10485760), config.App.MaxFileSize) // 10MB
 	assert.Equal(t, 10, config.App.MaxDirectoryDepth)
 	assert.Equal(t, 10, config.App.WorkerPoolSize)
@@ -134,25 +132,22 @@ func TestEnhancedConfigValidation(t *testing.T) {
 
 func TestEnhancedConfigClone(t *testing.T) {
 	original := DefaultEnhancedConfig()
-	original.OpenAI.APIKeyAlias = "test-key"
 	original.Translation.Enabled = true
 	original.Translation.TargetLanguage = "es"
 
 	cloned := original.Clone()
 
 	// Verify values are copied
-	assert.Equal(t, original.OpenAI.APIKeyAlias, cloned.OpenAI.APIKeyAlias)
 	assert.Equal(t, original.Translation.Enabled, cloned.Translation.Enabled)
 	assert.Equal(t, original.Translation.TargetLanguage, cloned.Translation.TargetLanguage)
 
 	// Verify they are independent
-	cloned.OpenAI.APIKeyAlias = "different-key"
-	assert.NotEqual(t, original.OpenAI.APIKeyAlias, cloned.OpenAI.APIKeyAlias)
+	cloned.Translation.TargetLanguage = "fr"
+	assert.NotEqual(t, original.Translation.TargetLanguage, cloned.Translation.TargetLanguage)
 }
 
 func TestEnhancedConfigLegacyConversion(t *testing.T) {
 	enhanced := DefaultEnhancedConfig()
-	enhanced.OpenAI.APIKeyAlias = "test-key"
 	enhanced.Translation.Enabled = true
 	enhanced.Translation.TargetLanguage = "fr"
 
@@ -187,7 +182,6 @@ func TestEnhancedConfigManagerCreation(t *testing.T) {
 
 	// Test that it has default values
 	assert.Equal(t, "gpt-4o", config.OpenAI.Model)
-	assert.Equal(t, "auto", config.App.Theme)
 }
 
 func TestEnhancedConfigManagerSaveLoad(t *testing.T) {
@@ -200,8 +194,6 @@ func TestEnhancedConfigManagerSaveLoad(t *testing.T) {
 	config.OpenAI.Model = "gpt-4"
 	config.Translation.Enabled = true
 	config.Translation.TargetLanguage = "es"
-	config.App.Theme = "dark"
-
 	// Update and save
 	err = manager.UpdateEnhanced(config)
 	require.NoError(t, err)
@@ -223,7 +215,6 @@ func TestEnhancedConfigManagerSaveLoad(t *testing.T) {
 	assert.Equal(t, "gpt-4", loadedConfig.OpenAI.Model)
 	assert.True(t, loadedConfig.Translation.Enabled)
 	assert.Equal(t, "es", loadedConfig.Translation.TargetLanguage)
-	assert.Equal(t, "dark", loadedConfig.App.Theme)
 }
 
 func TestEnhancedConfigManagerEnvironmentOverrides(t *testing.T) {
@@ -236,8 +227,6 @@ func TestEnhancedConfigManagerEnvironmentOverrides(t *testing.T) {
 	os.Setenv("SHOTGUN_TRANSLATION_TARGETLANGUAGE", "en")
 	os.Setenv("SHOTGUN_TRANSLATION_CACHESIZE", "1000")
 	os.Setenv("SHOTGUN_TRANSLATION_CACHETTL", "3600")
-	os.Setenv("SHOTGUN_APP_THEME", "light")
-	os.Setenv("SHOTGUN_APP_DEFAULTTEMPLATE", "dev")
 	os.Setenv("SHOTGUN_APP_MAXFILESIZE", "10485760")
 	os.Setenv("SHOTGUN_APP_MAXDIRECTORYDEPTH", "10")
 	os.Setenv("SHOTGUN_APP_WORKERPOOLSIZE", "10")
@@ -251,8 +240,6 @@ func TestEnhancedConfigManagerEnvironmentOverrides(t *testing.T) {
 		os.Unsetenv("SHOTGUN_TRANSLATION_TARGETLANGUAGE")
 		os.Unsetenv("SHOTGUN_TRANSLATION_CACHESIZE")
 		os.Unsetenv("SHOTGUN_TRANSLATION_CACHETTL")
-		os.Unsetenv("SHOTGUN_APP_THEME")
-		os.Unsetenv("SHOTGUN_APP_DEFAULTTEMPLATE")
 		os.Unsetenv("SHOTGUN_APP_MAXFILESIZE")
 		os.Unsetenv("SHOTGUN_APP_MAXDIRECTORYDEPTH")
 		os.Unsetenv("SHOTGUN_APP_WORKERPOOLSIZE")
@@ -272,7 +259,6 @@ func TestEnhancedConfigManagerEnvironmentOverrides(t *testing.T) {
 	// Verify environment overrides
 	assert.Equal(t, "gpt-3.5-turbo", config.OpenAI.Model)
 	assert.True(t, config.Translation.Enabled)
-	assert.Equal(t, "light", config.App.Theme)
 }
 
 func TestEnhancedConfigManagerValidation(t *testing.T) {

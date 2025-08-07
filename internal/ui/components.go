@@ -137,30 +137,6 @@ func (nta *NumberedTextArea) SetPlaceholder(placeholder string) {
 	nta.textarea.Placeholder = placeholder
 }
 
-// SetFullScreenMode adjusts the textarea for full-screen usage with Windows compatibility
-func (nta *NumberedTextArea) SetFullScreenMode(terminalWidth, terminalHeight int) {
-	// Use most of the terminal width, leaving some margin
-	width := terminalWidth - 10
-	if width < 40 {
-		width = 40
-	}
-	if width > 120 {
-		width = 120
-	}
-
-	// Use a good portion of terminal height for input
-	height := terminalHeight / 3
-	if height < 6 {
-		height = 6
-	}
-	if height > 15 {
-		height = 15
-	}
-
-	nta.SetWidth(width)
-	nta.SetHeight(height)
-}
-
 // Windows-specific methods for enhanced functionality
 
 // IsWindowsMode returns whether Windows compatibility mode is active

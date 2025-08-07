@@ -128,21 +128,15 @@ func (m EnhancedConfigFormModel) renderSectionHeader(section EnhancedConfigSecti
 
 // renderEnhancedField renders a configuration field with enhanced features
 func (m EnhancedConfigFormModel) renderEnhancedField(field EnhancedConfigField, isActive bool) string {
-	var parts []string
-
 	// Field label with required indicator
 	label := field.Label
 	if field.Required {
 		label = label + " *"
 	}
-
 	labelStyle := enhancedFieldLabelStyle
 	if isActive {
 		labelStyle = labelStyle.Foreground(lipgloss.Color("12"))
 	}
-
-	parts = append(parts, labelStyle.Render(label))
-
 	// Field input/display
 	var fieldDisplay string
 
@@ -210,15 +204,19 @@ func (m EnhancedConfigFormModel) renderEnhancedField(field EnhancedConfigField, 
 		fieldDisplay = fieldDisplay + " " + enhancedSuccessStyle.Render("✓")
 	}
 
-	parts = append(parts, fieldStyle.Render(fieldDisplay))
+	fieldPart := fieldStyle.Render(fieldDisplay)
+
+	// Combine label and field on one line for a more compact view
+	line := lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), "  ", fieldPart)
 
 	// Help text
 	if field.HelpText != "" && isActive {
-		help := enhancedHelpStyle.Render("💡 " + field.HelpText)
-		parts = append(parts, help)
+		// Indent help text to align with the field
+		help := enhancedHelpStyle.Render(strings.Repeat(" ", 30) + "💡 " + field.HelpText)
+		return lipgloss.JoinVertical(lipgloss.Left, line, help)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, parts...) + "\n"
+	return line
 }
 
 // renderConnectionTest renders the connection test panel
@@ -336,7 +334,7 @@ func (m EnhancedConfigFormModel) renderEnhancedHelp() string {
 		{
 			title: "Editing",
 			items: []string{
-				"Enter: Start/stop editing field",
+				"Enter/Space: Edit text field or toggle checkbox",
 				"Escape: Cancel editing",
 				"Ctrl+V: Paste (Windows compatible)",
 			},

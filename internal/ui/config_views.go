@@ -255,7 +255,7 @@ func (m ConfigFormModel) renderFooter() string {
 
 	// Connection status
 	if m.activeSection == 0 { // OpenAI section
-		if m.config.OpenAI.APIKeyAlias != "" && m.keyMgr != nil && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
+		if m.config.OpenAI.APIKey != "" {
 			statusItems = append(statusItems, "🔑 API Key: Set")
 		} else {
 			statusItems = append(statusItems, "⚠️  API Key: Not Set")
@@ -266,7 +266,7 @@ func (m ConfigFormModel) renderFooter() string {
 	if m.config.Translation.Enabled {
 		// Check if translator is actually available and configured
 		translatorWorking := false
-		if m.keyMgr != nil && m.keyMgr.HasAPIKey(m.config.OpenAI.APIKeyAlias) {
+		if m.config.OpenAI.APIKey != "" {
 			// We have an API key, so translation should work
 			translatorWorking = true
 		}
@@ -301,7 +301,7 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		sectionTitleStyle.Render("🔧 Configuration Sections:"),
 		"",
 		configHelpStyle.Render("OpenAI API Configuration:"),
-		"  • API Key: Your OpenAI API key (stored securely in system keyring)",
+		"  • API Key: Your OpenAI API key (stored directly in config file)",
 		"  • Base URL: API endpoint (use default for OpenAI, custom for compatible services)",
 		"  • Model: The AI model to use (gpt-4o recommended for best translation quality)",
 		"  • Timeout: Request timeout in seconds",
@@ -314,7 +314,6 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"  • Custom Prompt: Override default translation instructions",
 		"",
 		configHelpStyle.Render("Application Settings:"),
-		"  • Theme: UI color scheme (auto/dark/light)",
 		"  • Auto Save: Automatically save configuration changes",
 		"  • Line Numbers: Show line numbers in text areas",
 		"  • Default Template: Prompt template to select on startup",
@@ -327,7 +326,7 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"  • Tab/Shift+Tab: Navigate fields",
 		"",
 		configHelpStyle.Render("Editing:"),
-		"  • Enter or Space: Start editing a field",
+		"  • Enter/Space: Edit text field or toggle checkbox",
 		"  • Enter: Save changes while editing",
 		"  • Esc: Cancel editing or exit configuration",
 		"",
@@ -339,13 +338,10 @@ func (m ConfigFormModel) renderConfigHelp() string {
 		"",
 		sectionTitleStyle.Render("🔐 Security:"),
 		"",
-		"Your API key is stored securely using your operating system's keyring:",
-		"  • macOS: Keychain",
-		"  • Windows: Credential Manager",
-		"  • Linux: Secret Service (GNOME Keyring, KDE Wallet)",
-		"  • Fallback: Encrypted file in your config directory",
-		"",
-		"The API key is never stored in plain text in configuration files.",
+		"Your API key is stored directly in the configuration file:",
+		"  • Location: ~/.config/shotgun-cli/config.json",
+		"  • Format: Plain text (ensure file permissions are secure)",
+		"  • Recommendation: Use appropriate file permissions (600) to secure the config file",
 		"",
 		configHelpStyle.Render("Press 'F1' again to return to configuration"),
 	}

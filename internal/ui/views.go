@@ -326,10 +326,6 @@ func (m *Model) updateTaskDescription(msg tea.KeyMsg) (*Model, tea.Cmd) {
 }
 
 func (m *Model) renderTaskDescription() string {
-	// Adjust textarea for available screen space
-	if m.width > 0 && m.height > 0 {
-		m.taskInput.SetFullScreenMode(m.width, m.height)
-	}
 
 	title := titleStyle.Render("shotgun-cli - Task Description")
 
@@ -415,10 +411,6 @@ func (m *Model) updateCustomRules(msg tea.KeyMsg) (*Model, tea.Cmd) {
 }
 
 func (m *Model) renderCustomRules() string {
-	// Adjust textarea for available screen space
-	if m.width > 0 && m.height > 0 {
-		m.rulesInput.SetFullScreenMode(m.width, m.height)
-	}
 
 	title := titleStyle.Render("shotgun-cli - Custom Rules")
 

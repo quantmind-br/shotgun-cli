@@ -138,9 +138,8 @@ func (cm *EnhancedConfigManager) Save() error {
 		return fmt.Errorf("failed to store secure values: %w", err)
 	}
 
-	// Create a copy without sensitive data for file storage
+	// Create a copy for file storage
 	configForFile := cm.config.Clone()
-	configForFile.OpenAI.APIKeyAlias = cm.config.OpenAI.APIKeyAlias // Keep alias, not actual key
 	configForFile.LastUpdated = time.Now()
 
 	// Serialize to JSON with proper formatting
@@ -351,12 +350,8 @@ func (cm *EnhancedConfigManager) TestConnection() error {
 		return fmt.Errorf("no configuration available")
 	}
 
-	// Use keyring to get actual API key
-	apiKey, err := cm.keyring.GetAPIKey(config.OpenAI.APIKeyAlias)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve API key: %w", err)
-	}
-
+	// Use API key directly from config
+	apiKey := config.OpenAI.APIKey
 	if apiKey == "" {
 		return fmt.Errorf("no API key configured")
 	}
@@ -392,15 +387,12 @@ func (cm *EnhancedConfigManager) envTransform(s string) string {
 }
 
 func (cm *EnhancedConfigManager) loadSecureValues(config *EnhancedConfig) error {
-	if config.OpenAI.APIKeyAlias != "" {
-		// Key is stored in keyring, alias is in config
-		// The actual loading happens when needed
-	}
+	// API keys are stored directly in config now
 	return nil
 }
 
 func (cm *EnhancedConfigManager) storeSecureValues(config *EnhancedConfig) error {
-	// Secure values are already in keyring, just ensure alias is correct
+	// API keys are stored directly in config now
 	return nil
 }
 
