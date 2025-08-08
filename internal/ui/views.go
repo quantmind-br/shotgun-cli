@@ -91,7 +91,7 @@ func (m *Model) translateText(textType, text string) tea.Cmd {
 // File Exclusion View
 func (m *Model) updateFileExclusion(msg tea.KeyMsg) (*Model, tea.Cmd) {
 	switch msg.String() {
-	case "c":
+	case "f5":
 		// Continue to next step
 		m.includedFiles = core.GetIncludedFiles(m.fileTree_root, m.selection)
 		m.currentView = ViewTemplateSelection

@@ -1,71 +1,93 @@
 # Task Completion Workflow
 
-## Standard Development Task Completion
+## Standard Development Workflow
+
+When completing any development task on this project, follow these steps:
 
 ### 1. Code Quality Checks
 ```bash
-# Format code according to Go standards
-npm run format           # Runs: go fmt ./...
+# Format code (must be run)
+npm run format
+# OR: go fmt ./...
 
-# Check for potential issues
-npm run lint             # Runs: go vet ./...
+# Lint code (must be run)  
+npm run lint
+# OR: go vet ./...
 ```
 
 ### 2. Testing
 ```bash
-# Run all tests
-npm test                 # Runs: go test ./...
+# Run all tests (must pass)
+npm test
+# OR: go test ./...
 
-# Run tests with coverage (when needed)
-go test -v -cover ./...
-
-# Run specific tests (for targeted testing)
-go test -v ./internal/core -run TestSpecificFunction
+# For specific changes, run focused tests
+go test -v ./internal/core      # If core logic changed
+go test -v ./internal/ui        # If UI components changed
 ```
 
-### 3. Functionality Verification
+### 3. Build Verification
 ```bash
-# Test the application in development mode
-npm run dev              # Runs: go run .
+# Verify local build works
+npm run build:local
+# OR: go build -o bin/shotgun-cli .
 
-# Test specific functionality through the TUI interface
-# - Navigate through file exclusion
-# - Test template selection
-# - Verify prompt generation
+# Test the built binary
+./bin/shotgun-cli --version
+./bin/shotgun-cli --help
 ```
 
-### 4. Build Verification (when applicable)
+### 4. Cross-Platform Considerations
+Since this is a cross-platform tool, be aware of:
+- **Path handling**: Use `filepath.Join()` for cross-platform paths
+- **Platform-specific features**: Check for Windows-specific code (UTF-8 handling, console setup)
+- **File permissions**: Consider different permission models across platforms
+
+## Before Committing Code
+
+### Required Checks
+1. **All tests pass**: `npm test` or `go test ./...`
+2. **Code is formatted**: `npm run format` or `go fmt ./...`  
+3. **Code passes linting**: `npm run lint` or `go vet ./...`
+4. **Application builds**: `npm run build:local` or `go build`
+5. **Application runs**: Basic functionality test
+
+### Optional but Recommended
 ```bash
-# For local changes
-npm run build:local      # Quick local build test
+# Run benchmarks if performance-related changes
+go test -bench=. ./...
 
-# For cross-platform changes
-npm run build:all        # Ensure all platforms build successfully
+# Test with debug mode
+DEBUG=1 go run .
+
+# Cross-platform build test (if significant changes)
+npm run build:all
 ```
 
-### 5. Template Changes (if applicable)
-When modifying templates in `templates/`:
-- Verify template syntax with placeholders: `{TASK}`, `{RULES}`, `{FILE_STRUCTURE}`, `{CURRENT_DATE}`
-- Test template rendering through the application
-- Ensure output format matches expected structure (git diff for Dev, markdown for others)
+## Error Handling Standards
 
-## Pre-Commit Checklist
-- [ ] Code formatted with `npm run format`
-- [ ] No linting errors from `npm run lint`
-- [ ] All tests pass with `npm test`
-- [ ] Application runs correctly with `npm run dev`
-- [ ] New functionality tested through UI
-- [ ] Documentation updated if needed (README.md, CLAUDE.md)
+### When Adding New Features
+- **Use structured errors**: Follow patterns in `translation_errors.go`
+- **Add proper validation**: Use validation tags and error reporting
+- **Include tests**: Both success and error cases
+- **Add logging**: Use appropriate log levels for debugging
 
-## Error Resolution
-If any step fails:
-1. **Format/Lint errors**: Fix code style issues reported
-2. **Test failures**: Address failing tests, add missing test cases
-3. **Build failures**: Check Go syntax, imports, and cross-platform compatibility
-4. **Runtime errors**: Test with `npm run dev` and debug through UI interaction
+### Configuration Changes  
+- **Update defaults**: Modify `Default*` functions if needed
+- **Add validation**: Include validation rules for new config fields
+- **Test migration**: Ensure existing configs still work
+- **Update documentation**: Keep CLAUDE.md and README.md current
 
-## Special Considerations
-- **Windows Development**: Be aware of path separators and UTF-8 encoding issues
-- **Cross-Platform**: Test builds on Windows target when making file handling changes
-- **UI Changes**: Test keyboard shortcuts and TUI responsiveness
-- **Template Changes**: Verify placeholder substitution and output formatting
+## Release Readiness
+
+### Before Creating Releases
+1. **All quality checks pass**
+2. **Cross-platform builds successful**: `npm run build:all`
+3. **Manual testing on target platforms**
+4. **Documentation updated**
+5. **Version numbers updated** (package.json, main.go)
+
+### Platform Testing
+- **Windows**: UTF-8 handling, console behavior, path separators
+- **macOS**: File permissions, keyring integration
+- **Linux**: File permissions, XDG compliance

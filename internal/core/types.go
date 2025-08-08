@@ -27,6 +27,7 @@ type DirectoryScanner struct {
 	gitIgnore     *gitignore.GitIgnore
 	customIgnore  *gitignore.GitIgnore
 	defaultIgnore *gitignore.GitIgnore
+	forceInclude  *gitignore.GitIgnore
 	progressChan  chan ProgressUpdate
 	mu            sync.RWMutex
 }
@@ -361,4 +362,9 @@ type TranslationConfig struct {
 type AppConfig struct {
 	AutoSave        bool `json:"autoSave"`        // Default: true
 	ShowLineNumbers bool `json:"showLineNumbers"` // Default: true
+
+	// File Pattern Configuration
+	CustomIgnorePatterns     []string `json:"customIgnorePatterns"`     // Additional patterns to ignore beyond .gitignore
+	ForceIncludePatterns     []string `json:"forceIncludePatterns"`     // Patterns to force-include, overriding .gitignore
+	PatternValidationEnabled bool     `json:"patternValidationEnabled"` // Enable pattern syntax validation
 }

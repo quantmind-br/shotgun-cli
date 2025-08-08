@@ -1,19 +1,22 @@
-# Project Overview: shotgun-cli
+# Project Overview
 
 ## Purpose
-shotgun-cli is a terminal-based prompt generation tool designed to help developers generate structured LLM prompts from codebase context. It's a command-line interface version of the Shotgun application that provides an interactive TUI experience for creating context-rich prompts for AI coding assistants.
+shotgun-cli is a terminal-based prompt generation tool built with Go and BubbleTea. It's designed to generate structured LLM prompts from codebase context using an interactive terminal user interface.
 
 ## Key Features
 - **Interactive Terminal UI**: Built with BubbleTea for smooth TUI experience
-- **Inverse File Selection**: Select files to exclude rather than include (more intuitive for large projects)
+- **Inverse File Selection**: Users exclude files rather than include them (more intuitive for large projects)
 - **Advanced File Filtering**: Automatic .gitignore support, built-in ignore patterns, custom ignore rules
-- **Multiple Prompt Templates**: 
-  - Dev: Generate git diffs for code changes
-  - Architect: Create design plans and architecture
-  - Debug: Bug analysis and debugging
-  - Project Manager: Documentation sync and task management
+- **Template System**: 4 built-in templates + extensible custom templates with YAML frontmatter
 - **Progress Tracking**: Real-time progress bars for large projects
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Cross-Platform**: Windows, macOS, Linux support with platform-specific optimizations
 
-## Business Value
-The tool helps developers quickly generate comprehensive, context-aware prompts for LLM interactions by automatically processing codebase files and applying specialized prompt templates based on the task type.
+## Target Users
+- Developers who need to generate structured prompts for LLMs from their codebase
+- Teams working with large codebases who need context-aware prompt generation
+- Users who prefer terminal-based tools over GUI applications
+
+## Distribution
+- Global installation via npm (`npm install -g shotgun-cli`)
+- Cross-platform binaries generated for Windows, Linux, macOS (x64 and ARM64)
+- Hybrid npm/Go build system for easy distribution

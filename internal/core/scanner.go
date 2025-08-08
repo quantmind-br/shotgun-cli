@@ -112,6 +112,20 @@ func (ds *DirectoryScanner) SetCustomIgnore(patterns []string) error {
 	return nil
 }
 
+// SetForceIncludePatterns sets patterns that override ignore rules (force-include)
+func (ds *DirectoryScanner) SetForceIncludePatterns(patterns []string) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	if len(patterns) == 0 {
+		ds.forceInclude = nil
+		return nil
+	}
+
+	ds.forceInclude = gitignore.CompileIgnoreLines(patterns...)
+	return nil
+}
+
 // ScanDirectory scans a directory and returns a file tree
 func (ds *DirectoryScanner) ScanDirectory(ctx context.Context, rootPath string) (*FileNode, error) {
 	// Set up default patterns if not already set
@@ -175,10 +189,11 @@ func (ds *DirectoryScanner) buildTreeRecursive(ctx context.Context, currentPath,
 		nodePath := filepath.Join(currentPath, entry.Name())
 		relPath, _ := filepath.Rel(rootPath, nodePath)
 
-		// Check ignore patterns
+		// Check ignore patterns with 4-layer system
 		isGitignored := false
 		isCustomIgnored := false
 		isDefaultIgnored := false
+		isForceIncluded := false
 
 		pathToMatch := relPath
 		if entry.IsDir() {
@@ -188,16 +203,29 @@ func (ds *DirectoryScanner) buildTreeRecursive(ctx context.Context, currentPath,
 		}
 
 		ds.mu.RLock()
-		if ds.gitIgnore != nil {
-			isGitignored = ds.gitIgnore.MatchesPath(pathToMatch)
-		}
-		if ds.customIgnore != nil {
-			isCustomIgnored = ds.customIgnore.MatchesPath(pathToMatch)
-		}
+		// Layer 1: Default ignore patterns (built-in system patterns)
 		if ds.defaultIgnore != nil {
 			isDefaultIgnored = ds.defaultIgnore.MatchesPath(pathToMatch)
 		}
+
+		// Layer 2: Custom ignore patterns (user-defined additional patterns)
+		if ds.customIgnore != nil {
+			isCustomIgnored = ds.customIgnore.MatchesPath(pathToMatch)
+		}
+
+		// Layer 3: Git ignore patterns (.gitignore file)
+		if ds.gitIgnore != nil {
+			isGitignored = ds.gitIgnore.MatchesPath(pathToMatch)
+		}
+
+		// Layer 4: Force include patterns (overrides all ignore patterns)
+		if ds.forceInclude != nil {
+			isForceIncluded = ds.forceInclude.MatchesPath(pathToMatch)
+		}
 		ds.mu.RUnlock()
+
+		// Apply filtering logic: if force-included, override all ignores
+		finalIgnored := (isDefaultIgnored || isCustomIgnored || isGitignored) && !isForceIncluded
 
 		// Send progress update
 		select {
@@ -213,13 +241,13 @@ func (ds *DirectoryScanner) buildTreeRecursive(ctx context.Context, currentPath,
 			Path:            nodePath,
 			RelPath:         relPath,
 			IsDir:           entry.IsDir(),
-			IsGitignored:    isGitignored,
-			IsCustomIgnored: isCustomIgnored || isDefaultIgnored,
+			IsGitignored:    isGitignored && !isForceIncluded,
+			IsCustomIgnored: (isCustomIgnored || isDefaultIgnored) && !isForceIncluded,
 		}
 
 		if entry.IsDir() {
-			// Only recurse if not ignored
-			if !isGitignored && !isCustomIgnored && !isDefaultIgnored {
+			// Only recurse if not finally ignored (respecting force-include)
+			if !finalIgnored {
 				children, err := ds.buildTreeRecursive(ctx, nodePath, rootPath, depth+1)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {

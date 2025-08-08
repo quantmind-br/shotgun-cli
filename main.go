@@ -11,6 +11,16 @@ import (
 )
 
 func main() {
+	// Enable debug logging if DEBUG environment variable is set, as recommended for TUI apps
+	if os.Getenv("DEBUG") != "" {
+		f, err := tea.LogToFile("debug.log", "debug")
+		if err != nil {
+			fmt.Printf("could not create log file: %v\n", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+	}
+
 	// Ensure UTF-8 support on Windows
 	if runtime.GOOS == "windows" {
 		// Set environment variables for UTF-8 support

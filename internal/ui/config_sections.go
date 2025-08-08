@@ -50,14 +50,26 @@ func (m EnhancedConfigFormModel) renderEnhancedHeader() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, subtitle, "")
 }
 
-// renderSectionTabs renders the section navigation tabs
+// renderSectionTabs renders the section navigation tabs with responsive layout
 func (m EnhancedConfigFormModel) renderSectionTabs() string {
+	ctx := m.GetLayoutContext()
+	vertical, useSymbols, maxTabs := ctx.GetTabLayout()
+
 	var tabs []string
 
-	for i, section := range m.sections {
-		style := enhancedFieldInactiveStyle
+	// Determine how many tabs to show
+	tabsToShow := len(m.sections)
+	if maxTabs > 0 && tabsToShow > maxTabs {
+		tabsToShow = maxTabs
+	}
+
+	for i, section := range m.sections[:tabsToShow] {
+		// Use adaptive styles
+		var style lipgloss.Style
 		if i == m.activeSection {
-			style = enhancedFieldActiveStyle
+			style = GetFieldActiveStyle(ctx)
+		} else {
+			style = GetFieldInactiveStyle(ctx)
 		}
 
 		// Add validation indicator
@@ -67,12 +79,42 @@ func (m EnhancedConfigFormModel) renderSectionTabs() string {
 			validationIcon = "⚠"
 		}
 
-		tabContent := fmt.Sprintf("%s %s %s", section.Icon, section.Name, validationIcon)
+		// Create tab content based on layout
+		var tabContent string
+		if useSymbols {
+			// Mobile mode - use only icons and validation indicators
+			if i == m.activeSection {
+				tabContent = fmt.Sprintf("▶ %s %s", section.Icon, validationIcon)
+			} else {
+				tabContent = fmt.Sprintf("%s %s", section.Icon, validationIcon)
+			}
+		} else {
+			// Standard mode - include names
+			activeIndicator := ""
+			if i == m.activeSection && vertical {
+				activeIndicator = "▶ " // Visual indicator for active tab in vertical mode
+			}
+
+			tabContent = fmt.Sprintf("%s%s %s %s", activeIndicator, section.Icon, section.Name, validationIcon)
+		}
+
 		tab := style.Render(tabContent)
 		tabs = append(tabs, tab)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+	// Show overflow indicator if we're hiding tabs
+	if maxTabs > 0 && len(m.sections) > maxTabs {
+		overflowStyle := GetHelpStyle(ctx)
+		overflowTab := overflowStyle.Render(fmt.Sprintf("... (+%d)", len(m.sections)-maxTabs))
+		tabs = append(tabs, overflowTab)
+	}
+
+	// Layout tabs based on responsive settings
+	if vertical {
+		return lipgloss.JoinVertical(lipgloss.Left, tabs...)
+	} else {
+		return lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+	}
 }
 
 // renderCurrentSection renders the currently active section
@@ -95,24 +137,34 @@ func (m EnhancedConfigFormModel) renderCurrentSection() string {
 
 	fields := lipgloss.JoinVertical(lipgloss.Left, fieldViews...)
 
-	// Connection test panel (for OpenAI section)
-	var connectionTest string
-	if section.Name == "OpenAI API" && m.showConnectionTest {
-		connectionTest = m.renderConnectionTest()
-	}
-
-	// Validation details panel
-	var validationPanel string
-	if m.showValidationDetails && len(m.errors) > 0 {
-		validationPanel = m.renderValidationPanel()
-	}
-
+	// Responsive panel rendering with collapsible behavior
+	ctx := m.GetLayoutContext()
 	content := []string{header, fields}
-	if connectionTest != "" {
-		content = append(content, connectionTest)
+
+	// Connection test panel (for OpenAI section) - Priority 1 (high)
+	if section.Name == "OpenAI API" && m.showConnectionTest {
+		if ctx.ShouldShowPanel("connection", 1) {
+			// Full panel for wider screens
+			connectionTest := m.renderConnectionTest()
+			content = append(content, connectionTest)
+		} else if m.connectionResult != "" || m.connectionTesting {
+			// Collapsed state for narrow screens
+			collapsedConnection := m.renderCollapsedConnectionTest()
+			content = append(content, collapsedConnection)
+		}
 	}
-	if validationPanel != "" {
-		content = append(content, validationPanel)
+
+	// Validation details panel - Priority 1 (high) when errors exist
+	if m.showValidationDetails && len(m.errors) > 0 {
+		if ctx.ShouldShowPanel("validation", 1) {
+			// Full panel for wider screens
+			validationPanel := m.renderValidationPanel()
+			content = append(content, validationPanel)
+		} else {
+			// Collapsed state for narrow screens - always show error count
+			collapsedValidation := m.renderCollapsedValidationPanel()
+			content = append(content, collapsedValidation)
+		}
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, content...)
@@ -128,12 +180,15 @@ func (m EnhancedConfigFormModel) renderSectionHeader(section EnhancedConfigSecti
 
 // renderEnhancedField renders a configuration field with enhanced features
 func (m EnhancedConfigFormModel) renderEnhancedField(field EnhancedConfigField, isActive bool) string {
+	// Get layout context for responsive behavior
+	ctx := m.GetLayoutContext()
+
 	// Field label with required indicator
 	label := field.Label
 	if field.Required {
 		label = label + " *"
 	}
-	labelStyle := enhancedFieldLabelStyle
+	labelStyle := GetFieldLabelStyle(ctx)
 	if isActive {
 		labelStyle = labelStyle.Foreground(lipgloss.Color("12"))
 	}
@@ -191,32 +246,125 @@ func (m EnhancedConfigFormModel) renderEnhancedField(field EnhancedConfigField, 
 		}
 	}
 
-	// Apply styling based on state
-	fieldStyle := enhancedFieldInactiveStyle
+	// Apply styling based on state using adaptive styles
+	var fieldStyle lipgloss.Style
 	if isActive {
-		fieldStyle = enhancedFieldActiveStyle
+		fieldStyle = GetFieldActiveStyle(ctx)
+	} else {
+		fieldStyle = GetFieldInactiveStyle(ctx)
 	}
 
 	// Add validation error indicator
 	if err, hasError := m.errors[field.Key]; hasError {
-		fieldDisplay = fieldDisplay + " " + enhancedErrorStyle.Render("⚠ "+err)
+		fieldDisplay = fieldDisplay + " " + GetErrorStyle().Render("⚠ "+err)
 	} else if m.realTimeValidation && isActive {
-		fieldDisplay = fieldDisplay + " " + enhancedSuccessStyle.Render("✓")
+		fieldDisplay = fieldDisplay + " " + GetSuccessStyle().Render("✓")
 	}
 
 	fieldPart := fieldStyle.Render(fieldDisplay)
 
-	// Combine label and field on one line for a more compact view
-	line := lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), "  ", fieldPart)
+	// Get field layout configuration - vertical for narrow breakpoints, horizontal otherwise
+	vertical, _, _ := ctx.GetFieldLayout()
 
-	// Help text
+	var line string
+	if vertical {
+		// Vertical layout: label above field for narrow screens
+		line = lipgloss.JoinVertical(lipgloss.Left, labelStyle.Render(label), fieldPart)
+	} else {
+		// Horizontal layout: label and field side by side for wider screens
+		line = lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(label), "  ", fieldPart)
+	}
+
+	// Help text with adaptive layout
 	if field.HelpText != "" && isActive {
-		// Indent help text to align with the field
-		help := enhancedHelpStyle.Render(strings.Repeat(" ", 30) + "💡 " + field.HelpText)
-		return lipgloss.JoinVertical(lipgloss.Left, line, help)
+		// Get help text configuration from layout context
+		showHelp, indentation, iconOnly := ctx.GetHelpTextLayout()
+
+		if showHelp {
+			helpStyle := GetHelpStyle(ctx)
+
+			if iconOnly {
+				// Mobile mode - icon only, no full text
+				helpText := "💡"
+				help := helpStyle.Render(helpText)
+				return lipgloss.JoinVertical(lipgloss.Left, line, help)
+			} else {
+				// Standard mode with intelligent line wrapping
+				wrappedHelp := m.renderWrappedHelpText(field.HelpText, ctx, indentation)
+				return lipgloss.JoinVertical(lipgloss.Left, line, wrappedHelp)
+			}
+		}
 	}
 
 	return line
+}
+
+// renderWrappedHelpText renders help text with intelligent line wrapping
+func (m EnhancedConfigFormModel) renderWrappedHelpText(helpText string, ctx *LayoutContext, indentation int) string {
+	helpStyle := GetHelpStyle(ctx)
+
+	// Calculate available width for help text
+	availableWidth := ctx.Width - indentation - 4 // Reserve space for icon and margins
+	if availableWidth < 20 {
+		availableWidth = 20 // Minimum width
+	}
+
+	// Prepare indentation string
+	indentStr := strings.Repeat(" ", indentation)
+	iconPrefix := "💡 "
+
+	// If help text fits in one line, render it simply
+	if len(helpText) <= availableWidth-len(iconPrefix) {
+		helpLine := indentStr + iconPrefix + helpText
+		return helpStyle.Render(helpLine)
+	}
+
+	// Wrap long help text intelligently
+	words := strings.Fields(helpText)
+	var lines []string
+	var currentLine []string
+	currentLength := 0
+
+	for _, word := range words {
+		// Check if adding this word would exceed the line limit
+		wordLength := len(word)
+		spaceIfNeeded := 0
+		if len(currentLine) > 0 {
+			spaceIfNeeded = 1 // For the space between words
+		}
+
+		if currentLength+spaceIfNeeded+wordLength > availableWidth-len(iconPrefix) && len(currentLine) > 0 {
+			// Current line is full, start a new line
+			lines = append(lines, strings.Join(currentLine, " "))
+			currentLine = []string{word}
+			currentLength = wordLength
+		} else {
+			// Add word to current line
+			currentLine = append(currentLine, word)
+			currentLength += spaceIfNeeded + wordLength
+		}
+	}
+
+	// Add any remaining words
+	if len(currentLine) > 0 {
+		lines = append(lines, strings.Join(currentLine, " "))
+	}
+
+	// Render each line with proper indentation
+	var renderedLines []string
+	for i, line := range lines {
+		var formattedLine string
+		if i == 0 {
+			// First line gets the icon
+			formattedLine = indentStr + iconPrefix + line
+		} else {
+			// Subsequent lines get aligned indentation
+			formattedLine = indentStr + strings.Repeat(" ", len(iconPrefix)) + line
+		}
+		renderedLines = append(renderedLines, helpStyle.Render(formattedLine))
+	}
+
+	return strings.Join(renderedLines, "\n")
 }
 
 // renderConnectionTest renders the connection test panel
@@ -268,46 +416,100 @@ func (m EnhancedConfigFormModel) renderValidationPanel() string {
 	return enhancedFieldInactiveStyle.Render(panel) + "\n"
 }
 
-// renderStatusBar renders the status and actions bar
+// renderCollapsedConnectionTest renders a compact connection test status
+func (m EnhancedConfigFormModel) renderCollapsedConnectionTest() string {
+	ctx := m.GetLayoutContext()
+	helpStyle := GetHelpStyle(ctx)
+
+	var statusText string
+	if m.connectionTesting {
+		statusText = "🔄 Testing..."
+	} else if m.connectionSuccess {
+		statusText = "🔗✓ Connected"
+	} else if m.connectionResult != "" {
+		statusText = "🔗✗ Failed"
+	} else {
+		statusText = "🔗 Ready to test (Ctrl+T)"
+	}
+
+	return helpStyle.Render(statusText) + "\n"
+}
+
+// renderCollapsedValidationPanel renders a compact error summary
+func (m EnhancedConfigFormModel) renderCollapsedValidationPanel() string {
+	errorCount := len(m.errors)
+	if errorCount == 0 {
+		return ""
+	}
+
+	errorStyle := GetErrorStyle()
+	var statusText string
+	if errorCount == 1 {
+		statusText = "⚠️ 1 error"
+	} else {
+		statusText = fmt.Sprintf("⚠️ %d errors", errorCount)
+	}
+
+	return errorStyle.Render(statusText) + "\n"
+}
+
+// renderStatusBar renders the status and actions bar with adaptive layout
 func (m EnhancedConfigFormModel) renderStatusBar() string {
+	// Get layout context for responsive behavior
+	ctx := m.GetLayoutContext()
 	var sections []string
 
-	// Operation status
+	// Operation status with adaptive styling
 	if m.lastOperationStatus != "" {
-		style := enhancedSuccessStyle
-		if !m.lastOperationSuccess {
-			style = enhancedErrorStyle
+		var style lipgloss.Style
+		if m.lastOperationSuccess {
+			style = GetSuccessStyle()
+		} else {
+			style = GetErrorStyle()
 		}
 
 		status := style.Render(m.lastOperationStatus)
 		sections = append(sections, status)
 	}
 
-	// Auto-save indicator
+	// Status indicators - group by priority for space management
+	var indicators []string
+
+	// High priority indicators (always show when present)
 	if m.autoSave {
-		autoSaveStatus := enhancedHelpStyle.Render("🔄 Auto-save enabled")
-		sections = append(sections, autoSaveStatus)
+		indicators = append(indicators, "🔄 Auto-save enabled")
 	}
 
-	// Real-time validation indicator
 	if m.realTimeValidation {
-		validationStatus := enhancedHelpStyle.Render("✓ Real-time validation")
-		sections = append(sections, validationStatus)
+		indicators = append(indicators, "✓ Real-time validation")
 	}
 
-	// Keyboard shortcuts
-	shortcuts := []string{
-		"Ctrl+S: Save",
-		"Ctrl+T: Test",
-		"Ctrl+R: Reset",
-		"?: Help",
-		"Tab: Navigate",
-		"Enter: Edit",
+	// Render indicators if present
+	if len(indicators) > 0 {
+		helpStyle := GetHelpStyle(ctx)
+
+		// Group indicators based on available space
+		if ctx.ShowFullShortcuts && len(indicators) > 1 {
+			// Wide screens - show all indicators on one line
+			indicatorText := strings.Join(indicators, " | ")
+			sections = append(sections, helpStyle.Render(indicatorText))
+		} else {
+			// Narrow screens - show each indicator separately for better wrapping
+			for _, indicator := range indicators {
+				sections = append(sections, helpStyle.Render(indicator))
+			}
+		}
 	}
 
-	shortcutText := strings.Join(shortcuts, " | ")
-	shortcutPanel := enhancedHelpStyle.Render(shortcutText)
-	sections = append(sections, shortcutPanel)
+	// Adaptive keyboard shortcuts using layout context
+	shortcutGroups := ctx.GetShortcutGroups()
+	helpStyle := GetHelpStyle(ctx)
+
+	for _, group := range shortcutGroups {
+		groupText := strings.Join(group, " | ")
+		shortcutLine := helpStyle.Render(groupText)
+		sections = append(sections, shortcutLine)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
@@ -464,20 +666,51 @@ func (m EnhancedConfigFormModel) GetFieldValue(key string) (string, error) {
 	return "", fmt.Errorf("field not found: %s", key)
 }
 
-// SetSize sets the display size for the form
+// SetSize sets the display size for the form with intelligent breakpoint detection
 func (m *EnhancedConfigFormModel) SetSize(width, height int) {
+	// Initialize layout context if not exists or update existing one
+	if m.layoutContext == nil {
+		m.layoutContext = NewLayoutContext(width, height)
+	} else {
+		// Check if breakpoint changed - this triggers re-render if needed
+		breakpointChanged := m.layoutContext.Update(width, height)
+
+		// If breakpoint changed, we might need to trigger a full re-render
+		// This is handled by the calling code checking if the layout changed
+		_ = breakpointChanged
+	}
+
+	// Update model's width/height for backward compatibility
 	m.width = width
 	m.height = height
 
-	// Adjust field widths based on available space
-	fieldWidth := width - 20 // Leave margin for styling
-	if fieldWidth < 20 {
-		fieldWidth = 20
+	// Apply responsive field widths based on calculated layout
+	fieldWidth := m.layoutContext.FieldWidth
+	if fieldWidth < 10 {
+		fieldWidth = 10 // Absolute minimum
 	}
 
+	// Update all field input widths
 	for sectionIdx := range m.sections {
 		for fieldIdx := range m.sections[sectionIdx].Fields {
 			m.sections[sectionIdx].Fields[fieldIdx].Input.Width = fieldWidth
 		}
 	}
+}
+
+// GetLayoutContext returns the current layout context for responsive rendering
+func (m *EnhancedConfigFormModel) GetLayoutContext() *LayoutContext {
+	if m.layoutContext == nil {
+		// Create default layout context if none exists
+		m.layoutContext = NewLayoutContext(m.width, m.height)
+	}
+	return m.layoutContext
+}
+
+// IsBreakpointChange checks if changing to the given size would trigger a breakpoint change
+func (m *EnhancedConfigFormModel) IsBreakpointChange(newWidth int) bool {
+	if m.layoutContext == nil {
+		return true // First layout always triggers change
+	}
+	return m.layoutContext.IsBreakpointChange(newWidth)
 }

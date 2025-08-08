@@ -18,6 +18,9 @@ type DirectoryStats struct {
 	Filtered int
 }
 
+// PatternConfigRequestMsg is sent when user requests pattern configuration
+type PatternConfigRequestMsg struct{}
+
 // FileTreeModel represents the file tree component with exclusion capabilities
 type FileTreeModel struct {
 	root            *core.FileNode
@@ -106,6 +109,11 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 			// Include all files (clear exclusions)
 			m.selection.Reset()
 			m.invalidateStatsCache()
+		case "p", "P":
+			// Open pattern configuration - this will be handled by the main app
+			return m, tea.Cmd(func() tea.Msg {
+				return PatternConfigRequestMsg{}
+			})
 		}
 	}
 
@@ -157,7 +165,7 @@ func (m FileTreeModel) View() string {
 
 	lines = append(lines, statusStyleLocal.Render(stats))
 	lines = append(lines, "")
-	lines = append(lines, helpStyleLocal.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | c: continue | o: options"))
+	lines = append(lines, helpStyleLocal.Render("Space: toggle | hjkl: navigate | Enter: expand | r: reset | a/A: exclude/include all | p: patterns | F5: continue | o: options"))
 
 	return strings.Join(lines, "\n")
 }

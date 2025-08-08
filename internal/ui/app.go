@@ -50,6 +50,7 @@ const (
 	ViewTaskDescription
 	ViewCustomRules
 	ViewConfiguration
+	ViewPatternConfig
 	ViewGeneration
 	ViewComplete
 )
@@ -61,11 +62,12 @@ type Model struct {
 	width, height int
 
 	// Components
-	fileTree    FileTreeModel
-	progressBar progress.Model
-	taskInput   NumberedTextArea
-	rulesInput  NumberedTextArea
-	configForm  EnhancedConfigFormModel
+	fileTree      FileTreeModel
+	progressBar   progress.Model
+	taskInput     NumberedTextArea
+	rulesInput    NumberedTextArea
+	configForm    EnhancedConfigFormModel
+	patternConfig *PatternConfigModel
 
 	// Business Logic
 	scanner    *core.DirectoryScanner
@@ -194,12 +196,26 @@ func NewModel() (*Model, error) {
 	// Initialize configuration form
 	configForm := *NewEnhancedConfigFormModel(configMgr, keyMgr)
 
+	// Initialize pattern configuration (will be created when needed)
+	var patternConfig *PatternConfigModel
+
+	// Apply configuration patterns to scanner immediately
+	if patternErr := scanner.SetCustomIgnore(config.App.CustomIgnorePatterns); patternErr != nil {
+		// Log error but don't fail initialization
+		log.Printf("Warning: Failed to apply custom ignore patterns: %v", patternErr)
+	}
+	if patternErr := scanner.SetForceIncludePatterns(config.App.ForceIncludePatterns); patternErr != nil {
+		// Log error but don't fail initialization
+		log.Printf("Warning: Failed to apply force include patterns: %v", patternErr)
+	}
+
 	return &Model{
 		currentView:     ViewFileExclusion,
 		progressBar:     prog,
 		taskInput:       taskInput,
 		rulesInput:      rulesInput,
 		configForm:      configForm,
+		patternConfig:   patternConfig,
 		scanner:         scanner,
 		generator:       generator,
 		templates:       templates,
@@ -275,7 +291,7 @@ func (m *Model) GetSelectedDir() string {
 // Init initializes the application
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		m.scanDirectory(), // Start scanning immediately
+		m.scanDirectory(), // Start scanning immediately (patterns already applied in constructor)
 	)
 }
 
@@ -373,6 +389,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCustomRules(msg)
 		case ViewConfiguration:
 			return m.updateConfiguration(msg)
+		case ViewPatternConfig:
+			return m.updatePatternConfig(msg)
 		case ViewGeneration:
 			return m.updateGeneration(msg)
 		case ViewComplete:
@@ -397,6 +415,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errorMsg:
 		m.lastError = msg.err
 		m.generating = false
+		return m, nil
+
+	case PatternConfigRequestMsg:
+		// Initialize pattern config if needed
+		if m.patternConfig == nil {
+			config := m.configMgr.GetEnhanced()
+			m.patternConfig = NewPatternConfigModel(config, m.width, m.height)
+		}
+		m.currentView = ViewPatternConfig
 		return m, nil
 
 	case translationCompleteMsg:
@@ -456,6 +483,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if m.currentView == ViewPatternConfig && m.patternConfig != nil {
+		*m.patternConfig, cmd = m.patternConfig.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -480,6 +512,11 @@ func (m *Model) View() string {
 		return m.renderCustomRules()
 	case ViewConfiguration:
 		return m.configForm.View()
+	case ViewPatternConfig:
+		if m.patternConfig != nil {
+			return m.patternConfig.View()
+		}
+		return "Pattern configuration not initialized"
 	case ViewGeneration:
 		return m.renderGeneration()
 	case ViewComplete:
@@ -527,8 +564,9 @@ KEYBOARD SHORTCUTS:
     hjkl         Navigate file tree (vim-style)
     ↑↓←→         Navigate file tree (arrow keys)
     Space        Toggle file/directory exclusion
-    c            Continue to next step
+    F5           Continue to next step
     o            Access configuration/settings
+    p            Configure file patterns (ignore/include)
     r            Reset all exclusions
     a            Exclude all files
     A            Include all files
@@ -554,6 +592,66 @@ KEYBOARD SHORTCUTS:
 Press ? or Esc to close this help.
 `
 	return helpStyle.Render(help)
+}
+
+// updatePatternConfig handles pattern configuration view events
+func (m *Model) updatePatternConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.patternConfig == nil {
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "q", "ctrl+c":
+		// Save pattern changes and exit
+		if m.patternConfig != nil {
+			// Update configuration with pattern changes
+			updatedConfig := m.patternConfig.GetConfig()
+			if err := m.configMgr.UpdateEnhanced(updatedConfig); err != nil {
+				m.lastError = fmt.Errorf("failed to save pattern configuration: %w", err)
+			} else {
+				// Apply patterns to scanner for immediate effect
+				m.applyPatternsToScanner(updatedConfig)
+
+				// Change view and trigger rescan to apply new patterns
+				m.currentView = ViewFileExclusion
+				return m, m.scanDirectory()
+			}
+		}
+		m.currentView = ViewFileExclusion
+		return m, nil
+
+	case "s":
+		// Save configuration without exiting
+		if m.patternConfig != nil {
+			updatedConfig := m.patternConfig.GetConfig()
+			if err := m.configMgr.UpdateEnhanced(updatedConfig); err != nil {
+				m.lastError = fmt.Errorf("failed to save pattern configuration: %w", err)
+			} else {
+				// Apply patterns to scanner for immediate effect
+				m.applyPatternsToScanner(updatedConfig)
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// applyPatternsToScanner applies pattern configuration to the directory scanner
+func (m *Model) applyPatternsToScanner(config *core.EnhancedConfig) {
+	if m.scanner == nil {
+		return
+	}
+
+	// Apply custom ignore patterns
+	if err := m.scanner.SetCustomIgnore(config.App.CustomIgnorePatterns); err != nil {
+		// Handle error silently for now
+	}
+
+	// Apply force include patterns
+	if err := m.scanner.SetForceIncludePatterns(config.App.ForceIncludePatterns); err != nil {
+		// Handle error silently for now
+	}
 }
 
 // Message types for async operations

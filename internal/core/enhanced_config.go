@@ -1,9 +1,11 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/go-playground/validator/v10"
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
 // EnhancedConfig represents the enhanced application configuration with validation
@@ -55,6 +57,11 @@ type EnhancedAppConfig struct {
 	// UI Settings
 	RefreshInterval int  `koanf:"refreshInterval" validate:"min=100,max=10000"` // 100ms - 10s
 	EnableHotReload bool `koanf:"enableHotReload"`                              // Enable hot config reload
+
+	// File Pattern Configuration
+	CustomIgnorePatterns     []string `koanf:"customIgnorePatterns"`     // Additional patterns to ignore beyond .gitignore
+	ForceIncludePatterns     []string `koanf:"forceIncludePatterns"`     // Patterns to force-include, overriding .gitignore
+	PatternValidationEnabled bool     `koanf:"patternValidationEnabled"` // Enable pattern syntax validation
 }
 
 // ValidationError represents a configuration validation error with field context
@@ -118,6 +125,11 @@ func DefaultEnhancedAppConfig() EnhancedAppConfig {
 		WorkerPoolSize:    10,
 		RefreshInterval:   1000, // 1 second
 		EnableHotReload:   true,
+
+		// Pattern configuration defaults
+		CustomIgnorePatterns:     []string{}, // Empty by default - users can add patterns
+		ForceIncludePatterns:     []string{}, // Empty by default - users can add patterns
+		PatternValidationEnabled: true,       // Enable validation by default for safety
 	}
 }
 
@@ -140,8 +152,11 @@ func (ec *EnhancedConfig) ToLegacyConfig() *Config {
 			ContextPrompt:  ec.Translation.ContextPrompt,
 		},
 		App: AppConfig{
-			AutoSave:        ec.App.AutoSave,
-			ShowLineNumbers: ec.App.ShowLineNumbers,
+			AutoSave:                 ec.App.AutoSave,
+			ShowLineNumbers:          ec.App.ShowLineNumbers,
+			CustomIgnorePatterns:     ec.App.CustomIgnorePatterns,
+			ForceIncludePatterns:     ec.App.ForceIncludePatterns,
+			PatternValidationEnabled: ec.App.PatternValidationEnabled,
 		},
 		Version:     ec.Version,
 		LastUpdated: ec.LastUpdated,
@@ -177,12 +192,18 @@ func FromLegacyConfig(legacy *Config) *EnhancedConfig {
 
 		// Convert App config
 		enhanced.App = EnhancedAppConfig{
-			AutoSave:        legacy.App.AutoSave,
-			ShowLineNumbers: legacy.App.ShowLineNumbers, MaxFileSize: 10485760, // Default enhanced value (10MB)
-			MaxDirectoryDepth: 10,   // Default enhanced value
-			WorkerPoolSize:    10,   // Default enhanced value
-			RefreshInterval:   1000, // Default enhanced value (1 second)
-			EnableHotReload:   true, // Default enhanced value
+			AutoSave:          legacy.App.AutoSave,
+			ShowLineNumbers:   legacy.App.ShowLineNumbers,
+			MaxFileSize:       10485760, // Default enhanced value (10MB)
+			MaxDirectoryDepth: 10,       // Default enhanced value
+			WorkerPoolSize:    10,       // Default enhanced value
+			RefreshInterval:   1000,     // Default enhanced value (1 second)
+			EnableHotReload:   true,     // Default enhanced value
+
+			// Copy pattern fields from legacy config
+			CustomIgnorePatterns:     legacy.App.CustomIgnorePatterns,
+			ForceIncludePatterns:     legacy.App.ForceIncludePatterns,
+			PatternValidationEnabled: legacy.App.PatternValidationEnabled,
 		}
 
 		enhanced.Version = legacy.Version
@@ -195,26 +216,75 @@ func FromLegacyConfig(legacy *Config) *EnhancedConfig {
 // Validate performs comprehensive validation of the enhanced configuration
 func (ec *EnhancedConfig) Validate(validator *validator.Validate) *ConfigValidationResult {
 	err := validator.Struct(ec)
-	if err == nil {
-		return &ConfigValidationResult{Valid: true}
-	}
-
 	var validationErrors []ValidationError
 
-	// Check if it's validation errors using string checking as fallback
-	errStr := err.Error()
-	if validationErrs, ok := err.(interface{ Error() string }); ok && validationErrs != nil {
-		// Try to parse the error for field information
-		validationErrors = append(validationErrors, ValidationError{
-			Field:   "Configuration",
-			Tag:     "validation",
-			Value:   "",
-			Message: errStr,
-		})
+	if err != nil {
+		// Check if it's validation errors using string checking as fallback
+		errStr := err.Error()
+		if validationErrs, ok := err.(interface{ Error() string }); ok && validationErrs != nil {
+			// Try to parse the error for field information
+			validationErrors = append(validationErrors, ValidationError{
+				Field:   "Configuration",
+				Tag:     "validation",
+				Value:   "",
+				Message: errStr,
+			})
+		}
+	}
+
+	// Additional pattern validation if enabled
+	if ec.App.PatternValidationEnabled {
+		// Validate custom ignore patterns
+		for i, pattern := range ec.App.CustomIgnorePatterns {
+			if pattern == "" {
+				validationErrors = append(validationErrors, ValidationError{
+					Field:   fmt.Sprintf("App.CustomIgnorePatterns[%d]", i),
+					Tag:     "pattern",
+					Value:   pattern,
+					Message: "ignore pattern cannot be empty",
+				})
+				continue
+			}
+
+			// Test pattern validity by creating a temporary gitignore
+			testIgnore := gitignore.CompileIgnoreLines(pattern)
+			if testIgnore == nil {
+				validationErrors = append(validationErrors, ValidationError{
+					Field:   fmt.Sprintf("App.CustomIgnorePatterns[%d]", i),
+					Tag:     "pattern",
+					Value:   pattern,
+					Message: "invalid gitignore pattern syntax",
+				})
+			}
+		}
+
+		// Validate force include patterns
+		for i, pattern := range ec.App.ForceIncludePatterns {
+			if pattern == "" {
+				validationErrors = append(validationErrors, ValidationError{
+					Field:   fmt.Sprintf("App.ForceIncludePatterns[%d]", i),
+					Tag:     "pattern",
+					Value:   pattern,
+					Message: "force-include pattern cannot be empty",
+				})
+				continue
+			}
+
+			// Test pattern validity by creating a temporary gitignore
+			testIgnore := gitignore.CompileIgnoreLines(pattern)
+			if testIgnore == nil {
+				validationErrors = append(validationErrors, ValidationError{
+					Field:   fmt.Sprintf("App.ForceIncludePatterns[%d]", i),
+					Tag:     "pattern",
+					Value:   pattern,
+					Message: "invalid gitignore pattern syntax",
+				})
+			}
+		}
 	}
 
 	return &ConfigValidationResult{
-		Valid:  false,
+		Valid:  len(validationErrors) == 0,
 		Errors: validationErrors,
 	}
 }
@@ -264,8 +334,44 @@ func (ec *EnhancedConfig) IsEquivalent(other *EnhancedConfig) bool {
 	// Compare core configuration fields (excluding LastUpdated)
 	return ec.OpenAI == other.OpenAI &&
 		ec.Translation == other.Translation &&
-		ec.App == other.App &&
+		isEnhancedAppConfigEqual(ec.App, other.App) &&
 		ec.Version == other.Version
+}
+
+// Helper function to compare EnhancedAppConfig structs that contain slices
+func isEnhancedAppConfigEqual(a, b EnhancedAppConfig) bool {
+	// Compare all non-slice fields first
+	if a.AutoSave != b.AutoSave ||
+		a.ShowLineNumbers != b.ShowLineNumbers ||
+		a.MaxFileSize != b.MaxFileSize ||
+		a.MaxDirectoryDepth != b.MaxDirectoryDepth ||
+		a.WorkerPoolSize != b.WorkerPoolSize ||
+		a.RefreshInterval != b.RefreshInterval ||
+		a.EnableHotReload != b.EnableHotReload ||
+		a.PatternValidationEnabled != b.PatternValidationEnabled {
+		return false
+	}
+
+	// Compare slice fields
+	if len(a.CustomIgnorePatterns) != len(b.CustomIgnorePatterns) {
+		return false
+	}
+	for i, v := range a.CustomIgnorePatterns {
+		if v != b.CustomIgnorePatterns[i] {
+			return false
+		}
+	}
+
+	if len(a.ForceIncludePatterns) != len(b.ForceIncludePatterns) {
+		return false
+	}
+	for i, v := range a.ForceIncludePatterns {
+		if v != b.ForceIncludePatterns[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Clone creates a deep copy of the enhanced configuration

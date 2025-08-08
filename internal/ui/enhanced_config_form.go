@@ -48,6 +48,9 @@ type EnhancedConfigFormModel struct {
 	// UI state
 	showConnectionTest    bool
 	showValidationDetails bool
+
+	// Responsive layout
+	layoutContext *LayoutContext
 }
 
 // EnhancedConfigSection represents a section in the enhanced configuration form
@@ -140,6 +143,11 @@ func (m *EnhancedConfigFormModel) initializeEnhancedSections() {
 				m.createEnhancedField("Worker Pool Size", "app.workerPoolSize", FieldNumber, fmt.Sprintf("%d", m.config.App.WorkerPoolSize), true, false, "Number of parallel workers"),
 				m.createEnhancedField("Refresh Interval (ms)", "app.refreshInterval", FieldNumber, fmt.Sprintf("%d", m.config.App.RefreshInterval), true, false, "UI refresh interval"),
 				m.createEnhancedToggleField("Enable Hot Reload", "app.enableHotReload", m.config.App.EnableHotReload, "Automatically reload on config changes"),
+
+				// File Pattern Configuration
+				m.createEnhancedField("Custom Ignore Patterns", "app.customIgnorePatterns", FieldText, strings.Join(m.config.App.CustomIgnorePatterns, ","), false, false, "Additional patterns to ignore (comma-separated, e.g., *.tmp,temp/,*.log)"),
+				m.createEnhancedField("Force Include Patterns", "app.forceIncludePatterns", FieldText, strings.Join(m.config.App.ForceIncludePatterns, ","), false, false, "Patterns to force-include, overriding .gitignore (comma-separated)"),
+				m.createEnhancedToggleField("Pattern Validation", "app.patternValidationEnabled", m.config.App.PatternValidationEnabled, "Enable pattern syntax validation"),
 			},
 		},
 	}
@@ -336,6 +344,46 @@ func (m *EnhancedConfigFormModel) applyAppValue(config *core.EnhancedConfig, fie
 		}
 	case "enableHotReload":
 		config.App.EnableHotReload = value == "true"
+
+	// Pattern fields
+	case "customIgnorePatterns":
+		if value == "" {
+			config.App.CustomIgnorePatterns = []string{}
+		} else {
+			patterns := strings.Split(value, ",")
+			// Clean up patterns by trimming spaces
+			for i, pattern := range patterns {
+				patterns[i] = strings.TrimSpace(pattern)
+			}
+			// Remove empty patterns
+			var cleanPatterns []string
+			for _, pattern := range patterns {
+				if pattern != "" {
+					cleanPatterns = append(cleanPatterns, pattern)
+				}
+			}
+			config.App.CustomIgnorePatterns = cleanPatterns
+		}
+	case "forceIncludePatterns":
+		if value == "" {
+			config.App.ForceIncludePatterns = []string{}
+		} else {
+			patterns := strings.Split(value, ",")
+			// Clean up patterns by trimming spaces
+			for i, pattern := range patterns {
+				patterns[i] = strings.TrimSpace(pattern)
+			}
+			// Remove empty patterns
+			var cleanPatterns []string
+			for _, pattern := range patterns {
+				if pattern != "" {
+					cleanPatterns = append(cleanPatterns, pattern)
+				}
+			}
+			config.App.ForceIncludePatterns = cleanPatterns
+		}
+	case "patternValidationEnabled":
+		config.App.PatternValidationEnabled = value == "true"
 	}
 	return nil
 }
@@ -665,42 +713,152 @@ type configResetErrorMsg struct {
 }
 
 // Styling
+// Adaptive Styles System - styles that change based on layout context
+// These replace the old fixed styles with responsive versions
+
+// GetSectionTitleStyle returns an adaptive section title style
+func GetSectionTitleStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("12")).
+		Bold(true)
+
+	if ctx != nil {
+		// Adjust padding based on breakpoint
+		switch ctx.Breakpoint {
+		case BreakpointMobile:
+			style = style.Padding(0, 0) // No padding on mobile
+		case BreakpointNarrow:
+			style = style.Padding(0, 0) // Minimal padding
+		default:
+			style = style.Padding(0, 1) // Standard padding
+		}
+	}
+
+	return style
+}
+
+// GetSectionDescStyle returns an adaptive section description style
+func GetSectionDescStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("8")).
+		Italic(true)
+
+	if ctx != nil {
+		switch ctx.Breakpoint {
+		case BreakpointMobile:
+			style = style.Padding(0, 0)
+		case BreakpointNarrow:
+			style = style.Padding(0, 1)
+		default:
+			style = style.Padding(0, 2)
+		}
+	}
+
+	return style
+}
+
+// GetFieldLabelStyle returns an adaptive field label style
+func GetFieldLabelStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("14")).
+		Bold(true)
+
+	if ctx != nil {
+		// Use the calculated label width from layout context
+		if ctx.LabelWidth > 0 {
+			style = style.Width(ctx.LabelWidth).Align(lipgloss.Right)
+		}
+		// For mobile/narrow in vertical mode, don't set width
+		if vertical, _, _ := ctx.GetFieldLayout(); vertical {
+			style = style.Width(0).Align(lipgloss.Left)
+		}
+	} else {
+		// Fallback to original fixed width if no context
+		style = style.Width(25).Align(lipgloss.Right)
+	}
+
+	return style
+}
+
+// GetFieldActiveStyle returns an adaptive active field style
+func GetFieldActiveStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("12"))
+
+	if ctx != nil {
+		// Adjust padding based on available space
+		switch ctx.Breakpoint {
+		case BreakpointMobile:
+			style = style.Padding(0, 0) // No padding on mobile
+		case BreakpointNarrow:
+			style = style.Padding(0, 0) // Minimal padding
+		default:
+			style = style.Padding(0, 1) // Standard padding
+		}
+	}
+
+	return style
+}
+
+// GetFieldInactiveStyle returns an adaptive inactive field style
+func GetFieldInactiveStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("8"))
+
+	if ctx != nil {
+		switch ctx.Breakpoint {
+		case BreakpointMobile:
+			style = style.Padding(0, 0)
+		case BreakpointNarrow:
+			style = style.Padding(0, 0)
+		default:
+			style = style.Padding(0, 1)
+		}
+	}
+
+	return style
+}
+
+// GetErrorStyle returns the error style (non-adaptive for consistency)
+func GetErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("9")).
+		Bold(true)
+}
+
+// GetSuccessStyle returns the success style (non-adaptive for consistency)
+func GetSuccessStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("10")).
+		Bold(true)
+}
+
+// GetHelpStyle returns an adaptive help text style
+func GetHelpStyle(ctx *LayoutContext) lipgloss.Style {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("8")).
+		Italic(true)
+
+	if ctx != nil {
+		// On mobile, make help text more subtle
+		if ctx.Breakpoint == BreakpointMobile {
+			style = style.Foreground(lipgloss.Color("7")) // Even more subtle
+		}
+	}
+
+	return style
+}
+
+// Legacy styles for backward compatibility - these now use adaptive versions
 var (
-	enhancedSectionTitleStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("12")).
-					Bold(true).
-					Padding(0, 1)
-
-	enhancedSectionDescStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color("8")).
-					Italic(true).
-					Padding(0, 2)
-
-	enhancedFieldLabelStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("14")).
-				Bold(true).
-				Width(25).
-				Align(lipgloss.Right)
-
-	enhancedFieldActiveStyle = lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(lipgloss.Color("12")).
-					Padding(0, 1)
-
-	enhancedFieldInactiveStyle = lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(lipgloss.Color("8")).
-					Padding(0, 1)
-
-	enhancedErrorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("9")).
-				Bold(true)
-
-	enhancedSuccessStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("10")).
-				Bold(true)
-
-	enhancedHelpStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("8")).
-				Italic(true)
+	enhancedSectionTitleStyle  = GetSectionTitleStyle(nil)
+	enhancedSectionDescStyle   = GetSectionDescStyle(nil)
+	enhancedFieldLabelStyle    = GetFieldLabelStyle(nil)
+	enhancedFieldActiveStyle   = GetFieldActiveStyle(nil)
+	enhancedFieldInactiveStyle = GetFieldInactiveStyle(nil)
+	enhancedErrorStyle         = GetErrorStyle()
+	enhancedSuccessStyle       = GetSuccessStyle()
+	enhancedHelpStyle          = GetHelpStyle(nil)
 )

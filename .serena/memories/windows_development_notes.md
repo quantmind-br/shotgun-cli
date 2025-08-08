@@ -1,77 +1,84 @@
-# Windows Development Environment Notes
+# Windows Development Notes
 
-## Windows-Specific Commands and Utilities
+## Windows-Specific Considerations
 
-### File Operations
+### System Commands
+Since the development system is Windows, use these commands instead of Unix equivalents:
+
 ```cmd
-# Directory listing
-dir                      # List directory contents (equivalent to ls)
-dir /s                   # Recursive listing (equivalent to ls -R)
-
-# File viewing
-type filename.txt        # View file contents (equivalent to cat)
-more filename.txt        # Paginated file viewing (equivalent to less)
-
-# File searching
-find "search_text" filename.txt     # Search in specific file
-findstr "pattern" *.go              # Search pattern in multiple files (equivalent to grep)
-
-# File system
-where shotgun-cli.exe    # Find executable location (equivalent to which)
-copy source dest         # Copy files (equivalent to cp)
-move source dest         # Move files (equivalent to mv)
-del filename             # Delete files (equivalent to rm)
+# File operations
+dir                    # Instead of ls
+type filename.txt      # Instead of cat
+findstr "pattern" *.go # Instead of grep
+where go               # Instead of which go
 ```
 
-### Path Handling
-- Use backslashes (`\`) for Windows paths in commands
-- Go code handles path separators automatically with `filepath` package
-- Be aware of case-insensitive file system behavior
-
-### Development Environment
-```cmd
-# Go commands work the same on Windows
-go version
-go build
-go test
-go mod tidy
-
-# npm commands work the same
-npm run dev
-npm test
-npm run build
-```
-
-## Windows-Specific Code Considerations
+### Path Handling in Code
+- **Always use `filepath.Join()`** for cross-platform compatibility
+- **Be aware of backslash vs forward slash** in path strings
+- **Use `filepath.Separator`** when needed for platform-specific separators
 
 ### UTF-8 Support
-The application includes Windows-specific UTF-8 support in `main.go`:
-```go
-// Ensure UTF-8 support on Windows
-if runtime.GOOS == "windows" {
-    os.Setenv("LANG", "en_US.UTF-8")
-    os.Setenv("LC_ALL", "en_US.UTF-8")
-    // Additional UTF-8 setup via Windows API
-}
+The application includes special Windows UTF-8 handling in `main.go`:
+- Sets console code pages to UTF-8 (65001)
+- Configures environment variables for UTF-8
+- Enables virtual terminal processing
+- This is critical for proper display of Unicode characters in the TUI
+
+### Windows-Specific Features in Codebase
+
+#### Console Configuration
+- `enableUTF8Windows()` function in main.go
+- Windows-specific BubbleTea options (WithoutSignalHandler)
+- Console code page manipulation via syscalls
+
+#### File System
+- XDG directory support via `github.com/adrg/xdg` library
+- Configuration stored in `%LOCALAPPDATA%\shotgun-cli\`
+- Custom templates in `%LOCALAPPDATA%\shotgun-cli\templates\`
+
+#### Keyring Integration
+- Uses Windows Credential Manager via `github.com/99designs/keyring`
+- Secure storage for API keys and sensitive configuration
+
+### Development Environment Setup
+
+#### Prerequisites
+- **Go 1.24.5+**: Required for building
+- **Node.js 14.0.0+**: Required for npm build scripts
+- **Git**: For version control
+
+#### Environment Variables
+```cmd
+# Enable debug logging
+set DEBUG=1
+go run .
+
+# UTF-8 support (automatically handled by application)
+set LANG=en_US.UTF-8
+set LC_ALL=en_US.UTF-8
 ```
 
-### File Path Handling
-- Use `filepath.Join()` for cross-platform path construction
-- Use `filepath.Separator` for platform-specific separators
-- The codebase properly handles Windows paths in scanner and generator components
+### Windows Build Process
+The build system is designed to work well on Windows:
+- npm scripts handle cross-platform builds
+- GoReleaser configuration supports Windows builds
+- Binary outputs include `.exe` extension automatically
+- Windows-specific optimizations in build flags
 
-### Terminal Compatibility
-- BubbleTea framework handles Windows terminal differences
-- Windows Command Prompt and PowerShell both supported
-- UTF-8 and Unicode character support enabled
+### Testing Considerations
+- File path tests must work with Windows path separators
+- UTF-8 and Unicode handling tests are important
+- Console input/output tests for Windows terminal behavior
+- File permission tests (Windows has different permission model)
 
-## Build Artifacts
-Windows builds generate:
-- `bin/shotgun-cli.exe` - Windows executable
-- Cross-platform builds create multiple binaries for different OS/arch combinations
+### Common Windows Issues
+1. **Path length limits**: Windows has historically had 260-character path limits
+2. **File locking**: Windows locks files more aggressively than Unix systems
+3. **Case sensitivity**: Windows file system is case-insensitive by default
+4. **Line endings**: CRLF vs LF (handled automatically by Git and Go)
 
-## Common Windows Development Issues
-1. **Path separators**: Always use `filepath` package functions
-2. **Line endings**: Git handles CRLF/LF conversion automatically
-3. **Case sensitivity**: Windows is case-insensitive, but other platforms are not
-4. **Executable extensions**: Windows requires `.exe` extension for executables
+### Performance Notes
+- Windows I/O can be slower than Unix systems for many small files
+- Directory traversal performance differs
+- The application includes progress tracking for large directory scans

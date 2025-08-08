@@ -445,11 +445,47 @@ func (cm *EnhancedConfigManager) detectChanges(old, new *EnhancedConfig) map[str
 	if old.Translation != new.Translation {
 		changes["translation"] = true
 	}
-	if old.App != new.App {
+	if !isAppConfigEqual(old.App, new.App) {
 		changes["app"] = true
 	}
 
 	return changes
+}
+
+// Helper function to compare EnhancedAppConfig structs that contain slices
+func isAppConfigEqual(a, b EnhancedAppConfig) bool {
+	// Compare all non-slice fields first
+	if a.AutoSave != b.AutoSave ||
+		a.ShowLineNumbers != b.ShowLineNumbers ||
+		a.MaxFileSize != b.MaxFileSize ||
+		a.MaxDirectoryDepth != b.MaxDirectoryDepth ||
+		a.WorkerPoolSize != b.WorkerPoolSize ||
+		a.RefreshInterval != b.RefreshInterval ||
+		a.EnableHotReload != b.EnableHotReload ||
+		a.PatternValidationEnabled != b.PatternValidationEnabled {
+		return false
+	}
+
+	// Compare slice fields
+	if len(a.CustomIgnorePatterns) != len(b.CustomIgnorePatterns) {
+		return false
+	}
+	for i, v := range a.CustomIgnorePatterns {
+		if v != b.CustomIgnorePatterns[i] {
+			return false
+		}
+	}
+
+	if len(a.ForceIncludePatterns) != len(b.ForceIncludePatterns) {
+		return false
+	}
+	for i, v := range a.ForceIncludePatterns {
+		if v != b.ForceIncludePatterns[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (cm *EnhancedConfigManager) emitEvent(eventType, source string, changes map[string]interface{}, errorMsg string) {

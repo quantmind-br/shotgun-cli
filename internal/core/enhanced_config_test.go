@@ -37,6 +37,11 @@ func TestEnhancedConfigDefaults(t *testing.T) {
 	assert.Equal(t, 10, config.App.WorkerPoolSize)
 	assert.Equal(t, 1000, config.App.RefreshInterval)
 	assert.True(t, config.App.EnableHotReload)
+
+	// Test Pattern Configuration defaults
+	assert.Empty(t, config.App.CustomIgnorePatterns)
+	assert.Empty(t, config.App.ForceIncludePatterns)
+	assert.True(t, config.App.PatternValidationEnabled)
 }
 
 func TestEnhancedConfigValidation(t *testing.T) {
@@ -103,6 +108,35 @@ func TestEnhancedConfigValidation(t *testing.T) {
 			expectValid: false,
 			expectError: "workerPoolSize",
 		},
+		{
+			name: "valid custom ignore patterns",
+			config: func() *EnhancedConfig {
+				c := DefaultEnhancedConfig()
+				c.App.CustomIgnorePatterns = []string{"*.tmp", "temp/", "*.log"}
+				return c
+			}(),
+			expectValid: true,
+		},
+		{
+			name: "valid force include patterns",
+			config: func() *EnhancedConfig {
+				c := DefaultEnhancedConfig()
+				c.App.ForceIncludePatterns = []string{"important.log", "required/*.txt"}
+				return c
+			}(),
+			expectValid: true,
+		},
+		{
+			name: "valid combined patterns",
+			config: func() *EnhancedConfig {
+				c := DefaultEnhancedConfig()
+				c.App.CustomIgnorePatterns = []string{"*.tmp", "build/"}
+				c.App.ForceIncludePatterns = []string{"config.yml", "src/*.go"}
+				c.App.PatternValidationEnabled = true
+				return c
+			}(),
+			expectValid: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -134,22 +168,39 @@ func TestEnhancedConfigClone(t *testing.T) {
 	original := DefaultEnhancedConfig()
 	original.Translation.Enabled = true
 	original.Translation.TargetLanguage = "es"
+	original.App.CustomIgnorePatterns = []string{"*.tmp", "build/"}
+	original.App.ForceIncludePatterns = []string{"important.log", "src/*.go"}
+	original.App.PatternValidationEnabled = false
 
 	cloned := original.Clone()
 
 	// Verify values are copied
 	assert.Equal(t, original.Translation.Enabled, cloned.Translation.Enabled)
 	assert.Equal(t, original.Translation.TargetLanguage, cloned.Translation.TargetLanguage)
+	assert.Equal(t, original.App.CustomIgnorePatterns, cloned.App.CustomIgnorePatterns)
+	assert.Equal(t, original.App.ForceIncludePatterns, cloned.App.ForceIncludePatterns)
+	assert.Equal(t, original.App.PatternValidationEnabled, cloned.App.PatternValidationEnabled)
 
-	// Verify they are independent
+	// Verify they are independent - modify original
 	cloned.Translation.TargetLanguage = "fr"
+	cloned.App.CustomIgnorePatterns = []string{"*.bak"}
+	cloned.App.ForceIncludePatterns = []string{"config.yaml"}
+	cloned.App.PatternValidationEnabled = true
+
+	// Original should be unchanged
 	assert.NotEqual(t, original.Translation.TargetLanguage, cloned.Translation.TargetLanguage)
+	assert.NotEqual(t, original.App.CustomIgnorePatterns, cloned.App.CustomIgnorePatterns)
+	assert.NotEqual(t, original.App.ForceIncludePatterns, cloned.App.ForceIncludePatterns)
+	assert.NotEqual(t, original.App.PatternValidationEnabled, cloned.App.PatternValidationEnabled)
 }
 
 func TestEnhancedConfigLegacyConversion(t *testing.T) {
 	enhanced := DefaultEnhancedConfig()
 	enhanced.Translation.Enabled = true
 	enhanced.Translation.TargetLanguage = "fr"
+	enhanced.App.CustomIgnorePatterns = []string{"*.tmp", "cache/"}
+	enhanced.App.ForceIncludePatterns = []string{"*.config", "important/*.txt"}
+	enhanced.App.PatternValidationEnabled = false
 
 	// Convert to legacy
 	legacy := enhanced.ToLegacyConfig()
@@ -159,6 +210,9 @@ func TestEnhancedConfigLegacyConversion(t *testing.T) {
 	assert.Equal(t, enhanced.OpenAI.Model, legacy.OpenAI.Model)
 	assert.Equal(t, enhanced.Translation.Enabled, legacy.Translation.Enabled)
 	assert.Equal(t, enhanced.Translation.TargetLanguage, legacy.Translation.TargetLanguage)
+	assert.Equal(t, enhanced.App.CustomIgnorePatterns, legacy.App.CustomIgnorePatterns)
+	assert.Equal(t, enhanced.App.ForceIncludePatterns, legacy.App.ForceIncludePatterns)
+	assert.Equal(t, enhanced.App.PatternValidationEnabled, legacy.App.PatternValidationEnabled)
 
 	// Convert back from legacy
 	backConverted := FromLegacyConfig(legacy)
@@ -168,6 +222,9 @@ func TestEnhancedConfigLegacyConversion(t *testing.T) {
 	assert.Equal(t, enhanced.OpenAI.Model, backConverted.OpenAI.Model)
 	assert.Equal(t, enhanced.Translation.Enabled, backConverted.Translation.Enabled)
 	assert.Equal(t, enhanced.Translation.TargetLanguage, backConverted.Translation.TargetLanguage)
+	assert.Equal(t, enhanced.App.CustomIgnorePatterns, backConverted.App.CustomIgnorePatterns)
+	assert.Equal(t, enhanced.App.ForceIncludePatterns, backConverted.App.ForceIncludePatterns)
+	assert.Equal(t, enhanced.App.PatternValidationEnabled, backConverted.App.PatternValidationEnabled)
 }
 
 func TestEnhancedConfigManagerCreation(t *testing.T) {
@@ -194,6 +251,9 @@ func TestEnhancedConfigManagerSaveLoad(t *testing.T) {
 	config.OpenAI.Model = "gpt-4"
 	config.Translation.Enabled = true
 	config.Translation.TargetLanguage = "es"
+	config.App.CustomIgnorePatterns = []string{"*.tmp", "build/", "dist/"}
+	config.App.ForceIncludePatterns = []string{"important.log", "config/*.yml"}
+	config.App.PatternValidationEnabled = false
 	// Update and save
 	err = manager.UpdateEnhanced(config)
 	require.NoError(t, err)
@@ -215,6 +275,9 @@ func TestEnhancedConfigManagerSaveLoad(t *testing.T) {
 	assert.Equal(t, "gpt-4", loadedConfig.OpenAI.Model)
 	assert.True(t, loadedConfig.Translation.Enabled)
 	assert.Equal(t, "es", loadedConfig.Translation.TargetLanguage)
+	assert.Equal(t, []string{"*.tmp", "build/", "dist/"}, loadedConfig.App.CustomIgnorePatterns)
+	assert.Equal(t, []string{"important.log", "config/*.yml"}, loadedConfig.App.ForceIncludePatterns)
+	assert.False(t, loadedConfig.App.PatternValidationEnabled)
 }
 
 func TestEnhancedConfigManagerEnvironmentOverrides(t *testing.T) {
@@ -369,6 +432,192 @@ func TestEnhancedConfigManagerInvalidFilePath(t *testing.T) {
 	// This may or may not error depending on filesystem permissions
 	// The important thing is it doesn't panic
 	_ = err
+}
+
+// TestPatternConfigurationFunctionality tests comprehensive pattern functionality
+func TestPatternConfigurationFunctionality(t *testing.T) {
+	t.Run("Empty Patterns Default Behavior", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+
+		// Default patterns should be empty
+		assert.Empty(t, config.App.CustomIgnorePatterns)
+		assert.Empty(t, config.App.ForceIncludePatterns)
+		assert.True(t, config.App.PatternValidationEnabled)
+
+		// Configuration should be valid
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid)
+	})
+
+	t.Run("Common Ignore Patterns", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+		config.App.CustomIgnorePatterns = []string{
+			"*.tmp",         // Temporary files
+			"*.bak",         // Backup files
+			"*.swp",         // Vim swap files
+			"*.log",         // Log files
+			"node_modules/", // NPM modules directory
+			"build/",        // Build directory
+			"dist/",         // Distribution directory
+			"*.pyc",         // Python compiled files
+			"__pycache__/",  // Python cache
+			".DS_Store",     // macOS system file
+		}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Common ignore patterns should be valid")
+	})
+
+	t.Run("Force Include Patterns", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+		config.App.ForceIncludePatterns = []string{
+			"config.yml",      // Specific config file
+			"*.config",        // All config files
+			"important/*.txt", // Important text files in subdirectory
+			"src/**/*.go",     // All Go files in src tree
+			"LICENSE",         // License file
+			"README.md",       // Documentation
+		}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Force include patterns should be valid")
+	})
+
+	t.Run("Combined Patterns Scenario", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+
+		// Ignore common temporary and build files
+		config.App.CustomIgnorePatterns = []string{
+			"*.tmp", "*.bak", "*.log",
+			"node_modules/", "build/", "dist/",
+			"*.pyc", "__pycache__/",
+		}
+
+		// But force-include important files that might match ignore patterns
+		config.App.ForceIncludePatterns = []string{
+			"important.log",  // Specific important log
+			"config/*.yml",   // Configuration files
+			"docs/*.md",      // Documentation
+			"tests/**/*.log", // Test logs
+		}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Combined patterns scenario should be valid")
+	})
+
+	t.Run("Complex Gitignore Style Patterns", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+		config.App.CustomIgnorePatterns = []string{
+			"*.o",            // Object files
+			"*.so",           // Shared objects
+			"*.exe",          // Executables
+			"/build",         // Root build directory
+			"**/temp",        // temp directory anywhere
+			"*.{tmp,bak}",    // Multiple extensions (brace expansion)
+			"!important.tmp", // Negation pattern
+		}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Complex gitignore patterns should be valid")
+	})
+
+	t.Run("Pattern Validation Toggle", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+
+		// Test with validation enabled
+		config.App.PatternValidationEnabled = true
+		config.App.CustomIgnorePatterns = []string{"*.tmp", "build/"}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Valid patterns with validation enabled should pass")
+
+		// Test with validation disabled
+		config.App.PatternValidationEnabled = false
+		result = config.Validate(validator)
+		assert.True(t, result.Valid, "Any patterns with validation disabled should pass")
+	})
+
+	t.Run("Pattern Configuration Clone Independence", func(t *testing.T) {
+		original := DefaultEnhancedConfig()
+		original.App.CustomIgnorePatterns = []string{"*.tmp", "build/"}
+		original.App.ForceIncludePatterns = []string{"config.yml"}
+
+		cloned := original.Clone()
+
+		// Modify cloned patterns
+		cloned.App.CustomIgnorePatterns = append(cloned.App.CustomIgnorePatterns, "*.bak")
+		cloned.App.ForceIncludePatterns = []string{"important.txt"}
+
+		// Original should be unchanged
+		assert.Equal(t, []string{"*.tmp", "build/"}, original.App.CustomIgnorePatterns)
+		assert.Equal(t, []string{"config.yml"}, original.App.ForceIncludePatterns)
+
+		// Cloned should have new values
+		assert.Contains(t, cloned.App.CustomIgnorePatterns, "*.bak")
+		assert.Equal(t, []string{"important.txt"}, cloned.App.ForceIncludePatterns)
+	})
+
+	t.Run("Edge Cases and Empty Patterns", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+
+		// Test with some valid patterns (empty strings should be filtered out in UI)
+		config.App.CustomIgnorePatterns = []string{"*.tmp", "build/"}
+		config.App.ForceIncludePatterns = []string{"config.yml", "important.txt"}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Config with valid patterns should be valid")
+
+		// Test with empty arrays (should be valid)
+		config.App.CustomIgnorePatterns = []string{}
+		config.App.ForceIncludePatterns = []string{}
+		result = config.Validate(validator)
+		assert.True(t, result.Valid, "Config with empty pattern arrays should be valid")
+	})
+
+	t.Run("Real World Project Patterns", func(t *testing.T) {
+		config := DefaultEnhancedConfig()
+
+		// Typical patterns for a web project
+		config.App.CustomIgnorePatterns = []string{
+			// Dependencies
+			"node_modules/", "vendor/", "bower_components/",
+			// Build outputs
+			"build/", "dist/", "out/", "target/", "bin/",
+			// Logs and temporary files
+			"*.log", "logs/", "*.tmp", "*.bak", "*.swp",
+			// IDE and editor files
+			".vscode/", ".idea/", "*.sublime-*",
+			// OS files
+			".DS_Store", "Thumbs.db", "desktop.ini",
+			// Test coverage
+			"coverage/", "*.lcov", ".nyc_output/",
+			// Environment files
+			".env.local", ".env.*.local",
+		}
+
+		config.App.ForceIncludePatterns = []string{
+			// Important config files that might be ignored
+			"config/*.json", "config/*.yml", "config/*.yaml",
+			// Documentation
+			"README.md", "CHANGELOG.md", "LICENSE", "CONTRIBUTING.md",
+			// Configuration files
+			".gitkeep", ".gitignore", ".editorconfig",
+			"package.json", "tsconfig.json", "webpack.config.js",
+			// Important source directories
+			"src/**/*.js", "src/**/*.ts", "src/**/*.jsx", "src/**/*.tsx",
+		}
+
+		validator := SetupEnhancedValidator()
+		result := config.Validate(validator)
+		assert.True(t, result.Valid, "Real world project patterns should be valid")
+	})
 }
 
 // Benchmark tests for performance validation
