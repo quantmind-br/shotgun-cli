@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	ignore "github.com/sabhiram/go-gitignore"
+	"github.com/shotgun-cli/shotgun-cli/internal/core/ignore"
+	gitignorelib "github.com/sabhiram/go-gitignore"
 )
 
 // FileSystemScanner implements the Scanner interface for local file systems
@@ -17,9 +18,9 @@ type PathMatcher interface {
 	Matches(path string, isDir bool) bool
 }
 
-// gitIgnoreAdapter wraps *ignore.GitIgnore to implement PathMatcher
+// gitIgnoreAdapter wraps *gitignorelib.GitIgnore to implement PathMatcher
 type gitIgnoreAdapter struct {
-	engine *ignore.GitIgnore
+	engine *gitignorelib.GitIgnore
 }
 
 // Matches implements PathMatcher interface
@@ -31,34 +32,41 @@ func (g *gitIgnoreAdapter) Matches(path string, isDir bool) bool {
 }
 
 type FileSystemScanner struct {
-	pathMatcher PathMatcher
+	pathMatcher  PathMatcher
+	ignoreEngine ignore.IgnoreEngine
 }
 
 // NewFileSystemScanner creates a new file system scanner
 func NewFileSystemScanner() *FileSystemScanner {
-	return &FileSystemScanner{}
+	return &FileSystemScanner{
+		ignoreEngine: ignore.NewIgnoreEngine(),
+	}
 }
 
 // NewFileSystemScannerWithIgnore creates a new file system scanner with ignore rules
 func NewFileSystemScannerWithIgnore(ignoreRules []string) (*FileSystemScanner, error) {
-	if len(ignoreRules) == 0 {
-		return NewFileSystemScanner(), nil
+	scanner := NewFileSystemScanner()
+
+	if len(ignoreRules) > 0 {
+		if err := scanner.ignoreEngine.AddCustomRules(ignoreRules); err != nil {
+			return nil, fmt.Errorf("failed to add custom ignore rules: %w", err)
+		}
 	}
 
-	ignoreEngine := ignore.CompileIgnoreLines(ignoreRules...)
-	adapter := &gitIgnoreAdapter{engine: ignoreEngine}
-
-	return NewFileSystemScannerWithMatcher(adapter), nil
+	return scanner, nil
 }
 
 // NewFileSystemScannerWithMatcher creates a FileSystemScanner with a custom PathMatcher
+// This is kept for backward compatibility but the new ignore engine is preferred
 func NewFileSystemScannerWithMatcher(m PathMatcher) *FileSystemScanner {
 	return &FileSystemScanner{
-		pathMatcher: m,
+		pathMatcher:  m,
+		ignoreEngine: ignore.NewIgnoreEngine(),
 	}
 }
 
 // LoadGitIgnoreMatcher loads .gitignore rules from the specified root directory and returns a PathMatcher
+// This is kept for backward compatibility but the new ignore engine is preferred
 func LoadGitIgnoreMatcher(rootPath string) (PathMatcher, error) {
 	gitignorePath := filepath.Join(rootPath, ".gitignore")
 
@@ -67,7 +75,7 @@ func LoadGitIgnoreMatcher(rootPath string) (PathMatcher, error) {
 		return nil, nil // No .gitignore file
 	}
 
-	ignoreEngine, err := ignore.CompileIgnoreFile(gitignorePath)
+	ignoreEngine, err := gitignorelib.CompileIgnoreFile(gitignorePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load .gitignore from %s: %w", gitignorePath, err)
 	}
@@ -77,15 +85,21 @@ func LoadGitIgnoreMatcher(rootPath string) (PathMatcher, error) {
 
 // LoadGitIgnore loads .gitignore rules from the specified root directory
 func (fs *FileSystemScanner) LoadGitIgnore(rootPath string) error {
+	// Use the new ignore engine if available
+	if fs.ignoreEngine != nil {
+		return fs.ignoreEngine.LoadGitignore(rootPath)
+	}
+
+	// Fallback to old PathMatcher approach for backward compatibility
 	matcher, err := LoadGitIgnoreMatcher(rootPath)
 	if err != nil {
 		return err
 	}
-	
+
 	if matcher != nil {
 		fs.pathMatcher = matcher
 	}
-	
+
 	return nil
 }
 
@@ -100,10 +114,24 @@ func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfi
 		config = DefaultScanConfig()
 	}
 
-	// Load .gitignore if not already loaded
-	if fs.pathMatcher == nil {
-		if err := fs.LoadGitIgnore(rootPath); err != nil {
-			return nil, fmt.Errorf("failed to load ignore rules: %w", err)
+	// Load .gitignore and configure ignore engine with custom patterns
+	if fs.ignoreEngine != nil {
+		if err := fs.ignoreEngine.LoadGitignore(rootPath); err != nil {
+			return nil, fmt.Errorf("failed to load gitignore rules: %w", err)
+		}
+
+		// Add custom patterns from config
+		if len(config.IgnorePatterns) > 0 {
+			if err := fs.ignoreEngine.AddCustomRules(config.IgnorePatterns); err != nil {
+				return nil, fmt.Errorf("failed to add custom ignore patterns: %w", err)
+			}
+		}
+	} else {
+		// Fallback to old approach if ignore engine is not available
+		if fs.pathMatcher == nil {
+			if err := fs.LoadGitIgnore(rootPath); err != nil {
+				return nil, fmt.Errorf("failed to load ignore rules: %w", err)
+			}
 		}
 	}
 
@@ -374,6 +402,37 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 
 // getIgnoreStatus returns the ignore status for both gitignore and custom rules
 func (fs *FileSystemScanner) getIgnoreStatus(relPath string, isDir bool, config *ScanConfig) (bool, bool) {
+	// Use the new ignore engine if available
+	if fs.ignoreEngine != nil {
+		// Check if path should be ignored by the layered ignore engine
+		ignored, reason := fs.ignoreEngine.ShouldIgnore(relPath)
+
+		if ignored {
+			// Determine the ignore type based on the reason
+			switch reason {
+			case ignore.IgnoreReasonGitignore:
+				return true, false // Gitignored but not custom ignored
+			case ignore.IgnoreReasonBuiltIn, ignore.IgnoreReasonCustom, ignore.IgnoreReasonExplicit:
+				return false, true // Custom ignored but not gitignored
+			}
+		}
+
+		// Check hidden files/directories if not included and not already ignored
+		if !config.IncludeHidden && !ignored {
+			baseName := filepath.Base(relPath)
+			if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
+				return false, true // Hidden files are treated as custom ignored
+			}
+		}
+
+		// Use the engine's specific methods for precise classification
+		isGitignored := fs.ignoreEngine.IsGitignored(relPath)
+		isCustomIgnored := fs.ignoreEngine.IsCustomIgnored(relPath) || ignored && reason != ignore.IgnoreReasonGitignore
+
+		return isGitignored, isCustomIgnored
+	}
+
+	// Fallback to old logic if ignore engine is not available
 	var isGitignored, isCustomIgnored bool
 
 	// Check .gitignore rules
