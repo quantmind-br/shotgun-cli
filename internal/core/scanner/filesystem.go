@@ -197,6 +197,11 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 			return nil // Skip on error
 		}
 
+		// Skip root directory itself
+		if relPath == "." {
+			return nil
+		}
+
 		// Check if should be ignored
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
 			if d.IsDir() {
