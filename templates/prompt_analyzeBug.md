@@ -97,6 +97,8 @@ Your **ONLY** output will be a single, well-structured Markdown document. No oth
          - **Expected Behavior:** ...
          - **Observed/Presumed Result:** [How this leads to the observed bug]
       *(Detail the steps, including conditional branches, loops, error handling. Mermaid.js can be used for sequence diagrams or flowcharts if it improves understanding.)*
+```
+
       ```mermaid
       sequenceDiagram
           participant User
