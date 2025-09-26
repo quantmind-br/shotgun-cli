@@ -7,13 +7,16 @@ import (
 	"runtime"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/diogo464/shotgun-cli/internal/core/scanner"
+	"github.com/diogo464/shotgun-cli/internal/ui"
+
 	// Required UI dependencies as per verification comment
-	_ "github.com/charmbracelet/bubbletea"
 	_ "github.com/charmbracelet/lipgloss"
 	_ "github.com/sabhiram/go-gitignore"
 )
@@ -57,19 +60,39 @@ func runRootCommand(cmd *cobra.Command, args []string) {
 }
 
 func launchTUIWizard() {
-	// TODO: This will be implemented in Phase 2
-	// For now, just print a placeholder message
-	fmt.Println("🎯 shotgun-cli TUI Wizard")
-	fmt.Println("Interactive 5-step wizard will be available in the next phase.")
-	fmt.Println("For now, use 'shotgun-cli --help' to see available commands.")
-	fmt.Println("")
-	fmt.Println("Available commands:")
-	fmt.Println("  context generate - Generate LLM-optimized context")
-	fmt.Println("  template list    - List available templates")
-	fmt.Println("  template render  - Render templates with variables")
-	fmt.Println("  diff split       - Split large diff files")
-	fmt.Println("  config show      - Show current configuration")
-	fmt.Println("  config set       - Set configuration values")
+	// Detect current working directory as scan root
+	rootPath, err := os.Getwd()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get current working directory")
+		fmt.Fprintf(os.Stderr, "Error: Could not determine current directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create scanner configuration from Viper settings
+	config := &scanner.Config{
+		MaxFiles:          viper.GetInt("scanner.max-files"),
+		MaxFileSize:       viper.GetString("scanner.max-file-size"),
+		RespectGitignore:  viper.GetBool("scanner.respect-gitignore"),
+		IncludeHidden:     false, // Default for TUI
+		FollowSymlinks:    false, // Default for TUI
+	}
+
+	// Create wizard model
+	wizard := ui.NewWizard(rootPath, config)
+
+	// Configure Bubble Tea program
+	program := tea.NewProgram(
+		wizard,
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+
+	// Handle terminal size detection
+	if err := program.Start(); err != nil {
+		log.Error().Err(err).Msg("Failed to start TUI wizard")
+		fmt.Fprintf(os.Stderr, "Error starting wizard: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
