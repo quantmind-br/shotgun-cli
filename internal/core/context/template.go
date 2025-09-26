@@ -10,15 +10,24 @@ import (
 
 type TemplateRenderer struct {
 	funcs template.FuncMap
+	requiredVars []string
 }
 
 func NewTemplateRenderer() *TemplateRenderer {
 	return &TemplateRenderer{
 		funcs: getTemplateFunctions(),
+		requiredVars: []string{"TASK"}, // Default template requires TASK variable
 	}
 }
 
 func (tr *TemplateRenderer) RenderTemplate(templateContent string, data ContextData) (string, error) {
+	// Validate required variables for default template
+	if templateContent == tr.getDefaultTemplate() {
+		if err := tr.validateRequiredVars(data); err != nil {
+			return "", fmt.Errorf("template variable validation failed: %w", err)
+		}
+	}
+
 	tmpl, err := template.New("context").Funcs(tr.funcs).Parse(templateContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
@@ -54,6 +63,16 @@ func getTemplateFunctions() template.FuncMap {
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 	}
+}
+
+func (tr *TemplateRenderer) validateRequiredVars(data ContextData) error {
+	for _, varName := range tr.requiredVars {
+		value, exists := data.Config.TemplateVars[varName]
+		if !exists || strings.TrimSpace(value) == "" {
+			return fmt.Errorf("required template variable '%s' is missing or empty", varName)
+		}
+	}
+	return nil
 }
 
 func (tr *TemplateRenderer) getDefaultTemplate() string {

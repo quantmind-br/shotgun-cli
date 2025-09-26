@@ -29,7 +29,7 @@ func collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileC
 			return nil
 		}
 
-		if !node.IsSelected() {
+		if !node.Selected {
 			return nil
 		}
 
@@ -41,17 +41,24 @@ func collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileC
 			return nil
 		}
 
+		// First peek at the file header to check if it's binary before reading full content
+		if config.SkipBinary {
+			header, err := peekFileHeader(node.Path, 1024)
+			if err != nil {
+				return fmt.Errorf("failed to peek file header %s: %w", node.Path, err)
+			}
+			if !isTextFile(string(header)) {
+				return nil // Skip binary file without reading full content
+			}
+		}
+
 		content, err := readFileContent(node.Path)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", node.Path, err)
 		}
 
-		if config.SkipBinary && !isTextFile(content) {
-			return nil
-		}
-
-		if totalSize+int64(len(content)) > config.MaxSize {
-			return fmt.Errorf("cumulative content size exceeds limit: %d + %d > %d", totalSize, len(content), config.MaxSize)
+		if totalSize+int64(len(content)) > config.MaxTotalSize {
+			return fmt.Errorf("cumulative content size exceeds total size limit: %d + %d > %d", totalSize, len(content), config.MaxTotalSize)
 		}
 
 		relPath, err := filepath.Rel(root.Path, node.Path)
@@ -95,6 +102,22 @@ func walkSelectedNodes(node *scanner.FileNode, fn func(*scanner.FileNode) error)
 	}
 
 	return nil
+}
+
+func peekFileHeader(path string, n int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	header := make([]byte, n)
+	bytesRead, err := file.Read(header)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+
+	return header[:bytesRead], nil
 }
 
 func readFileContent(path string) (string, error) {
@@ -243,7 +266,7 @@ func shouldSkipFile(node *scanner.FileNode, config GenerateConfig) bool {
 		return true
 	}
 
-	if node.Size > config.MaxSize {
+	if node.Size > config.MaxFileSize {
 		return true
 	}
 

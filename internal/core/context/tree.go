@@ -15,8 +15,8 @@ type TreeRenderer struct {
 
 func NewTreeRenderer() *TreeRenderer {
 	return &TreeRenderer{
-		showIgnored: true,
-		maxDepth:    -1, // No limit by default
+		showIgnored: false, // Default to hiding ignored files
+		maxDepth:    -1,    // No limit by default
 	}
 }
 
@@ -61,7 +61,7 @@ func (tr *TreeRenderer) renderNode(node *scanner.FileNode, prefix string, isLast
 
 	ignoreIndicator := ""
 	if node.IsIgnored() {
-		if node.IsGitIgnored() {
+		if node.IsGitignored {
 			ignoreIndicator = " (g)"
 		} else {
 			ignoreIndicator = " (c)"
