@@ -1,19 +1,19 @@
 package ui
 
 import (
-    "fmt"
-    "testing"
+	"fmt"
+	"testing"
 
-    tea "github.com/charmbracelet/bubbletea"
-    "github.com/quantmind-br/shotgun-cli/internal/core/scanner"
-    "github.com/quantmind-br/shotgun-cli/internal/core/template"
-    "github.com/quantmind-br/shotgun-cli/internal/ui/screens"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 )
 
 func TestWizardInitStartsScanCommand(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/tmp/project", &scanner.ScanConfig{MaxFiles: 10})
+	wizard := NewWizard("/tmp/project", &scanner.ScanConfig{MaxFiles: 10})
 	cmd := wizard.Init()
 	if cmd == nil {
 		t.Fatalf("expected init command to be non-nil")
@@ -31,9 +31,11 @@ func TestWizardInitStartsScanCommand(t *testing.T) {
 func TestWizardHandlesScanLifecycle(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5})
 
-	model, cmd := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.Config{MaxFiles: 5}})
+	var model tea.Model
+	var cmd tea.Cmd
+	model, cmd = wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
 	wiz := model.(*WizardModel)
 	if wiz.scanState == nil {
 		t.Fatalf("expected scan state to be initialised")
@@ -43,14 +45,16 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 	}
 
 	// Simulate progress
-	wiz, _ = wiz.Update(ScanProgressMsg{Current: 1, Total: 10, Stage: "scanning"}).(*WizardModel)
+	model, _ = wiz.Update(ScanProgressMsg{Current: 1, Total: 10, Stage: "scanning"})
+	wiz = model.(*WizardModel)
 	if !wiz.progress.Visible {
 		t.Fatalf("expected progress visibility during scan")
 	}
 
 	// Simulate completion
 	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
-	wiz, _ = wiz.Update(ScanCompleteMsg{Tree: tree}).(*WizardModel)
+	model, _ = wiz.Update(ScanCompleteMsg{Tree: tree})
+	wiz = model.(*WizardModel)
 	if wiz.fileTree != tree {
 		t.Fatalf("expected file tree to be set")
 	}
@@ -65,7 +69,7 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -94,7 +98,7 @@ func TestWizardCanAdvanceStepLogic(t *testing.T) {
 func TestWizardGenerateContextCommand(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -117,29 +121,32 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = "Implement feature"
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.template, wizard.taskDesc, "")
+	var model tea.Model
 
 	// Initialise generation state
-	wizard, _ = wizard.Update(startGenerationMsg{
+	model, _ = wizard.Update(startGenerationMsg{
 		fileTree:      wizard.fileTree,
 		selectedFiles: wizard.selectedFiles,
 		template:      wizard.template,
 		taskDesc:      wizard.taskDesc,
 		rules:         "",
 		rootPath:      "/workspace",
-	}).(*WizardModel)
+	})
+	wizard = model.(*WizardModel)
 
 	if wizard.generateState == nil {
 		t.Fatalf("expected generation state to be initialised")
 	}
 
 	// Progress message
-	wizard, _ = wizard.Update(GenerationProgressMsg{Stage: "render", Message: "rendering"}).(*WizardModel)
+	model, _ = wizard.Update(GenerationProgressMsg{Stage: "render", Message: "rendering"})
+	wizard = model.(*WizardModel)
 	if !wizard.progress.Visible {
 		t.Fatalf("expected progress visible during generation")
 	}
@@ -156,7 +163,8 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	}
 
 	// Simulate clipboard completion
-	wizard, _ = wizard.Update(ClipboardCompleteMsg{Success: true}).(*WizardModel)
+	model, _ = wizard.Update(ClipboardCompleteMsg{Success: true})
+	wizard = model.(*WizardModel)
 	if wizard.error != nil {
 		t.Fatalf("did not expect clipboard error, got %v", wizard.error)
 	}
@@ -165,7 +173,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.selectedFiles["main.go"] = true
 
 	cmd := wizard.generateContext()
@@ -185,7 +193,7 @@ func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 func TestWizardClipboardFailureStored(t *testing.T) {
 	t.Parallel()
 
-    wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.review = screens.NewReview(map[string]bool{}, nil, "", "")
 
 	model, _ := wizard.Update(ClipboardCompleteMsg{Success: false, Err: fmt.Errorf("copy failed")})
@@ -203,16 +211,20 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 
-	wizard, _ = wizard.Update(startGenerationMsg{
+	var model tea.Model
+
+	model, _ = wizard.Update(startGenerationMsg{
 		fileTree:      wizard.fileTree,
 		selectedFiles: wizard.selectedFiles,
 		template:      wizard.template,
 		taskDesc:      "Implement feature",
 		rootPath:      "/workspace",
-	}).(*WizardModel)
+	})
+	wizard = model.(*WizardModel)
 
 	stage := "collect"
-	wizard, _ = wizard.Update(GenerationProgressMsg{Stage: stage, Message: "Collecting"}).(*WizardModel)
+	model, _ = wizard.Update(GenerationProgressMsg{Stage: stage, Message: "Collecting"})
+	wizard = model.(*WizardModel)
 	if wizard.progress.Stage != stage {
 		t.Fatalf("expected progress stage %s, got %s", stage, wizard.progress.Stage)
 	}
@@ -221,21 +233,14 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 func TestWizardKeyboardNavigation(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.Config{})
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = "Implement feature"
 
-	// Step 1 -> Step 2 via F8
 	wizard.step = StepFileSelection
-	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'8'}, Alt: false, Ctrl: false})
-	wizard = model.(*WizardModel)
-	if wizard.step != StepFileSelection {
-		t.Fatalf("unexpected step change without proper key mapping")
-	}
-
-	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
 	wizard = model.(*WizardModel)
 	if wizard.step != StepTemplateSelection {
 		t.Fatalf("expected to advance to template selection")

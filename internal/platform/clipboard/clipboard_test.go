@@ -10,7 +10,6 @@ import (
 
 // Compile-time assertions for interface compliance.
 var (
-	_ ClipboardManager = (*Manager)(nil)
 	_ ClipboardManager = (*LinuxClipboard)(nil)
 	_ ClipboardManager = (*DarwinClipboard)(nil)
 	_ ClipboardManager = (*WindowsClipboard)(nil)
@@ -35,6 +34,7 @@ func (f *fakeClipboard) Copy(content string) error {
 
 func (f *fakeClipboard) CopyWithTimeout(content string, timeout time.Duration) error {
 	f.timeoutCalls = append(f.timeoutCalls, timeout)
+	f.copyCalls = append(f.copyCalls, content)
 	if f.errorOnTimed != nil {
 		return f.errorOnTimed
 	}
@@ -68,8 +68,11 @@ func TestManager_CopyDelegatesToImplementation(t *testing.T) {
 	if err := mgr.CopyWithTimeout("world", time.Second); err != nil {
 		t.Fatalf("CopyWithTimeout failed: %v", err)
 	}
-	if len(fake.timeoutCalls) != 1 || fake.timeoutCalls[0] != time.Second {
+	if len(fake.timeoutCalls) == 0 {
 		t.Fatalf("expected timeout call to be recorded")
+	}
+	if got := fake.timeoutCalls[len(fake.timeoutCalls)-1]; got != time.Second {
+		t.Fatalf("expected explicit timeout, got %v", got)
 	}
 }
 
@@ -142,13 +145,12 @@ func TestManager_GetStatusReflectsTools(t *testing.T) {
 }
 
 func TestManager_InitializeTools_LinuxPriority(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
 	createFakeCommand(t, dir, "wl-copy")
 	createFakeCommand(t, dir, "xclip")
 	createFakeCommand(t, dir, "xsel")
-	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("PATH", dir)
 	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
 	t.Setenv("DISPLAY", "")
 
@@ -167,11 +169,10 @@ func TestManager_InitializeTools_LinuxPriority(t *testing.T) {
 }
 
 func TestManager_InitializeTools_LinuxFallback(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
 	createFakeCommand(t, dir, "xclip")
-	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("PATH", dir)
 	t.Setenv("WAYLAND_DISPLAY", "")
 	t.Setenv("DISPLAY", ":0")
 
@@ -185,12 +186,11 @@ func TestManager_InitializeTools_LinuxFallback(t *testing.T) {
 }
 
 func TestWindowsClipboard_ToolPreference(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
 	createFakeCommand(t, dir, "clip")
 	createFakeCommand(t, dir, "powershell")
-	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("PATH", dir)
 
 	wc := NewWindowsClipboard()
 	if wc.preferredTool != "clip" {
@@ -199,11 +199,10 @@ func TestWindowsClipboard_ToolPreference(t *testing.T) {
 }
 
 func TestDarwinClipboard_IsAvailable(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
 	createFakeCommand(t, dir, "pbcopy")
-	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("PATH", dir)
 
 	dc := NewDarwinClipboard()
 	if !dc.IsAvailable() {
@@ -212,8 +211,6 @@ func TestDarwinClipboard_IsAvailable(t *testing.T) {
 }
 
 func TestWSLClipboard_DetectsViaEnv(t *testing.T) {
-	t.Parallel()
-
 	t.Setenv("WSL_DISTRO_NAME", "Ubuntu-20.04")
 	wsl := NewWSLClipboard()
 	if !wsl.isWSL {

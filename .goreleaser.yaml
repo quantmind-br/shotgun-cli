@@ -1,0 +1,56 @@
+project_name: shotgun-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: shotgun-cli
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/quantmind-br/shotgun-cli/cmd.version={{.Version}}
+    binary: shotgun-cli
+    flags:
+      - -trimpath
+
+archives:
+  - id: shotgun-cli
+    builds:
+      - shotgun-cli
+    format: zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: desc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+release:
+  github:
+    owner: quantmind-br
+    name: shotgun-cli
+  draft: false
+  prerelease: false
+
+# signs:
+#   - artifacts: checksum
+

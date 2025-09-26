@@ -215,7 +215,7 @@ func renderTemplate(templateName string, variables map[string]string, output str
 
 func init() {
 	// Template render flags
-	templateRenderCmd.Flags().StringToStringP("var", "v", nil, "Template variables (key=value pairs)")
+	templateRenderCmd.Flags().StringToString("var", nil, "Template variables (key=value pairs)")
 	templateRenderCmd.Flags().StringP("output", "o", "", "Output file (default: stdout)")
 
 	// Add subcommands

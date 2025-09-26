@@ -142,12 +142,13 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 func generateContextHeadless(config GenerateConfig) error {
 	// Initialize scanner with configuration
 	scannerConfig := scanner.ScanConfig{
-		MaxFiles:     viper.GetInt64("scanner.max-files"),
-		MaxFileSize:  parseConfigSize(viper.GetString("scanner.max-file-size")),
-		SkipBinary:   false,
-		IncludeHidden: false,
-		Workers:      1,
-		IgnorePatterns: config.Exclude,
+		MaxFiles:        viper.GetInt64("scanner.max-files"),
+		MaxFileSize:     parseConfigSize(viper.GetString("scanner.max-file-size")),
+		SkipBinary:      false,
+		IncludeHidden:   false,
+		Workers:         1,
+		IgnorePatterns:  config.Exclude,
+		IncludePatterns: config.Include,
 	}
 
 	log.Debug().Interface("config", scannerConfig).Msg("Scanner configuration")

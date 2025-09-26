@@ -93,6 +93,11 @@ type ScanConfig struct {
 	// Use gitignore-style patterns like "*.log", "build/", or "!important.txt" for negation.
 	// Legacy glob patterns may not work as expected.
 	IgnorePatterns []string `json:"ignore_patterns,omitempty"`
+
+	// IncludePatterns contains patterns for files to include
+	// If specified, only files matching these patterns will be included
+	// Uses glob-style patterns like "*.go", "*.js", etc.
+	IncludePatterns []string `json:"include_patterns,omitempty"`
 }
 
 // DefaultScanConfig returns a default scanning configuration

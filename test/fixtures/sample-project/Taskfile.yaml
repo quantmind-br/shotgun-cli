@@ -1,0 +1,7 @@
+tasks:
+  build:
+    cmds:
+      - go build ./...
+  test:
+    cmds:
+      - go test ./...

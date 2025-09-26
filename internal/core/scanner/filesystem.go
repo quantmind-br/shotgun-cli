@@ -402,8 +402,40 @@ func (fs *FileSystemScanner) sortChildren(node *FileNode) {
 	}
 }
 
+// matchesIncludePatterns checks if a file matches any include patterns
+func (fs *FileSystemScanner) matchesIncludePatterns(relPath string, isDir bool, config *ScanConfig) bool {
+	// If no include patterns specified, include everything
+	if len(config.IncludePatterns) == 0 {
+		return true
+	}
+
+	// Always include directories to allow traversal
+	if isDir {
+		return true
+	}
+
+	// Check if file matches any include pattern
+	fileName := filepath.Base(relPath)
+	for _, pattern := range config.IncludePatterns {
+		// Try matching against both relative path and filename
+		if matched, _ := filepath.Match(pattern, relPath); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, fileName); matched {
+			return true
+		}
+	}
+
+	return false
+}
+
 // shouldIgnore checks if a path should be ignored based on all rules
 func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *ScanConfig) bool {
+	// First check if file matches include patterns (if any)
+	if !fs.matchesIncludePatterns(relPath, isDir, config) {
+		return true
+	}
+
 	// Use the new ignore engine if available - it properly handles explicit includes/excludes
 	if fs.ignoreEngine != nil {
 		ignored, _ := fs.ignoreEngine.ShouldIgnore(relPath)

@@ -1,0 +1,4 @@
+{
+  "go.lintOnSave": "file",
+  "editor.formatOnSave": true
+}

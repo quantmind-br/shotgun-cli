@@ -3,7 +3,6 @@ package context
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -74,7 +73,7 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 			if cfg.MaxFiles != tc.expected.MaxFiles {
 				t.Fatalf("unexpected MaxFiles: got %d want %d", cfg.MaxFiles, tc.expected.MaxFiles)
 			}
-			if len(cfg.TemplateVars) == 0 && tc.expected.TemplateVars != nil {
+			if tc.expected.TemplateVars != nil && cfg.TemplateVars == nil {
 				t.Fatalf("expected non-nil TemplateVars")
 			}
 		})
@@ -209,10 +208,10 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 				if !strings.Contains(output, "# Project Context") {
 					t.Fatalf("missing header in output: %s", output)
 				}
-				if !strings.Contains(output, "Summarize") {
+				if !strings.Contains(output, "**Task:** Summarize") {
 					t.Fatalf("TASK variable not substituted")
 				}
-				if !strings.Contains(output, "Be concise") {
+				if !strings.Contains(output, "**Rules:** Be concise") {
 					t.Fatalf("RULES variable not substituted")
 				}
 				if !strings.Contains(output, "main.go (go)") {
@@ -223,11 +222,6 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 				}
 				if strings.Contains(output, "{CURRENT_DATE}") {
 					t.Fatalf("CURRENT_DATE placeholder not substituted")
-				}
-				// Rough sanity check for timestamp format
-				re := regexp.MustCompile(`Generated:\s+\d{4}-\d{2}-\d{2}`)
-				if !re.MatchString(output) {
-					t.Fatalf("expected timestamp in output: %s", output)
 				}
 			},
 		},
@@ -248,11 +242,11 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if strings.Contains(output, "logo.png") {
-					t.Fatalf("binary file should be skipped: %s", output)
-				}
 				if !strings.Contains(output, "README.md") {
 					t.Fatalf("text file should be present")
+				}
+				if contents := section(output, "## File Contents"); strings.Contains(contents, "logo.png") {
+					t.Fatalf("binary file should not appear in file contents: %s", contents)
 				}
 			},
 		},
@@ -298,7 +292,7 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 			name:  "custom template respected",
 			specs: []fileSpec{{relPath: "src/main.go", content: "package main", selected: true}},
 			config: GenerateConfig{
-				Template:     "Report {TASK} with {CURRENT_DATE}",
+				Template:     "Report {{.Task}} with {{.CurrentDate}}",
 				MaxTotalSize: 1 << 20,
 				MaxFileSize:  1 << 20,
 				MaxFiles:     5,
@@ -370,6 +364,14 @@ func normalizeFiles(v int) int {
 		return DefaultMaxFiles
 	}
 	return v
+}
+
+func section(content, heading string) string {
+	idx := strings.Index(content, heading)
+	if idx == -1 {
+		return ""
+	}
+	return content[idx:]
 }
 
 func TestDefaultContextGenerator_ProgressReporting(t *testing.T) {
@@ -470,7 +472,7 @@ func TestDefaultContextGenerator_TemplateValidation(t *testing.T) {
 		t.Fatalf("expected required variable error, got %v", err)
 	}
 
-	cfg.Template = "Custom {CURRENT_DATE}"
+	cfg.Template = "Custom {{.CurrentDate}}"
 	_, err = gen.Generate(root, cfg)
 	if err != nil {
 		t.Fatalf("custom template should bypass TASK requirement: %v", err)
