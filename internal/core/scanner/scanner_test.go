@@ -573,6 +573,189 @@ func TestNewFileSystemScannerWithIgnore(t *testing.T) {
 	}
 }
 
+func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
+	// Create a temporary directory structure for testing
+	tempDir, err := os.MkdirTemp("", "hidden_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test structure with hidden files
+	testFiles := []string{
+		"normal.txt",
+		".hidden.txt",
+		".hiddendir/file.txt",
+		"subdir/.hidden_in_subdir.txt",
+	}
+
+	for _, file := range testFiles {
+		fullPath := filepath.Join(tempDir, file)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory for %s: %v", file, err)
+		}
+
+		content := "test content for " + file
+		err = os.WriteFile(fullPath, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	t.Run("hidden files excluded with ignore engine and IncludeHidden=false", func(t *testing.T) {
+		scanner, err := NewFileSystemScannerWithIgnore([]string{"*.tmp"}) // Basic ignore rule
+		if err != nil {
+			t.Fatalf("Failed to create scanner with ignore: %v", err)
+		}
+
+		config := DefaultScanConfig()
+		config.IncludeHidden = false
+
+		// Count items
+		count, err := scanner.countItems(tempDir, config)
+		if err != nil {
+			t.Fatalf("countItems failed: %v", err)
+		}
+
+		// Build tree
+		root, buildCount, err := scanner.walkAndBuild(tempDir, config, nil, count)
+		if err != nil {
+			t.Fatalf("walkAndBuild failed: %v", err)
+		}
+
+		// Count and build passes should match
+		if count != buildCount {
+			t.Errorf("Count mismatch: countItems=%d, walkAndBuild=%d", count, buildCount)
+		}
+
+		// Verify no hidden files are present in the tree
+		var checkHiddenFiles func(*FileNode) []string
+		checkHiddenFiles = func(node *FileNode) []string {
+			var hiddenFiles []string
+			for _, child := range node.Children {
+				if strings.HasPrefix(child.Name, ".") && child.Name != "." && child.Name != ".." {
+					hiddenFiles = append(hiddenFiles, child.RelPath)
+				}
+				hiddenFiles = append(hiddenFiles, checkHiddenFiles(child)...)
+			}
+			return hiddenFiles
+		}
+
+		hiddenFiles := checkHiddenFiles(root)
+		if len(hiddenFiles) > 0 {
+			t.Errorf("Found hidden files in result when IncludeHidden=false: %v", hiddenFiles)
+		}
+	})
+
+	t.Run("hidden files included with ignore engine and IncludeHidden=true", func(t *testing.T) {
+		scanner, err := NewFileSystemScannerWithIgnore([]string{"*.tmp"}) // Basic ignore rule
+		if err != nil {
+			t.Fatalf("Failed to create scanner with ignore: %v", err)
+		}
+
+		config := DefaultScanConfig()
+		config.IncludeHidden = true
+
+		// Count items
+		count, err := scanner.countItems(tempDir, config)
+		if err != nil {
+			t.Fatalf("countItems failed: %v", err)
+		}
+
+		// Build tree
+		root, buildCount, err := scanner.walkAndBuild(tempDir, config, nil, count)
+		if err != nil {
+			t.Fatalf("walkAndBuild failed: %v", err)
+		}
+
+		// Count and build passes should match
+		if count != buildCount {
+			t.Errorf("Count mismatch: countItems=%d, walkAndBuild=%d", count, buildCount)
+		}
+
+		// Verify hidden files are present in the tree
+		var hiddenFiles []string
+		var checkHiddenFiles func(*FileNode)
+		checkHiddenFiles = func(node *FileNode) {
+			for _, child := range node.Children {
+				if strings.HasPrefix(child.Name, ".") && child.Name != "." && child.Name != ".." {
+					hiddenFiles = append(hiddenFiles, child.RelPath)
+				}
+				checkHiddenFiles(child)
+			}
+		}
+
+		checkHiddenFiles(root)
+		if len(hiddenFiles) == 0 {
+			t.Error("Expected to find hidden files when IncludeHidden=true")
+		}
+
+		// Should find at least .hidden.txt
+		foundHiddenTxt := false
+		for _, path := range hiddenFiles {
+			if strings.Contains(path, ".hidden.txt") {
+				foundHiddenTxt = true
+				break
+			}
+		}
+		if !foundHiddenTxt {
+			t.Error("Expected to find .hidden.txt in results")
+		}
+	})
+
+	t.Run("explicitly included hidden file still excluded if IncludeHidden=false", func(t *testing.T) {
+		// Create scanner with explicit include for a hidden file
+		scanner, err := NewFileSystemScannerWithIgnore([]string{})
+		if err != nil {
+			t.Fatalf("Failed to create scanner with ignore: %v", err)
+		}
+
+		// Add explicit include for the hidden file
+		if scanner.ignoreEngine != nil {
+			scanner.ignoreEngine.AddExplicitInclude(".hidden.txt")
+		}
+
+		config := DefaultScanConfig()
+		config.IncludeHidden = false
+
+		// Count items
+		count, err := scanner.countItems(tempDir, config)
+		if err != nil {
+			t.Fatalf("countItems failed: %v", err)
+		}
+
+		// Build tree
+		root, buildCount, err := scanner.walkAndBuild(tempDir, config, nil, count)
+		if err != nil {
+			t.Fatalf("walkAndBuild failed: %v", err)
+		}
+
+		// Count and build passes should match
+		if count != buildCount {
+			t.Errorf("Count mismatch: countItems=%d, walkAndBuild=%d", count, buildCount)
+		}
+
+		// Verify no hidden files are present (hidden rule should apply alongside engine decision)
+		var checkHiddenFiles func(*FileNode) []string
+		checkHiddenFiles = func(node *FileNode) []string {
+			var hiddenFiles []string
+			for _, child := range node.Children {
+				if strings.HasPrefix(child.Name, ".") && child.Name != "." && child.Name != ".." {
+					hiddenFiles = append(hiddenFiles, child.RelPath)
+				}
+				hiddenFiles = append(hiddenFiles, checkHiddenFiles(child)...)
+			}
+			return hiddenFiles
+		}
+
+		hiddenFiles := checkHiddenFiles(root)
+		if len(hiddenFiles) > 0 {
+			t.Errorf("Explicitly included hidden file should still be excluded when IncludeHidden=false: %v", hiddenFiles)
+		}
+	})
+}
+
 func TestNewFileSystemScannerWithMatcher(t *testing.T) {
 	// Create a fake matcher for testing
 	fakeMatcher := &fakeMatcher{

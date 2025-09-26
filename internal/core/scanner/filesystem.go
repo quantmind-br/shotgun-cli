@@ -278,16 +278,6 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 			return nil
 		}
 
-		// Apply hidden file filtering if not using ignore engine (for consistency with countItems)
-		if fs.ignoreEngine == nil && !config.IncludeHidden {
-			baseName := filepath.Base(relPath)
-			if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
-				if d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-		}
 
 		// Get file size for files
 		var size int64
@@ -412,7 +402,17 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 	// Use the new ignore engine if available - it properly handles explicit includes/excludes
 	if fs.ignoreEngine != nil {
 		ignored, _ := fs.ignoreEngine.ShouldIgnore(relPath)
-		return ignored && !fs.shouldIncludeIgnored(config)
+		if ignored {
+			return !fs.shouldIncludeIgnored(config)
+		}
+		// If not ignored by engine, check hidden file exclusion
+		if !config.IncludeHidden {
+			baseName := filepath.Base(relPath)
+			if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
+				return true
+			}
+		}
+		return false
 	}
 	
 	// Fallback to old logic for backward compatibility when using pathMatcher
