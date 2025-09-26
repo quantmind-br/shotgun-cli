@@ -118,6 +118,20 @@ func (m *FileTreeModel) ToggleShowIgnored() {
 	m.rebuildVisibleItems()
 }
 
+func (m *FileTreeModel) SetFilter(filter string) {
+	m.filter = filter
+	m.rebuildVisibleItems()
+}
+
+func (m *FileTreeModel) GetFilter() string {
+	return m.filter
+}
+
+func (m *FileTreeModel) ClearFilter() {
+	m.filter = ""
+	m.rebuildVisibleItems()
+}
+
 func (m *FileTreeModel) GetSelections() map[string]bool {
 	return m.selections
 }

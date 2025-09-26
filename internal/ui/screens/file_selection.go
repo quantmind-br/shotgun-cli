@@ -10,12 +10,18 @@ import (
 	"github.com/diogo464/shotgun-cli/internal/ui/styles"
 )
 
+type RescanRequestMsg struct{}
+
 type FileSelectionModel struct {
-	tree      *components.FileTreeModel
-	width     int
-	height    int
-	fileTree  *scanner.FileNode
+	tree       *components.FileTreeModel
+	width      int
+	height     int
+	fileTree   *scanner.FileNode
 	selections map[string]bool
+	
+	// Filter mode state
+	filterMode   bool
+	filterBuffer string
 }
 
 func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool) *FileSelectionModel {
@@ -41,6 +47,31 @@ func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) 
 
 	var cmd tea.Cmd
 
+	// Handle filter mode
+	if m.filterMode {
+		switch msg.String() {
+		case "enter":
+			// Apply filter and exit filter mode
+			m.tree.SetFilter(m.filterBuffer)
+			m.filterMode = false
+		case "esc":
+			// Cancel filter mode without applying
+			m.filterMode = false
+			m.filterBuffer = ""
+		case "backspace":
+			if len(m.filterBuffer) > 0 {
+				m.filterBuffer = m.filterBuffer[:len(m.filterBuffer)-1]
+			}
+		default:
+			// Add character to filter buffer
+			if len(msg.String()) == 1 && msg.String() != " " {
+				m.filterBuffer += msg.String()
+			}
+		}
+		return cmd
+	}
+
+	// Normal mode key handling
 	switch msg.String() {
 	case "up", "k":
 		m.tree.MoveUp()
@@ -59,9 +90,17 @@ func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) 
 	case "i":
 		m.tree.ToggleShowIgnored()
 	case "/":
-		// TODO: Implement filter mode
+		// Enter filter mode
+		m.filterMode = true
+		m.filterBuffer = m.tree.GetFilter()
 	case "f5":
-		// TODO: Implement rescan
+		// Return a command to trigger rescan
+		return func() tea.Msg {
+			return RescanRequestMsg{}
+		}
+	case "ctrl+c":
+		// Clear filter
+		m.tree.ClearFilter()
 	default:
 		// Handle other keys if needed
 	}
@@ -94,6 +133,11 @@ func (m *FileSelectionModel) View() string {
 		stats = "Selected: 0 files (0 B)"
 	}
 
+	// Add filter status
+	if m.tree != nil && m.tree.GetFilter() != "" {
+		stats += fmt.Sprintf(" | Filter: %s", m.tree.GetFilter())
+	}
+
 	var treeView string
 	if m.tree != nil {
 		treeView = m.tree.View()
@@ -103,21 +147,42 @@ func (m *FileSelectionModel) View() string {
 
 	shortcuts := []string{
 		"↑/↓: Navigate",
-		"←/→: Expand/Collapse",
+		"←/→: Expand/Collapse", 
 		"Space: Select File",
 		"d: Select Directory",
 		"i: Toggle Ignored",
+		"/: Filter",
+		"F5: Rescan",
 		"F8: Next",
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
+
+	// Update shortcuts if in filter mode
+	if m.filterMode {
+		shortcuts = []string{
+			"Type to filter",
+			"Enter: Apply filter",
+			"Esc: Cancel",
+			"Backspace: Delete char",
+		}
+	}
+
 	footer := styles.RenderFooter(shortcuts)
 
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n")
 	content.WriteString(stats)
-	content.WriteString("\n\n")
+	content.WriteString("\n")
+	
+	// Show filter input if in filter mode
+	if m.filterMode {
+		content.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
+		content.WriteString("\n")
+	}
+	
+	content.WriteString("\n")
 	content.WriteString(treeView)
 	content.WriteString("\n")
 	content.WriteString(footer)
