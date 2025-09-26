@@ -12,8 +12,26 @@ import (
 )
 
 // FileSystemScanner implements the Scanner interface for local file systems
+// PathMatcher defines an interface for evaluating whether paths should be ignored
+type PathMatcher interface {
+	MatchesPath(path string) bool
+}
+
+// GitIgnoreAdapter wraps *ignore.GitIgnore to implement PathMatcher
+type GitIgnoreAdapter struct {
+	engine *ignore.GitIgnore
+}
+
+// MatchesPath implements PathMatcher interface
+func (g *GitIgnoreAdapter) MatchesPath(path string) bool {
+	if g.engine == nil {
+		return false
+	}
+	return g.engine.MatchesPath(path)
+}
+
 type FileSystemScanner struct {
-	ignoreEngine *ignore.GitIgnore
+	pathMatcher PathMatcher
 }
 
 // NewFileSystemScanner creates a new file system scanner
@@ -28,9 +46,10 @@ func NewFileSystemScannerWithIgnore(ignoreRules []string) (*FileSystemScanner, e
 	}
 
 	ignoreEngine := ignore.CompileIgnoreLines(ignoreRules...)
+	adapter := &GitIgnoreAdapter{engine: ignoreEngine}
 
 	return &FileSystemScanner{
-		ignoreEngine: ignoreEngine,
+		pathMatcher: adapter,
 	}, nil
 }
 
@@ -48,7 +67,7 @@ func (fs *FileSystemScanner) LoadGitIgnore(rootPath string) error {
 		return fmt.Errorf("failed to load .gitignore from %s: %w", gitignorePath, err)
 	}
 
-	fs.ignoreEngine = ignoreEngine
+	fs.pathMatcher = &GitIgnoreAdapter{engine: ignoreEngine}
 	return nil
 }
 
@@ -64,7 +83,7 @@ func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfi
 	}
 
 	// Load .gitignore if not already loaded
-	if fs.ignoreEngine == nil {
+	if fs.pathMatcher == nil {
 		if err := fs.LoadGitIgnore(rootPath); err != nil {
 			return nil, fmt.Errorf("failed to load ignore rules: %w", err)
 		}
@@ -87,7 +106,7 @@ func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfi
 	}
 
 	// Second pass: build the file tree
-	root, err := fs.walkAndBuild(rootPath, config, progress, total)
+	root, actualCount, err := fs.walkAndBuild(rootPath, config, progress, total)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan directory: %w", err)
 	}
@@ -97,7 +116,7 @@ func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfi
 
 	if progress != nil {
 		progress <- Progress{
-			Current:   total,
+			Current:   actualCount,
 			Total:     total,
 			Stage:     "complete",
 			Message:   "Scan completed successfully",
@@ -111,6 +130,7 @@ func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfi
 // countItems performs a quick count of all items to be processed
 func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (int64, error) {
 	var count int64
+	var fileCount int64
 
 	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -121,8 +141,8 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 			return nil
 		}
 
-		// Check limits
-		if config.MaxFiles > 0 && count >= config.MaxFiles {
+		// Check file limits (MaxFiles applies only to files, not directories)
+		if config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles {
 			return filepath.SkipDir
 		}
 
@@ -139,7 +159,21 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 			return nil
 		}
 
+		// Apply MaxFileSize filter for files during counting pass
+		if !d.IsDir() && config.MaxFileSize > 0 {
+			if info, err := d.Info(); err == nil {
+				if info.Size() > config.MaxFileSize {
+					return nil // Skip large files, don't count them
+				}
+			}
+			// If we can't get file info, ignore the error gracefully and continue counting
+		}
+
 		count++
+		// Only count files towards MaxFiles limit
+		if !d.IsDir() {
+			fileCount++
+		}
 		return nil
 	})
 
@@ -147,9 +181,9 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 }
 
 // walkAndBuild builds the file tree with progress reporting
-func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, progress chan<- Progress, total int64) (*FileNode, error) {
+func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, progress chan<- Progress, total int64) (*FileNode, int64, error) {
 	var current int64
-	var processedFiles int64
+	var fileCount int64
 
 	// Create root node
 	root := &FileNode{
@@ -164,7 +198,7 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 
 	// Map to keep track of directory nodes for building the tree
 	dirNodes := make(map[string]*FileNode)
-	dirNodes["."] = root
+	dirNodes[normRel(".")] = root
 
 	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -175,8 +209,8 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 			return nil
 		}
 
-		// Check limits
-		if config.MaxFiles > 0 && processedFiles >= config.MaxFiles {
+		// Check file limits (MaxFiles applies only to files, not directories)
+		if config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles {
 			return filepath.SkipDir
 		}
 
@@ -233,13 +267,16 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 			parentNode.Children = append(parentNode.Children, node)
 		}
 
-		// If this is a directory, add it to the directory map
+		// If this is a directory, add it to the directory map with normalized path
 		if d.IsDir() {
-			dirNodes[relPath] = node
+			dirNodes[normRel(relPath)] = node
 		}
 
 		current++
-		processedFiles++
+		// Only count files towards MaxFiles limit
+		if !d.IsDir() {
+			fileCount++
+		}
 
 		// Report progress every 100 items to avoid UI blocking
 		if progress != nil && current%100 == 0 {
@@ -255,18 +292,18 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 		return nil
 	})
 
-	return root, err
+	return root, current, err
 }
 
 // findParentNode finds the parent directory node for a given relative path
 func (fs *FileSystemScanner) findParentNode(relPath string, dirNodes map[string]*FileNode) *FileNode {
 	parentPath := filepath.Dir(relPath)
 	if parentPath == "." {
-		return dirNodes["."]
+		return dirNodes[normRel(".")]
 	}
 
 	// Normalize path separators for consistency
-	parentPath = filepath.ToSlash(parentPath)
+	parentPath = normRel(parentPath)
 	if node, exists := dirNodes[parentPath]; exists {
 		return node
 	}
@@ -280,7 +317,7 @@ func (fs *FileSystemScanner) findParentNode(relPath string, dirNodes map[string]
 		}
 	}
 
-	return dirNodes["."] // Return root if no parent found
+	return dirNodes[normRel(".")] // Return root if no parent found
 }
 
 // sortChildren sorts the children of all directory nodes recursively
@@ -322,8 +359,8 @@ func (fs *FileSystemScanner) getIgnoreStatus(relPath string, isDir bool, config 
 	var isGitignored, isCustomIgnored bool
 
 	// Check .gitignore rules
-	if fs.ignoreEngine != nil {
-		isGitignored = fs.ignoreEngine.MatchesPath(relPath)
+	if fs.pathMatcher != nil {
+		isGitignored = fs.pathMatcher.MatchesPath(relPath)
 	}
 
 	// Check hidden files/directories
@@ -354,6 +391,11 @@ func (fs *FileSystemScanner) shouldIncludeIgnored(config *ScanConfig) bool {
 	// For now, we always exclude ignored files during scanning
 	// This can be extended based on configuration needs
 	return false
+}
+
+// normRel normalizes a relative path for consistent map lookups
+func normRel(relPath string) string {
+	return filepath.ToSlash(relPath)
 }
 
 // SkipDir is a sentinel error used with filepath.WalkDir to skip directories
