@@ -329,7 +329,7 @@ func formatValue(value interface{}) string {
 }
 
 func getDefaultConfigPath() string {
-	return getConfigDir() + string(filepath.Separator) + "config.yaml"
+	return filepath.Join(getConfigDir(), "config.yaml")
 }
 
 func init() {

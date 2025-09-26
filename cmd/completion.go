@@ -127,10 +127,15 @@ func boolValueCompletion(cmd *cobra.Command, args []string, toComplete string) (
 func init() {
 	// Register custom completion functions
 	if configSetCmd != nil {
-		configSetCmd.ValidArgsFunction = configKeyCompletion
-
-		// Register completion for the second argument (value) based on the key
-		configSetCmd.Flags().SetAnnotation("__complete_config_value", []string{"true"})
+		configSetCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return configKeyCompletion(cmd, args, toComplete)
+			}
+			if len(args) == 1 {
+				return boolValueCompletion(cmd, args, toComplete)
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
 	}
 
 	rootCmd.AddCommand(completionCmd)

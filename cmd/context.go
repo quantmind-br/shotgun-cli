@@ -18,11 +18,12 @@ import (
 )
 
 type GenerateConfig struct {
-	RootPath string
-	Include  []string
-	Exclude  []string
-	Output   string
-	MaxSize  int64
+	RootPath     string
+	Include      []string
+	Exclude      []string
+	Output       string
+	MaxSize      int64
+	EnforceLimit bool
 }
 
 var contextCmd = &cobra.Command{
@@ -40,11 +41,15 @@ This command scans your codebase, applies ignore patterns, and generates an opti
 context file suitable for LLM consumption. The output includes a directory tree,
 file summaries, and file contents within the specified size limits.
 
+By default, the context generation will fail if the output exceeds the max-size limit.
+Use --no-enforce-limit to allow generation that exceeds the limit with a warning.
+
 Examples:
   shotgun-cli context generate --root . --include "*.go"
   shotgun-cli context generate --exclude "vendor/*,*.test.go" --max-size 5MB
   shotgun-cli context generate --output my-context.md --root ./src
-  shotgun-cli context generate --include "*.py,*.js" --exclude "node_modules/*"`,
+  shotgun-cli context generate --include "*.py,*.js" --exclude "node_modules/*"
+  shotgun-cli context generate --no-enforce-limit --max-size 5MB`,
 
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Validate root path
@@ -104,6 +109,7 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	exclude, _ := cmd.Flags().GetStringSlice("exclude")
 	output, _ := cmd.Flags().GetString("output")
 	maxSizeStr, _ := cmd.Flags().GetString("max-size")
+	enforceLimit, _ := cmd.Flags().GetBool("enforce-limit")
 
 	// Convert root to absolute path
 	absPath, err := filepath.Abs(rootPath)
@@ -124,11 +130,12 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	}
 
 	return GenerateConfig{
-		RootPath: absPath,
-		Include:  include,
-		Exclude:  exclude,
-		Output:   output,
-		MaxSize:  maxSize,
+		RootPath:     absPath,
+		Include:      include,
+		Exclude:      exclude,
+		Output:       output,
+		MaxSize:      maxSize,
+		EnforceLimit: enforceLimit,
 	}, nil
 }
 
@@ -170,11 +177,17 @@ func generateContextHeadless(config GenerateConfig) error {
 	}
 
 	// Check size limits
-	if int64(len(contextResult.Content)) > config.MaxSize {
-		log.Warn().
-			Int("actual", len(contextResult.Content)).
-			Int64("limit", config.MaxSize).
-			Msg("Generated context exceeds size limit")
+	contentSize := int64(len(contextResult.Content))
+	if contentSize > config.MaxSize {
+		if config.EnforceLimit {
+			return fmt.Errorf("generated context size (%s) exceeds limit (%s). Use --no-enforce-limit to allow truncation or generation without enforcement",
+				formatBytes(contentSize), formatBytes(config.MaxSize))
+		} else {
+			log.Warn().
+				Int64("actual", contentSize).
+				Int64("limit", config.MaxSize).
+				Msg("Generated context exceeds size limit - continuing without enforcement")
+		}
 	}
 
 	// Write output file
@@ -268,6 +281,7 @@ func init() {
 	contextGenerateCmd.Flags().StringSliceP("exclude", "e", []string{}, "File patterns to exclude (glob patterns)")
 	contextGenerateCmd.Flags().StringP("output", "o", "", "Output file (default: shotgun-prompt-YYYYMMDD-HHMMSS.md)")
 	contextGenerateCmd.Flags().String("max-size", "10MB", "Maximum context size (e.g., 5MB, 1GB, 500KB)")
+	contextGenerateCmd.Flags().Bool("enforce-limit", true, "Enforce context size limit (default: true)")
 
 	// Mark root as required would be too restrictive since we have a default
 	// But we validate it in PreRunE instead

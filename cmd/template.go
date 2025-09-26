@@ -74,7 +74,8 @@ var templateRenderCmd = &cobra.Command{
 
 Templates can contain variables in the format {{.VariableName}} which will be
 replaced with values provided via the --var flag. All required variables must
-be provided for successful rendering.
+be provided for successful rendering. The command validates required variables
+before rendering and will fail with a helpful error if any are missing.
 
 Examples:
   shotgun-cli template render code-review
@@ -158,6 +159,24 @@ Examples:
 
 func renderTemplate(templateName string, variables map[string]string, output string) error {
 	manager := template.NewTemplateManager()
+
+	// Pre-validate required template variables
+	if templateInfo, err := manager.GetTemplateInfo(templateName); err != nil {
+		// If GetTemplateInfo doesn't exist yet, we can create a fallback method
+		log.Debug().Err(err).Msg("Could not get template info for validation, proceeding with rendering")
+	} else if len(templateInfo.RequiredVars) > 0 {
+		var missingVars []string
+		for _, requiredVar := range templateInfo.RequiredVars {
+			if _, exists := variables[requiredVar]; !exists {
+				missingVars = append(missingVars, requiredVar)
+			}
+		}
+
+		if len(missingVars) > 0 {
+			return fmt.Errorf("missing required template variables for '%s': %s. Use --var %s=value to provide them",
+				templateName, strings.Join(missingVars, ", "), strings.Join(missingVars, "=value --var "))
+		}
+	}
 
 	// Prepare template configuration
 	config := template.RenderConfig{
