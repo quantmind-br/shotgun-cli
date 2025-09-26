@@ -1,12 +1,13 @@
 package template
 
 import (
-	"embed"
 	"fmt"
 	"io/fs"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/quantmind-br/shotgun-cli/internal/assets"
 )
 
 // TemplateManager defines the interface for template management
@@ -25,8 +26,6 @@ type Manager struct {
 	renderer  *Renderer
 }
 
-//go:embed templates/*.md
-var templatesEmbedFS embed.FS
 
 var templatesFS fs.FS
 
@@ -34,7 +33,7 @@ var templatesFS fs.FS
 func NewManager() (*Manager, error) {
 	// Create fs.Sub for the templates directory
 	var err error
-	templatesFS, err = fs.Sub(templatesEmbedFS, "templates")
+	templatesFS, err = fs.Sub(assets.Templates, "templates")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create templates filesystem: %w", err)
 	}
