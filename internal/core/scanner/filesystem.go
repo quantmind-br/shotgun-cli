@@ -14,16 +14,16 @@ import (
 // FileSystemScanner implements the Scanner interface for local file systems
 // PathMatcher defines an interface for evaluating whether paths should be ignored
 type PathMatcher interface {
-	MatchesPath(path string) bool
+	Matches(path string, isDir bool) bool
 }
 
-// GitIgnoreAdapter wraps *ignore.GitIgnore to implement PathMatcher
-type GitIgnoreAdapter struct {
+// gitIgnoreAdapter wraps *ignore.GitIgnore to implement PathMatcher
+type gitIgnoreAdapter struct {
 	engine *ignore.GitIgnore
 }
 
-// MatchesPath implements PathMatcher interface
-func (g *GitIgnoreAdapter) MatchesPath(path string) bool {
+// Matches implements PathMatcher interface
+func (g *gitIgnoreAdapter) Matches(path string, isDir bool) bool {
 	if g.engine == nil {
 		return false
 	}
@@ -46,28 +46,46 @@ func NewFileSystemScannerWithIgnore(ignoreRules []string) (*FileSystemScanner, e
 	}
 
 	ignoreEngine := ignore.CompileIgnoreLines(ignoreRules...)
-	adapter := &GitIgnoreAdapter{engine: ignoreEngine}
+	adapter := &gitIgnoreAdapter{engine: ignoreEngine}
 
-	return &FileSystemScanner{
-		pathMatcher: adapter,
-	}, nil
+	return NewFileSystemScannerWithMatcher(adapter), nil
 }
 
-// LoadGitIgnore loads .gitignore rules from the specified root directory
-func (fs *FileSystemScanner) LoadGitIgnore(rootPath string) error {
+// NewFileSystemScannerWithMatcher creates a FileSystemScanner with a custom PathMatcher
+func NewFileSystemScannerWithMatcher(m PathMatcher) *FileSystemScanner {
+	return &FileSystemScanner{
+		pathMatcher: m,
+	}
+}
+
+// LoadGitIgnoreMatcher loads .gitignore rules from the specified root directory and returns a PathMatcher
+func LoadGitIgnoreMatcher(rootPath string) (PathMatcher, error) {
 	gitignorePath := filepath.Join(rootPath, ".gitignore")
 
 	// Check if .gitignore exists
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		return nil // No .gitignore file, continue without it
+		return nil, nil // No .gitignore file
 	}
 
 	ignoreEngine, err := ignore.CompileIgnoreFile(gitignorePath)
 	if err != nil {
-		return fmt.Errorf("failed to load .gitignore from %s: %w", gitignorePath, err)
+		return nil, fmt.Errorf("failed to load .gitignore from %s: %w", gitignorePath, err)
 	}
 
-	fs.pathMatcher = &GitIgnoreAdapter{engine: ignoreEngine}
+	return &gitIgnoreAdapter{engine: ignoreEngine}, nil
+}
+
+// LoadGitIgnore loads .gitignore rules from the specified root directory
+func (fs *FileSystemScanner) LoadGitIgnore(rootPath string) error {
+	matcher, err := LoadGitIgnoreMatcher(rootPath)
+	if err != nil {
+		return err
+	}
+	
+	if matcher != nil {
+		fs.pathMatcher = matcher
+	}
+	
 	return nil
 }
 
@@ -360,7 +378,7 @@ func (fs *FileSystemScanner) getIgnoreStatus(relPath string, isDir bool, config 
 
 	// Check .gitignore rules
 	if fs.pathMatcher != nil {
-		isGitignored = fs.pathMatcher.MatchesPath(relPath)
+		isGitignored = fs.pathMatcher.Matches(relPath, isDir)
 	}
 
 	// Check hidden files/directories
