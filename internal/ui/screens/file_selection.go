@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/diogo464/shotgun-cli/internal/core/scanner"
-	"github.com/diogo464/shotgun-cli/internal/ui/components"
-	"github.com/diogo464/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 type RescanRequestMsg struct{}

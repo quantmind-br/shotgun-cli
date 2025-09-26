@@ -5,9 +5,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/diogo464/shotgun-cli/internal/core/scanner"
-	"github.com/diogo464/shotgun-cli/internal/core/context"
-	"github.com/diogo464/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 type ProgressModel struct {

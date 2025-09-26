@@ -10,13 +10,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
-	"github.com/diogo464/shotgun-cli/internal/core/scanner"
-	"github.com/diogo464/shotgun-cli/internal/core/template"
-	"github.com/diogo464/shotgun-cli/internal/core/context"
-	"github.com/diogo464/shotgun-cli/internal/platform/clipboard"
-	"github.com/diogo464/shotgun-cli/internal/ui/screens"
-	"github.com/diogo464/shotgun-cli/internal/ui/components"
-	"github.com/diogo464/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 const (
@@ -122,6 +122,7 @@ type generateState struct {
 	progressCh    chan context.GenProgress
 	done          chan bool
 	started       bool
+	content       string
 }
 
 // New message types for iterative commands
@@ -139,7 +140,6 @@ type startGenerationMsg struct {
 	rootPath      string
 }
 
-type RescanRequestMsg struct{}
 
 func NewWizard(rootPath string, config *scanner.Config) *WizardModel {
 	return &WizardModel{
@@ -309,7 +309,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.iterativeGenerateCmd()
 		cmds = append(cmds, cmd)
 
-	case RescanRequestMsg:
+	case screens.RescanRequestMsg:
 		// Trigger rescan when in file selection step
 		if m.step == StepFileSelection {
 			cmd = scanDirectoryCmd(m.rootPath, m.config)
@@ -615,13 +615,8 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 					return
 				}
 
-				timestamp := time.Now().Format("20060102-150405")
-				filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-				filePath := filepath.Join(m.generateState.rootPath, filename)
-
-				if err := writeFile(filePath, content); err != nil {
-					return
-				}
+				// Store the content for later use
+				m.generateState.content = content
 
 				// Signal completion
 				go func() {
@@ -640,14 +635,10 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 			if !ok || progress.Stage == "complete" {
 				<-m.generateState.done
 
-				// Re-generate to get the content and save it
-				content, err := m.generateState.generator.GenerateWithProgressEx(
-					m.generateState.fileTree,
-					m.generateState.config,
-					nil,
-				)
-				if err != nil {
-					return GenerationErrorMsg{Err: err}
+				// Use the stored content
+				content := m.generateState.content
+				if content == "" {
+					return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
 				}
 
 				// Check size limit
@@ -683,14 +674,10 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 				Message: progress.Message,
 			}
 		case <-m.generateState.done:
-			// Completed - same logic as above
-			content, err := m.generateState.generator.GenerateWithProgressEx(
-				m.generateState.fileTree,
-				m.generateState.config,
-				nil,
-			)
-			if err != nil {
-				return GenerationErrorMsg{Err: err}
+			// Completed - use stored content
+			content := m.generateState.content
+			if content == "" {
+				return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
 			}
 
 			// Check size limit

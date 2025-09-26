@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/diogo464/shotgun-cli/internal/core/template"
-	"github.com/diogo464/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 type ReviewModel struct {

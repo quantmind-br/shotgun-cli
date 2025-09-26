@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/diogo464/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 const maxTaskLength = 2000

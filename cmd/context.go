@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/diogo-plex/shotgun-cli/internal/core/context"
-	"github.com/diogo-plex/shotgun-cli/internal/core/scanner"
-	"github.com/diogo-plex/shotgun-cli/pkg/clipboard"
+	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/pkg/clipboard"
 )
 
 type GenerateConfig struct {

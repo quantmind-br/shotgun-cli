@@ -13,12 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/diogo464/shotgun-cli/internal/core/scanner"
-	"github.com/diogo464/shotgun-cli/internal/ui"
-
-	// Required UI dependencies as per verification comment
-	_ "github.com/charmbracelet/lipgloss"
-	_ "github.com/sabhiram/go-gitignore"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/ui"
 )
 
 var (
