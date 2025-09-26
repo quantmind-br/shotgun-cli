@@ -39,10 +39,19 @@ func (m *TemplateSelectionModel) SetSize(width, height int) {
 
 func (m *TemplateSelectionModel) LoadTemplates() tea.Cmd {
 	return func() tea.Msg {
-		manager := template.NewManager()
-		templates, err := manager.ListTemplates()
+		manager, err := template.NewManager()
 		if err != nil {
 			return TemplatesErrorMsg{Err: err}
+		}
+		templateList, err := manager.ListTemplates()
+		if err != nil {
+			return TemplatesErrorMsg{Err: err}
+		}
+
+		// Convert []template.Template to []*template.Template
+		templates := make([]*template.Template, len(templateList))
+		for i := range templateList {
+			templates[i] = &templateList[i]
 		}
 		return TemplatesLoadedMsg{Templates: templates}
 	}
@@ -152,11 +161,11 @@ func (m *TemplateSelectionModel) View() string {
 		content.WriteString(selectedTemplate.Description)
 		content.WriteString("\n")
 
-		if len(selectedTemplate.Variables) > 0 {
+		if len(selectedTemplate.RequiredVars) > 0 {
 			content.WriteString("\n")
 			content.WriteString(styles.TitleStyle.Render("Required Variables:"))
 			content.WriteString("\n")
-			for _, variable := range selectedTemplate.Variables {
+			for _, variable := range selectedTemplate.RequiredVars {
 				content.WriteString(fmt.Sprintf("  • %s", variable))
 				content.WriteString("\n")
 			}

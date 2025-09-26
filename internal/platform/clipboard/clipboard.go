@@ -147,3 +147,8 @@ func isWSL() bool {
 	wslClipboard := &WSLClipboard{}
 	return wslClipboard.detectWSL()
 }
+
+// Copy provides a convenient package-level function to copy content to clipboard
+func Copy(content string) error {
+	return NewManager().Copy(content)
+}

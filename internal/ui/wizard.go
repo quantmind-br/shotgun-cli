@@ -49,7 +49,7 @@ type WizardModel struct {
 	showHelp      bool
 
 	rootPath     string
-	config       *scanner.Config
+	config       *scanner.ScanConfig
 
 	fileSelection     *screens.FileSelectionModel
 	templateSelection *screens.TemplateSelectionModel
@@ -108,16 +108,16 @@ type ClipboardCompleteMsg struct {
 type scanState struct {
 	scanner     *scanner.FileSystemScanner
 	rootPath    string
-	config      *scanner.Config
+	config      *scanner.ScanConfig
 	progressCh  chan scanner.Progress
 	done        chan bool
 	started     bool
 }
 
 type generateState struct {
-	generator     *context.Generator
+	generator     context.ContextGenerator
 	fileTree      *scanner.FileNode
-	config        *context.Config
+	config        *context.GenerateConfig
 	rootPath      string
 	progressCh    chan context.GenProgress
 	done          chan bool
@@ -128,7 +128,7 @@ type generateState struct {
 // New message types for iterative commands
 type startScanMsg struct {
 	rootPath string
-	config   *scanner.Config
+	config   *scanner.ScanConfig
 }
 
 type startGenerationMsg struct {
@@ -141,7 +141,7 @@ type startGenerationMsg struct {
 }
 
 
-func NewWizard(rootPath string, config *scanner.Config) *WizardModel {
+func NewWizard(rootPath string, config *scanner.ScanConfig) *WizardModel {
 	return &WizardModel{
 		step:          StepFileSelection,
 		selectedFiles: make(map[string]bool),
@@ -293,13 +293,16 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case startGenerationMsg:
 		m.generateState = &generateState{
-			generator: context.NewGenerator(),
+			generator: context.NewDefaultContextGenerator(),
 			fileTree:  msg.fileTree,
-			config: &context.Config{
-				SelectedFiles: msg.selectedFiles,
-				Template:      msg.template,
-				TaskDesc:      msg.taskDesc,
-				Rules:         msg.rules,
+			config: &context.GenerateConfig{
+				TemplateVars: map[string]string{
+					"TASK":          msg.taskDesc,
+					"RULES":         msg.rules,
+					"FILE_STRUCTURE": "",
+					"CURRENT_DATE":   time.Now().Format("2006-01-02"),
+				},
+				Template: msg.template.Name,
 			},
 			rootPath:   msg.rootPath,
 			progressCh: make(chan context.GenProgress, 100),
@@ -461,7 +464,7 @@ func (m *WizardModel) generateContext() tea.Cmd {
 	return generateContextCmd(m.fileTree, m.selectedFiles, m.template, m.taskDesc, m.rules, m.rootPath)
 }
 
-func scanDirectoryCmd(rootPath string, config *scanner.Config) tea.Cmd {
+func scanDirectoryCmd(rootPath string, config *scanner.ScanConfig) tea.Cmd {
 	return func() tea.Msg {
 		return startScanMsg{
 			rootPath: rootPath,
@@ -535,7 +538,7 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 			m.scanState.started = true
 			go func() {
 				defer close(m.scanState.done)
-				tree, err := m.scanState.scanner.ScanWithProgress(
+				_, err := m.scanState.scanner.ScanWithProgress(
 					m.scanState.rootPath,
 					m.scanState.config,
 					m.scanState.progressCh,
@@ -608,8 +611,10 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 
 				content, err := m.generateState.generator.GenerateWithProgressEx(
 					m.generateState.fileTree,
-					m.generateState.config,
-					m.generateState.progressCh,
+					*m.generateState.config,
+					func(p context.GenProgress) {
+						m.generateState.progressCh <- p
+					},
 				)
 				if err != nil {
 					return

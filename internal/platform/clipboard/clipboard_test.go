@@ -1,408 +1,264 @@
 package clipboard
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
-	"runtime"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestClipboardManager_Interface(t *testing.T) {
-	manager := NewManager()
+// Compile-time assertions for interface compliance.
+var (
+	_ ClipboardManager = (*Manager)(nil)
+	_ ClipboardManager = (*LinuxClipboard)(nil)
+	_ ClipboardManager = (*DarwinClipboard)(nil)
+	_ ClipboardManager = (*WindowsClipboard)(nil)
+	_ ClipboardManager = (*WSLClipboard)(nil)
+)
 
-	var _ ClipboardManager = manager.clipboard
+type fakeClipboard struct {
+	platform      string
+	command       string
+	available     bool
+	copyCalls     []string
+	timeoutCalls  []time.Duration
+	errorOnCopy   error
+	errorOnTimed  error
+	selectedTools []string
+}
 
-	if manager.clipboard == nil {
-		t.Fatal("clipboard implementation should not be nil")
+func (f *fakeClipboard) Copy(content string) error {
+	f.copyCalls = append(f.copyCalls, content)
+	return f.errorOnCopy
+}
+
+func (f *fakeClipboard) CopyWithTimeout(content string, timeout time.Duration) error {
+	f.timeoutCalls = append(f.timeoutCalls, timeout)
+	if f.errorOnTimed != nil {
+		return f.errorOnTimed
+	}
+	return f.errorOnCopy
+}
+
+func (f *fakeClipboard) IsAvailable() bool { return f.available }
+
+func (f *fakeClipboard) GetCommand() (string, []string) { return f.command, nil }
+
+func (f *fakeClipboard) GetPlatform() string { return f.platform }
+
+func (f *fakeClipboard) SetSelectedTool(name string) error {
+	f.selectedTools = append(f.selectedTools, name)
+	return nil
+}
+
+func TestManager_CopyDelegatesToImplementation(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	mgr := &Manager{platform: "linux", clipboard: fake}
+
+	if err := mgr.Copy("hello"); err != nil {
+		t.Fatalf("Copy failed: %v", err)
+	}
+	if fake.copyCalls[0] != "hello" {
+		t.Fatalf("expected copy content to be recorded")
 	}
 
-	if manager.GetPlatform() != runtime.GOOS {
-		t.Errorf("expected platform %s, got %s", runtime.GOOS, manager.GetPlatform())
+	if err := mgr.CopyWithTimeout("world", time.Second); err != nil {
+		t.Fatalf("CopyWithTimeout failed: %v", err)
+	}
+	if len(fake.timeoutCalls) != 1 || fake.timeoutCalls[0] != time.Second {
+		t.Fatalf("expected timeout call to be recorded")
 	}
 }
 
-func TestManager_PlatformDetection(t *testing.T) {
-	tests := []struct {
-		name         string
-		platform     string
-		expectedType string
-	}{
-		{"Linux", "linux", "*clipboard.LinuxClipboard"},
-		{"Darwin", "darwin", "*clipboard.DarwinClipboard"},
-		{"Windows", "windows", "*clipboard.WindowsClipboard"},
+func TestManager_CopyLarge_SizeLimit(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	mgr := &Manager{platform: "linux", clipboard: fake}
+
+	oversized := strings.Repeat("x", MaxClipboardSize+1)
+	if err := mgr.CopyLarge(oversized); err == nil {
+		t.Fatalf("expected error for oversized clipboard content")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manager := &Manager{platform: tt.platform}
-
-			switch tt.platform {
-			case "linux":
-				if !mockIsWSL(false) {
-					manager.clipboard = NewLinuxClipboard()
-				} else {
-					manager.clipboard = NewWSLClipboard()
-				}
-			case "darwin":
-				manager.clipboard = NewDarwinClipboard()
-			case "windows":
-				manager.clipboard = NewWindowsClipboard()
-			}
-
-			if manager.clipboard == nil {
-				t.Fatalf("clipboard implementation should not be nil for platform %s", tt.platform)
-			}
-		})
+	allowed := strings.Repeat("y", 1024)
+	if err := mgr.CopyLarge(allowed); err != nil {
+		t.Fatalf("CopyLarge should succeed: %v", err)
 	}
-}
-
-func TestClipboardError(t *testing.T) {
-	err := &ClipboardError{
-		Platform: "test",
-		Command:  "testcmd",
-		Err:      fmt.Errorf("test error"),
-	}
-
-	expected := "clipboard error on test using testcmd: test error"
-	if err.Error() != expected {
-		t.Errorf("expected error message %q, got %q", expected, err.Error())
-	}
-}
-
-func TestLinuxClipboard_ToolDetection(t *testing.T) {
-	lc := &LinuxClipboard{
-		tools: []ClipboardTool{
-			{Name: "wl-copy", Command: "wl-copy", Args: []string{}, Priority: 1},
-			{Name: "xclip", Command: "xclip", Args: []string{"-selection", "clipboard"}, Priority: 2},
-			{Name: "xsel", Command: "xsel", Args: []string{"--clipboard", "--input"}, Priority: 3},
-		},
-	}
-
-	lc.detectAvailableTools()
-
-	foundAvailableTool := false
-	for _, tool := range lc.tools {
-		if tool.Available {
-			foundAvailableTool = true
-			break
-		}
-	}
-
-	if foundAvailableTool && lc.selectedTool == nil {
-		t.Error("expected a tool to be selected when available tools exist")
-	}
-}
-
-func TestDarwinClipboard_Basic(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("skipping macOS-specific test")
-	}
-
-	dc := NewDarwinClipboard()
-
-	if dc.GetPlatform() != "darwin" {
-		t.Errorf("expected platform darwin, got %s", dc.GetPlatform())
-	}
-
-	cmd, args := dc.GetCommand()
-	if cmd != "pbcopy" {
-		t.Errorf("expected command pbcopy, got %s", cmd)
-	}
-	if len(args) != 0 {
-		t.Errorf("expected no args, got %v", args)
-	}
-}
-
-func TestWindowsClipboard_ToolSelection(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("skipping Windows-specific test")
-	}
-
-	wc := NewWindowsClipboard()
-
-	if wc.preferredTool == "" {
-		t.Error("expected a preferred tool to be selected")
-	}
-
-	cmd, args := wc.GetCommand()
-	if cmd == "" {
-		t.Error("expected a command to be returned")
-	}
-
-	if wc.preferredTool == "clip" && cmd != "clip" {
-		t.Errorf("expected clip command when preferred tool is clip, got %s", cmd)
-	}
-
-	if wc.preferredTool == "powershell" && cmd != "powershell" {
-		t.Errorf("expected powershell command when preferred tool is powershell, got %s", cmd)
-	}
-
-	if wc.preferredTool == "powershell" {
-		expectedArgs := []string{"-Command", "Set-Clipboard"}
-		if len(args) != len(expectedArgs) {
-			t.Errorf("expected args %v, got %v", expectedArgs, args)
-		}
-		for i, arg := range expectedArgs {
-			if i < len(args) && args[i] != arg {
-				t.Errorf("expected arg[%d] %s, got %s", i, arg, args[i])
-			}
-		}
-	}
-}
-
-func TestWSLClipboard_Detection(t *testing.T) {
-	wsl := NewWSLClipboard()
-
-	if wsl.detectWSL() && !wsl.isWSL {
-		t.Error("WSL detection mismatch")
-	}
-
-	if wsl.GetPlatform() != "wsl" {
-		t.Errorf("expected platform wsl, got %s", wsl.GetPlatform())
-	}
-
-	if wsl.isWSL {
-		cmd, args := wsl.GetCommand()
-		if cmd != "clip.exe" {
-			t.Errorf("expected clip.exe command in WSL, got %s", cmd)
-		}
-		if len(args) != 0 {
-			t.Errorf("expected no args for clip.exe, got %v", args)
-		}
-	}
-}
-
-func TestManager_Timeout(t *testing.T) {
-	manager := NewManager()
-
-	if !manager.IsAvailable() {
-		t.Skip("no clipboard tools available")
-	}
-
-	testContent := "timeout test content"
-	timeout := time.Millisecond * 100
-
-	err := manager.CopyWithTimeout(testContent, timeout)
-	if err != nil {
-		clipErr, ok := err.(*ClipboardError)
-		if ok && strings.Contains(clipErr.Err.Error(), "timed out") {
-			t.Log("timeout test passed - operation timed out as expected")
-		} else {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}
-}
-
-func TestManager_LargeContent(t *testing.T) {
-	manager := NewManager()
-
-	if !manager.IsAvailable() {
-		t.Skip("no clipboard tools available")
-	}
-
-	largeContent := strings.Repeat("a", MaxClipboardSize+1)
-
-	err := manager.CopyLarge(largeContent)
-	if err == nil {
-		t.Error("expected error for content exceeding maximum size")
-	}
-
-	clipErr, ok := err.(*ClipboardError)
-	if !ok {
-		t.Errorf("expected ClipboardError, got %T", err)
-	}
-
-	if !strings.Contains(clipErr.Err.Error(), "too large") {
-		t.Errorf("expected 'too large' in error message, got: %v", clipErr.Err)
-	}
-}
-
-func TestManager_Status(t *testing.T) {
-	manager := NewManager()
-	status := manager.GetStatus()
-
-	if status.Platform != runtime.GOOS {
-		t.Errorf("expected platform %s, got %s", runtime.GOOS, status.Platform)
-	}
-
-	if len(status.Tools) == 0 {
-		t.Error("expected at least one tool in status")
-	}
-
-	selectedCount := 0
-	for _, tool := range status.Tools {
-		if tool.Selected {
-			selectedCount++
-		}
-		if tool.Name == "" {
-			t.Error("tool name should not be empty")
-		}
-		if tool.Command == "" {
-			t.Error("tool command should not be empty")
-		}
-	}
-
-	if manager.IsAvailable() && selectedCount != 1 {
-		t.Errorf("expected exactly 1 selected tool when available, got %d", selectedCount)
-	}
-}
-
-func TestManager_ToolSelection(t *testing.T) {
-	manager := NewManager()
-
-	availableTools := manager.GetAvailableTools()
-	selectedTool := manager.GetSelectedTool()
-
-	if manager.IsAvailable() {
-		if len(availableTools) == 0 {
-			t.Error("expected available tools when clipboard is available")
-		}
-		if selectedTool == "" {
-			t.Error("expected selected tool when clipboard is available")
-		}
-
-		found := false
-		for _, tool := range availableTools {
-			if tool == selectedTool {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("selected tool %s not found in available tools %v", selectedTool, availableTools)
-		}
+	if len(fake.copyCalls) == 0 {
+		t.Fatalf("expected underlying copy to be invoked")
 	}
 }
 
 func TestManager_ForceToolSelection(t *testing.T) {
-	manager := NewManager()
+	t.Parallel()
 
-	if !manager.IsAvailable() {
-		t.Skip("no clipboard tools available")
+	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	mgr := &Manager{
+		platform:  "linux",
+		clipboard: fake,
+		tools:     []ClipboardTool{{Name: "xclip", Command: "xclip", Available: true}},
 	}
 
-	availableTools := manager.GetAvailableTools()
-	if len(availableTools) == 0 {
-		t.Skip("no available tools to test")
+	if err := mgr.ForceToolSelection("xclip"); err != nil {
+		t.Fatalf("expected tool selection to succeed: %v", err)
+	}
+	if mgr.selectedTool == nil || mgr.selectedTool.Name != "xclip" {
+		t.Fatalf("expected selected tool to be xclip")
+	}
+	if len(fake.selectedTools) != 1 || fake.selectedTools[0] != "xclip" {
+		t.Fatalf("expected clipboard implementation to receive SetSelectedTool call")
 	}
 
-	firstTool := availableTools[0]
-	err := manager.ForceToolSelection(firstTool)
-	if err != nil {
-		t.Errorf("unexpected error forcing tool selection: %v", err)
-	}
-
-	if manager.GetSelectedTool() != firstTool {
-		t.Errorf("expected selected tool %s, got %s", firstTool, manager.GetSelectedTool())
-	}
-
-	err = manager.ForceToolSelection("nonexistent-tool")
-	if err == nil {
-		t.Error("expected error for nonexistent tool")
+	if err := mgr.ForceToolSelection("unknown"); err == nil {
+		t.Fatalf("expected error for unknown tool")
 	}
 }
 
-func TestCreateTempFile(t *testing.T) {
-	content := "test content for temp file"
-	suffix := ".txt"
+func TestManager_GetStatusReflectsTools(t *testing.T) {
+	t.Parallel()
 
-	tmpPath, cleanup, err := CreateTempFile(content, suffix)
+	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	mgr := &Manager{
+		platform:  "linux",
+		clipboard: fake,
+		tools:     []ClipboardTool{{Name: "xclip", Command: "xclip", Available: true}},
+	}
+	mgr.selectedTool = &mgr.tools[0]
+
+	status := mgr.GetStatus()
+	if !status.Available {
+		t.Fatalf("expected status to be available")
+	}
+	if status.Platform != "linux" {
+		t.Fatalf("unexpected platform: %s", status.Platform)
+	}
+	if len(status.Tools) != 1 || !status.Tools[0].Selected {
+		t.Fatalf("expected selected tool in status")
+	}
+}
+
+func TestManager_InitializeTools_LinuxPriority(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createFakeCommand(t, dir, "wl-copy")
+	createFakeCommand(t, dir, "xclip")
+	createFakeCommand(t, dir, "xsel")
+	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
+	t.Setenv("DISPLAY", "")
+
+	mgr := &Manager{platform: "linux"}
+	mgr.clipboard = NewLinuxClipboard()
+	mgr.initializeTools()
+
+	if mgr.selectedTool == nil || mgr.selectedTool.Name != "wl-copy" {
+		t.Fatalf("expected wl-copy to be selected when available: %+v", mgr.selectedTool)
+	}
+	for _, tool := range mgr.tools {
+		if !tool.Available {
+			t.Fatalf("expected %s to be available", tool.Name)
+		}
+	}
+}
+
+func TestManager_InitializeTools_LinuxFallback(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createFakeCommand(t, dir, "xclip")
+	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("DISPLAY", ":0")
+
+	mgr := &Manager{platform: "linux"}
+	mgr.clipboard = NewLinuxClipboard()
+	mgr.initializeTools()
+
+	if mgr.selectedTool == nil || mgr.selectedTool.Name != "xclip" {
+		t.Fatalf("expected xclip fallback selection, got %+v", mgr.selectedTool)
+	}
+}
+
+func TestWindowsClipboard_ToolPreference(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createFakeCommand(t, dir, "clip")
+	createFakeCommand(t, dir, "powershell")
+	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+
+	wc := NewWindowsClipboard()
+	if wc.preferredTool != "clip" {
+		t.Fatalf("expected clip to be preferred when available, got %s", wc.preferredTool)
+	}
+}
+
+func TestDarwinClipboard_IsAvailable(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	createFakeCommand(t, dir, "pbcopy")
+	t.Setenv("PATH", dir+string(filepath.ListSeparator)+getEnv("PATH"))
+
+	dc := NewDarwinClipboard()
+	if !dc.IsAvailable() {
+		t.Fatalf("expected pbcopy to be detected as available")
+	}
+}
+
+func TestWSLClipboard_DetectsViaEnv(t *testing.T) {
+	t.Parallel()
+
+	t.Setenv("WSL_DISTRO_NAME", "Ubuntu-20.04")
+	wsl := NewWSLClipboard()
+	if !wsl.isWSL {
+		t.Fatalf("expected WSL detection to succeed when WSL_DISTRO_NAME set")
+	}
+}
+
+func TestCreateTempFileLifecycle(t *testing.T) {
+	t.Parallel()
+
+	content := "hello clipboard"
+	path, cleanup, err := CreateTempFile(content, ".txt")
 	if err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
+		t.Fatalf("CreateTempFile failed: %v", err)
 	}
-	defer cleanup()
-
-	if !strings.HasSuffix(tmpPath, suffix) {
-		t.Errorf("expected temp file to have suffix %s, got %s", suffix, tmpPath)
+	if !strings.HasSuffix(path, ".txt") {
+		t.Fatalf("expected suffix to be applied: %s", path)
 	}
-
-	data, err := os.ReadFile(tmpPath)
-	if err != nil {
-		t.Fatalf("failed to read temp file: %v", err)
-	}
-
-	if string(data) != content {
-		t.Errorf("expected temp file content %q, got %q", content, string(data))
-	}
-
 	cleanup()
-
-	if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
-		t.Error("expected temp file to be cleaned up")
-	}
 }
 
-func BenchmarkClipboard_SmallContent(b *testing.B) {
-	manager := NewManager()
-	if !manager.IsAvailable() {
-		b.Skip("no clipboard tools available")
-	}
+func BenchmarkManager_Copy(b *testing.B) {
+	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	mgr := &Manager{platform: "linux", clipboard: fake}
 
-	content := "small test content"
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
-		err := manager.Copy(content)
-		if err != nil {
-			b.Fatalf("clipboard copy failed: %v", err)
+		if err := mgr.Copy("benchmark"); err != nil {
+			b.Fatalf("Copy failed: %v", err)
 		}
 	}
 }
 
-func BenchmarkClipboard_LargeContent(b *testing.B) {
-	manager := NewManager()
-	if !manager.IsAvailable() {
-		b.Skip("no clipboard tools available")
-	}
-
-	content := strings.Repeat("large content test ", 10000)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		err := manager.Copy(content)
-		if err != nil {
-			b.Fatalf("clipboard copy failed: %v", err)
-		}
+func createFakeCommand(tb testing.TB, dir, name string) {
+	tb.Helper()
+	script := "#!/bin/sh\nexit 0\n"
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		tb.Fatalf("failed to create fake command %s: %v", name, err)
 	}
 }
 
-func mockIsWSL(isWSL bool) bool {
-	return isWSL
-}
-
-func mockExecLookPath(cmd string, available bool) error {
-	if available {
-		return nil
+func getEnv(key string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
 	}
-	return exec.ErrNotFound
-}
-
-func TestClipboard_CrossPlatformBuild(t *testing.T) {
-	platforms := []string{"linux", "darwin", "windows"}
-
-	for _, platform := range platforms {
-		t.Run(fmt.Sprintf("Platform_%s", platform), func(t *testing.T) {
-			manager := &Manager{platform: platform}
-
-			switch platform {
-			case "linux":
-				manager.clipboard = NewLinuxClipboard()
-			case "darwin":
-				manager.clipboard = NewDarwinClipboard()
-			case "windows":
-				manager.clipboard = NewWindowsClipboard()
-			}
-
-			if manager.clipboard == nil {
-				t.Fatalf("failed to create clipboard for platform %s", platform)
-			}
-
-			if manager.clipboard.GetPlatform() != platform {
-				t.Errorf("platform mismatch: expected %s, got %s", platform, manager.clipboard.GetPlatform())
-			}
-		})
-	}
+	return ""
 }

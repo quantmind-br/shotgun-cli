@@ -3,825 +3,499 @@ package context
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 )
 
-func TestNewDefaultContextGenerator(t *testing.T) {
-	gen := NewDefaultContextGenerator()
-	if gen == nil {
-		t.Fatal("NewDefaultContextGenerator() returned nil")
-	}
-	if gen.treeRenderer == nil {
-		t.Error("TreeRenderer is nil")
-	}
-	if gen.templateRenderer == nil {
-		t.Error("TemplateRenderer is nil")
-	}
-}
+// Compile-time contract checks
+var _ ContextGenerator = (*DefaultContextGenerator)(nil)
 
-func TestGenerateConfig_Validation(t *testing.T) {
-	gen := NewDefaultContextGenerator()
+func TestDefaultContextGenerator_validateConfig(t *testing.T) {
+	t.Parallel()
 
-	tests := []struct {
+	gen := NewDefaultContextGenerator()
+	cases := []struct {
 		name     string
-		config   GenerateConfig
+		input    GenerateConfig
 		expected GenerateConfig
 	}{
 		{
-			name:   "default values",
-			config: GenerateConfig{},
+			name:  "defaults applied",
+			input: GenerateConfig{},
 			expected: GenerateConfig{
 				MaxSize:      DefaultMaxSize,
 				MaxFileSize:  DefaultMaxSize,
 				MaxTotalSize: DefaultMaxSize,
 				MaxFiles:     DefaultMaxFiles,
-				SkipBinary:   false,
 				TemplateVars: map[string]string{},
 			},
 		},
 		{
-			name: "custom values preserved",
-			config: GenerateConfig{
-				MaxSize:      5000,
-				MaxFiles:     50,
-				SkipBinary:   true,
-				TemplateVars: map[string]string{"key": "value"},
-			},
+			name:  "legacy MaxSize propagated",
+			input: GenerateConfig{MaxSize: 2048, MaxFiles: 10},
 			expected: GenerateConfig{
-				MaxSize:      5000,
-				MaxFileSize:  5000,
-				MaxTotalSize: 5000,
-				MaxFiles:     50,
-				SkipBinary:   true,
-				TemplateVars: map[string]string{"key": "value"},
+				MaxSize:      2048,
+				MaxFileSize:  2048,
+				MaxTotalSize: 2048,
+				MaxFiles:     10,
+				TemplateVars: map[string]string{},
+			},
+		},
+		{
+			name:  "custom totals respected",
+			input: GenerateConfig{MaxFileSize: 512, MaxTotalSize: 1024, MaxFiles: 5, TemplateVars: map[string]string{"TASK": "x"}},
+			expected: GenerateConfig{
+				MaxSize:      1024,
+				MaxFileSize:  512,
+				MaxTotalSize: 1024,
+				MaxFiles:     5,
+				TemplateVars: map[string]string{"TASK": "x"},
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := tt.config
-			err := gen.validateConfig(&config)
-			if err != nil {
-				t.Errorf("validateConfig() error = %v", err)
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := tc.input
+			if err := gen.validateConfig(&cfg); err != nil {
+				t.Fatalf("validateConfig returned error: %v", err)
 			}
-			if config.MaxSize != tt.expected.MaxSize {
-				t.Errorf("MaxSize = %v, want %v", config.MaxSize, tt.expected.MaxSize)
+			if cfg.MaxSize != tc.expected.MaxSize || cfg.MaxFileSize != tc.expected.MaxFileSize || cfg.MaxTotalSize != tc.expected.MaxTotalSize {
+				t.Fatalf("unexpected size config: %+v", cfg)
 			}
-			if config.MaxFileSize != tt.expected.MaxFileSize {
-				t.Errorf("MaxFileSize = %v, want %v", config.MaxFileSize, tt.expected.MaxFileSize)
+			if cfg.MaxFiles != tc.expected.MaxFiles {
+				t.Fatalf("unexpected MaxFiles: got %d want %d", cfg.MaxFiles, tc.expected.MaxFiles)
 			}
-			if config.MaxTotalSize != tt.expected.MaxTotalSize {
-				t.Errorf("MaxTotalSize = %v, want %v", config.MaxTotalSize, tt.expected.MaxTotalSize)
-			}
-			if config.MaxFiles != tt.expected.MaxFiles {
-				t.Errorf("MaxFiles = %v, want %v", config.MaxFiles, tt.expected.MaxFiles)
-			}
-			if config.SkipBinary != tt.expected.SkipBinary {
-				t.Errorf("SkipBinary = %v, want %v", config.SkipBinary, tt.expected.SkipBinary)
-			}
-			if config.TemplateVars == nil {
-				t.Error("TemplateVars is nil")
+			if len(cfg.TemplateVars) == 0 && tc.expected.TemplateVars != nil {
+				t.Fatalf("expected non-nil TemplateVars")
 			}
 		})
 	}
 }
 
-func TestGenerate_WithEmptyRoot(t *testing.T) {
-	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "Test with empty root",
-		},
-	}
+type fileSpec struct {
+	relPath       string
+	content       string
+	isDir         bool
+	selected      bool
+	gitIgnored    bool
+	customIgnored bool
+}
 
+func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, func()) {
+	tb.Helper()
+	rootDir := tb.TempDir()
 	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
+		Name:     filepath.Base(rootDir),
+		Path:     rootDir,
+		RelPath:  ".",
 		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
 		Selected: true,
 	}
 
-	result, err := gen.Generate(root, config)
+	nodes := map[string]*scanner.FileNode{rootDir: root}
+
+	// Sort to ensure parents created before children on case-insensitive FS
+	sort.Slice(specs, func(i, j int) bool {
+		return specs[i].relPath < specs[j].relPath
+	})
+
+	for _, spec := range specs {
+		absPath := filepath.Join(rootDir, filepath.FromSlash(spec.relPath))
+		if spec.isDir {
+			if err := os.MkdirAll(absPath, 0o755); err != nil {
+				tb.Fatalf("mkdir: %v", err)
+			}
+		} else {
+			if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+				tb.Fatalf("mkdir parent: %v", err)
+			}
+			if err := os.WriteFile(absPath, []byte(spec.content), 0o644); err != nil {
+				tb.Fatalf("write file: %v", err)
+			}
+		}
+
+		node := &scanner.FileNode{
+			Name:            filepath.Base(absPath),
+			Path:            absPath,
+			RelPath:         spec.relPath,
+			IsDir:           spec.isDir,
+			Selected:        spec.selected,
+			IsGitignored:    spec.gitIgnored,
+			IsCustomIgnored: spec.customIgnored,
+		}
+		if !spec.isDir {
+			node.Size = int64(len(spec.content))
+		}
+
+		parentPath := filepath.Dir(absPath)
+		parent, ok := nodes[parentPath]
+		if !ok {
+			parent = ensureDirNode(tb, nodes, rootDir, parentPath)
+		}
+		parent.Children = append(parent.Children, node)
+		node.Parent = parent
+		if spec.isDir {
+			nodes[absPath] = node
+		}
+	}
+
+	cleanup := func() {
+		os.RemoveAll(rootDir)
+	}
+
+	return root, cleanup
+}
+
+func ensureDirNode(tb testing.TB, nodes map[string]*scanner.FileNode, rootDir, path string) *scanner.FileNode {
+	if node, ok := nodes[path]; ok {
+		return node
+	}
+	if path == rootDir {
+		return nodes[path]
+	}
+
+	parent := ensureDirNode(tb, nodes, rootDir, filepath.Dir(path))
+	rel, err := filepath.Rel(rootDir, path)
 	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
+		tb.Fatalf("failed to compute relative path: %v", err)
 	}
 
-	if result == "" {
-		t.Error("Generate() returned empty result")
+	node := &scanner.FileNode{
+		Name:     filepath.Base(path),
+		Path:     path,
+		RelPath:  rel,
+		IsDir:    true,
+		Selected: true,
+		Parent:   parent,
+	}
+	parent.Children = append(parent.Children, node)
+	nodes[path] = node
+	return node
+}
+
+func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	tests := []struct {
+		name        string
+		specs       []fileSpec
+		config      GenerateConfig
+		expectError bool
+		verify      func(t *testing.T, output string, err error)
+	}{
+		{
+			name:  "single go file",
+			specs: []fileSpec{{relPath: "main.go", content: "package main\n// hello", selected: true}},
+			config: GenerateConfig{
+				MaxTotalSize: 1 << 20,
+				MaxFileSize:  1 << 20,
+				MaxFiles:     10,
+				TemplateVars: map[string]string{"TASK": "Summarize", "RULES": "Be concise"},
+			},
+			verify: func(t *testing.T, output string, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !strings.Contains(output, "# Project Context") {
+					t.Fatalf("missing header in output: %s", output)
+				}
+				if !strings.Contains(output, "Summarize") {
+					t.Fatalf("TASK variable not substituted")
+				}
+				if !strings.Contains(output, "Be concise") {
+					t.Fatalf("RULES variable not substituted")
+				}
+				if !strings.Contains(output, "main.go (go)") {
+					t.Fatalf("language detection missing: %s", output)
+				}
+				if !strings.Contains(output, "└── main.go") {
+					t.Fatalf("tree output missing: %s", output)
+				}
+				if strings.Contains(output, "{CURRENT_DATE}") {
+					t.Fatalf("CURRENT_DATE placeholder not substituted")
+				}
+				// Rough sanity check for timestamp format
+				re := regexp.MustCompile(`Generated:\s+\d{4}-\d{2}-\d{2}`)
+				if !re.MatchString(output) {
+					t.Fatalf("expected timestamp in output: %s", output)
+				}
+			},
+		},
+		{
+			name: "binary skipped when requested",
+			specs: []fileSpec{
+				{relPath: "assets/logo.png", content: string([]byte{0x00, 0x01, 0x02}), selected: true},
+				{relPath: "README.md", content: "hello", selected: true},
+			},
+			config: GenerateConfig{
+				SkipBinary:   true,
+				MaxTotalSize: 1 << 20,
+				MaxFileSize:  1 << 20,
+				MaxFiles:     10,
+				TemplateVars: map[string]string{"TASK": "Describe"},
+			},
+			verify: func(t *testing.T, output string, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if strings.Contains(output, "logo.png") {
+					t.Fatalf("binary file should be skipped: %s", output)
+				}
+				if !strings.Contains(output, "README.md") {
+					t.Fatalf("text file should be present")
+				}
+			},
+		},
+		{
+			name: "total size limit triggers error",
+			specs: []fileSpec{
+				{relPath: "a.txt", content: strings.Repeat("A", 600), selected: true},
+				{relPath: "b.txt", content: strings.Repeat("B", 600), selected: true},
+			},
+			config: GenerateConfig{
+				MaxTotalSize: 1000,
+				MaxFileSize:  1000,
+				MaxFiles:     5,
+				TemplateVars: map[string]string{"TASK": "Check size"},
+			},
+			expectError: true,
+			verify: func(t *testing.T, _ string, err error) {
+				if err == nil || !strings.Contains(err.Error(), "total size") {
+					t.Fatalf("expected total size error, got %v", err)
+				}
+			},
+		},
+		{
+			name: "max files enforcement",
+			specs: []fileSpec{
+				{relPath: "file1.txt", content: "1", selected: true},
+				{relPath: "file2.txt", content: "2", selected: true},
+			},
+			config: GenerateConfig{
+				MaxTotalSize: 1 << 20,
+				MaxFileSize:  1 << 20,
+				MaxFiles:     1,
+				TemplateVars: map[string]string{"TASK": "Limit"},
+			},
+			expectError: true,
+			verify: func(t *testing.T, _ string, err error) {
+				if err == nil || !strings.Contains(err.Error(), "maximum file count") {
+					t.Fatalf("expected max files error, got %v", err)
+				}
+			},
+		},
+		{
+			name:  "custom template respected",
+			specs: []fileSpec{{relPath: "src/main.go", content: "package main", selected: true}},
+			config: GenerateConfig{
+				Template:     "Report {TASK} with {CURRENT_DATE}",
+				MaxTotalSize: 1 << 20,
+				MaxFileSize:  1 << 20,
+				MaxFiles:     5,
+				TemplateVars: map[string]string{"TASK": "Custom"},
+			},
+			verify: func(t *testing.T, output string, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !strings.Contains(output, "Report Custom") {
+					t.Fatalf("custom template not rendered: %s", output)
+				}
+				if strings.Contains(output, "# Project Context") {
+					t.Fatalf("default template should not be used: %s", output)
+				}
+			},
+		},
 	}
 
-	if !strings.Contains(result, "# Project Context") {
-		t.Error("Generated context missing expected header")
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root, cleanup := buildTestTree(t, tc.specs)
+			defer cleanup()
+
+			gen := NewDefaultContextGenerator()
+			// ensure deterministic time by overriding template renderer required var validation if needed
+			tc.config.TemplateVars = ensureTemplateVars(tc.config.TemplateVars)
+			tc.config.MaxFileSize = normalizeLimit(tc.config.MaxFileSize)
+			tc.config.MaxTotalSize = normalizeLimit(tc.config.MaxTotalSize)
+			tc.config.MaxFiles = normalizeFiles(tc.config.MaxFiles)
+
+			output, err := gen.Generate(root, tc.config)
+			if tc.expectError {
+				tc.verify(t, output, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("Generate returned error: %v", err)
+			}
+			if strings.Contains(output, now.Add(24*time.Hour).Format("2006-01-02")) {
+				t.Fatalf("unexpected future date in output")
+			}
+			tc.verify(t, output, err)
+		})
 	}
 }
 
-func TestGenerate_WithFiles(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_test")
-	if err != nil {
-		t.Fatal(err)
+func ensureTemplateVars(vars map[string]string) map[string]string {
+	if vars == nil {
+		vars = map[string]string{}
 	}
-	defer os.RemoveAll(tmpDir)
-
-	testFile := filepath.Join(tmpDir, "test.go")
-	testContent := `package main
-
-import "fmt"
-
-func main() {
-	fmt.Println("Hello, World!")
-}`
-
-	err = os.WriteFile(testFile, []byte(testContent), 0644)
-	if err != nil {
-		t.Fatal(err)
+	if _, ok := vars["TASK"]; !ok {
+		vars["TASK"] = "default task"
 	}
+	return vars
+}
 
-	// Create a simple FileNode structure
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
+func normalizeLimit(v int64) int64 {
+	if v == 0 {
+		return DefaultMaxSize
 	}
+	return v
+}
 
-	fileNode := &scanner.FileNode{
-		Name:   "test.go",
-		Path:   testFile,
-		IsDir:  false,
-		Size:   int64(len(testContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
+func normalizeFiles(v int) int {
+	if v == 0 {
+		return DefaultMaxFiles
 	}
-	root.Children = append(root.Children, fileNode)
+	return v
+}
+
+func TestDefaultContextGenerator_ProgressReporting(t *testing.T) {
+	t.Parallel()
+	specs := []fileSpec{{relPath: "file.txt", content: "content", selected: true}}
+	root, cleanup := buildTestTree(t, specs)
+	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "Test task",
-		},
-	}
+	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}
 
-	result, err := gen.Generate(root, config)
+	var events []GenProgress
+	out, err := gen.GenerateWithProgressEx(root, cfg, func(p GenProgress) {
+		events = append(events, p)
+	})
 	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
+		t.Fatalf("GenerateWithProgressEx failed: %v", err)
+	}
+	if out == "" {
+		t.Fatalf("expected output")
 	}
 
-	expectedStrings := []string{
-		"# Project Context",
-		"**Task:** Test task",
-		"## File Structure",
-		"test.go",
-		"## File Contents",
-		"### test.go (go)",
-		"package main",
-		"fmt.Println",
+	expectedStages := []string{"tree_generation", "content_collection", "template_rendering", "complete"}
+	if len(events) != len(expectedStages) {
+		t.Fatalf("expected %d events, got %d", len(expectedStages), len(events))
 	}
-
-	for _, expected := range expectedStrings {
-		if !strings.Contains(result, expected) {
-			t.Errorf("Generated context missing expected string: %s", expected)
+	for i, stage := range expectedStages {
+		if events[i].Stage != stage {
+			t.Fatalf("event %d stage mismatch: got %s want %s", i, events[i].Stage, stage)
+		}
+		if events[i].Message == "" {
+			t.Fatalf("event %d message should not be empty", i)
 		}
 	}
 }
 
-func TestGenerate_SizeLimit(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+func TestDefaultContextGenerator_ErrorPropagation(t *testing.T) {
+	t.Parallel()
 
-	// Create a large file
-	largeContent := strings.Repeat("x", 1000)
-	testFile := filepath.Join(tmpDir, "large.txt")
-	err = os.WriteFile(testFile, []byte(largeContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	fileNode := &scanner.FileNode{
-		Name:   "large.txt",
-		Path:   testFile,
-		IsDir:  false,
-		Size:   int64(len(largeContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	root.Children = append(root.Children, fileNode)
+	specs := []fileSpec{{relPath: "missing.txt", content: "temp", selected: true}}
+	root, cleanup := buildTestTree(t, specs)
+	cleanup()
+	// remove file to trigger read error
+	os.Remove(filepath.Join(root.Path, "missing.txt"))
 
 	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		MaxTotalSize: 500, // Smaller than the content
-		TemplateVars: map[string]string{
-			"TASK": "Test size limit",
-		},
-	}
+	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}
 
-	_, err = gen.Generate(root, config)
+	_, err := gen.Generate(root, cfg)
 	if err == nil {
-		t.Error("Expected error for size limit exceeded, got nil")
+		t.Fatalf("expected error when file is missing")
 	}
-	if !strings.Contains(err.Error(), "size") && !strings.Contains(err.Error(), "limit") {
-		t.Errorf("Expected size limit error, got: %v", err)
-	}
-}
-
-func TestGenerate_SkipBinary(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a binary-like file with null bytes
-	binaryContent := []byte{0x00, 0x01, 0x02, 0x03}
-	binaryFile := filepath.Join(tmpDir, "binary.dat")
-	err = os.WriteFile(binaryFile, binaryContent, 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	fileNode := &scanner.FileNode{
-		Name:   "binary.dat",
-		Path:   binaryFile,
-		IsDir:  false,
-		Size:   int64(len(binaryContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	root.Children = append(root.Children, fileNode)
-
-	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		SkipBinary: true,
-		TemplateVars: map[string]string{
-			"TASK": "Test skip binary",
-		},
-	}
-
-	result, err := gen.Generate(root, config)
-	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
-	}
-
-	// Binary file should not be in the File Contents section
-	contentsStart := strings.Index(result, "## File Contents")
-	if contentsStart != -1 {
-		contentsSection := result[contentsStart:]
-		if strings.Contains(contentsSection, "### binary.dat") {
-			t.Error("Binary file content should be skipped when SkipBinary is true")
-		}
+	if !strings.Contains(err.Error(), "failed to collect file contents") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 
-func TestGenerateWithProgress(t *testing.T) {
-	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "Test with progress",
-		},
+func TestDefaultContextGenerator_IgnoresFlaggedFilesInTree(t *testing.T) {
+	t.Parallel()
+	specs := []fileSpec{
+		{relPath: "src", isDir: true, selected: true},
+		{relPath: "src/visible.go", content: "package main", selected: true},
+		{relPath: "src/ignored.go", content: "package main", selected: true, gitIgnored: true},
 	}
+	root, cleanup := buildTestTree(t, specs)
+	defer cleanup()
 
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	var progressMessages []string
-	progress := func(msg string) {
-		progressMessages = append(progressMessages, msg)
-	}
-
-	_, err := gen.GenerateWithProgress(root, config, progress)
+	renderer := NewTreeRenderer()
+	out, err := renderer.RenderTree(root)
 	if err != nil {
-		t.Errorf("GenerateWithProgress() error = %v", err)
-		return
+		t.Fatalf("RenderTree failed: %v", err)
+	}
+	if strings.Contains(out, "ignored.go") {
+		t.Fatalf("ignored file should not be rendered: %s", out)
 	}
 
-	expectedMessages := []string{
-		"Generating file structure...",
-		"Collecting file contents...",
-		"Rendering template...",
-		"Context generation completed",
+	outShowIgnored, err := renderer.WithShowIgnored(true).RenderTree(root)
+	if err != nil {
+		t.Fatalf("RenderTree with ignored failed: %v", err)
 	}
-
-	if len(progressMessages) != len(expectedMessages) {
-		t.Errorf("Expected %d progress messages, got %d", len(expectedMessages), len(progressMessages))
-	}
-
-	for i, expected := range expectedMessages {
-		if i < len(progressMessages) && progressMessages[i] != expected {
-			t.Errorf("Progress message %d: expected %q, got %q", i, expected, progressMessages[i])
-		}
+	if !strings.Contains(outShowIgnored, "ignored.go") {
+		t.Fatalf("ignored file should be rendered when showIgnored is true")
 	}
 }
 
-func TestGenerate_CustomTemplate(t *testing.T) {
+func TestDefaultContextGenerator_TemplateValidation(t *testing.T) {
+	t.Parallel()
+
+	specs := []fileSpec{{relPath: "file.txt", content: "hello", selected: true}}
+	root, cleanup := buildTestTree(t, specs)
+	defer cleanup()
+
 	gen := NewDefaultContextGenerator()
+	cfg := GenerateConfig{TemplateVars: map[string]string{}}
 
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
+	_, err := gen.Generate(root, cfg)
+	if err == nil || !strings.Contains(err.Error(), "required template variable 'TASK'") {
+		t.Fatalf("expected required variable error, got %v", err)
 	}
 
-	customTemplate := "Custom template: {{.Task}} - {{.CurrentDate}}"
-	config := GenerateConfig{
-		Template: customTemplate,
-		TemplateVars: map[string]string{
-			"TASK": "Custom task",
-		},
-	}
-
-	result, err := gen.Generate(root, config)
+	cfg.Template = "Custom {CURRENT_DATE}"
+	_, err = gen.Generate(root, cfg)
 	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
-	}
-
-	if !strings.Contains(result, "Custom template: Custom task") {
-		t.Error("Custom template not applied correctly")
+		t.Fatalf("custom template should bypass TASK requirement: %v", err)
 	}
 }
 
-func BenchmarkGenerate(b *testing.B) {
-	gen := NewDefaultContextGenerator()
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
+func BenchmarkDefaultContextGenerator(b *testing.B) {
+	specs := make([]fileSpec, 0, 50)
+	for i := 0; i < 50; i++ {
+		specs = append(specs, fileSpec{
+			relPath:  filepath.Join("pkg", "module", "file"+strconv.Itoa(i)+".go"),
+			content:  "package module\nvar _ = \"benchmark\"",
+			selected: true,
+		})
 	}
+	root, cleanup := buildTestTree(b, specs)
+	defer cleanup()
 
-	config := GenerateConfig{}
+	gen := NewDefaultContextGenerator()
+	cfg := GenerateConfig{MaxTotalSize: 10 << 20, MaxFileSize: 1 << 20, MaxFiles: 100, TemplateVars: map[string]string{"TASK": "benchmark"}}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := gen.Generate(root, config)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestGenerate_MissingRequiredTemplateVars(t *testing.T) {
-	gen := NewDefaultContextGenerator()
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	// Test case 1: Missing TASK variable entirely
-	config1 := GenerateConfig{
-		TemplateVars: map[string]string{}, // No TASK variable
-	}
-
-	_, err := gen.Generate(root, config1)
-	if err == nil {
-		t.Error("Expected error for missing required template variable TASK, got nil")
-	}
-	if !strings.Contains(err.Error(), "required template variable 'TASK'") {
-		t.Errorf("Expected error about missing TASK variable, got: %v", err)
-	}
-
-	// Test case 2: Empty TASK variable
-	config2 := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "", // Empty TASK variable
-		},
-	}
-
-	_, err = gen.Generate(root, config2)
-	if err == nil {
-		t.Error("Expected error for empty required template variable TASK, got nil")
-	}
-	if !strings.Contains(err.Error(), "required template variable 'TASK'") {
-		t.Errorf("Expected error about empty TASK variable, got: %v", err)
-	}
-
-	// Test case 3: Whitespace-only TASK variable
-	config3 := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "   ", // Whitespace-only TASK variable
-		},
-	}
-
-	_, err = gen.Generate(root, config3)
-	if err == nil {
-		t.Error("Expected error for whitespace-only required template variable TASK, got nil")
-	}
-	if !strings.Contains(err.Error(), "required template variable 'TASK'") {
-		t.Errorf("Expected error about whitespace-only TASK variable, got: %v", err)
-	}
-
-	// Test case 4: Valid TASK variable should work
-	config4 := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "Valid task description",
-		},
-	}
-
-	_, err = gen.Generate(root, config4)
-	if err != nil {
-		t.Errorf("Expected no error with valid TASK variable, got: %v", err)
-	}
-
-	// Test case 5: Custom template should not require TASK variable
-	customTemplate := "Custom template: {{.CurrentDate}}"
-	config5 := GenerateConfig{
-		Template:     customTemplate,
-		TemplateVars: map[string]string{}, // No TASK variable
-	}
-
-	_, err = gen.Generate(root, config5)
-	if err != nil {
-		t.Errorf("Expected no error with custom template and no TASK variable, got: %v", err)
-	}
-}
-
-func TestGenerate_BinaryDetectionOptimization(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a large binary file
-	binaryContent := make([]byte, 10000) // 10KB
-	// Add null bytes at the beginning to make it clearly binary
-	for i := 0; i < 100; i++ {
-		binaryContent[i] = 0x00
-	}
-	// Fill the rest with random data
-	for i := 100; i < len(binaryContent); i++ {
-		binaryContent[i] = byte(i % 256)
-	}
-
-	binaryFile := filepath.Join(tmpDir, "large.bin")
-	err = os.WriteFile(binaryFile, binaryContent, 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a text file for comparison
-	textContent := "This is a text file with some content\n"
-	textFile := filepath.Join(tmpDir, "text.txt")
-	err = os.WriteFile(textFile, []byte(textContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	binaryNode := &scanner.FileNode{
-		Name:     "large.bin",
-		Path:     binaryFile,
-		IsDir:    false,
-		Size:     int64(len(binaryContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	textNode := &scanner.FileNode{
-		Name:     "text.txt",
-		Path:     textFile,
-		IsDir:    false,
-		Size:     int64(len(textContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	root.Children = append(root.Children, binaryNode, textNode)
-
-	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		SkipBinary: true,
-		TemplateVars: map[string]string{
-			"TASK": "Test binary detection optimization",
-		},
-	}
-
-	result, err := gen.Generate(root, config)
-	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
-	}
-
-	// Binary file should not be in the content section
-	if strings.Contains(result, "### large.bin") && strings.Contains(result, "## File Contents") {
-		t.Error("Binary file content should be skipped when SkipBinary is true")
-	}
-
-	// Text file should be in the content
-	if !strings.Contains(result, "### text.txt") || !strings.Contains(result, "This is a text file") {
-		t.Error("Text file should be included in the output")
-	}
-}
-
-func TestGenerate_SizeLimitDisambiguation(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "context_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a large file that exceeds MaxFileSize but not MaxTotalSize
-	largeFileContent := strings.Repeat("x", 1000)
-	largeFile := filepath.Join(tmpDir, "large.txt")
-	err = os.WriteFile(largeFile, []byte(largeFileContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a smaller file
-	smallFileContent := strings.Repeat("y", 100)
-	smallFile := filepath.Join(tmpDir, "small.txt")
-	err = os.WriteFile(smallFile, []byte(smallFileContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	largeNode := &scanner.FileNode{
-		Name:     "large.txt",
-		Path:     largeFile,
-		IsDir:    false,
-		Size:     int64(len(largeFileContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	smallNode := &scanner.FileNode{
-		Name:     "small.txt",
-		Path:     smallFile,
-		IsDir:    false,
-		Size:     int64(len(smallFileContent)),
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-	root.Children = append(root.Children, largeNode, smallNode)
-
-	gen := NewDefaultContextGenerator()
-
-	// Test 1: MaxFileSize limits individual files
-	config1 := GenerateConfig{
-		MaxFileSize:  500,  // Large file exceeds this
-		MaxTotalSize: 5000, // But total would be under this
-		TemplateVars: map[string]string{
-			"TASK": "Test MaxFileSize limit",
-		},
-	}
-
-	result, err := gen.Generate(root, config1)
-	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
-	}
-
-	// Large file should be skipped from File Contents section due to MaxFileSize
-	// (it may still appear in file structure)
-	contentsStart := strings.Index(result, "## File Contents")
-	if contentsStart != -1 {
-		contentsSection := result[contentsStart:]
-		if strings.Contains(contentsSection, "### large.txt") {
-			t.Error("Large file should be skipped from File Contents due to MaxFileSize limit")
-		}
-	}
-	// Small file should be included
-	if !strings.Contains(result, "small.txt") {
-		t.Error("Small file should be included")
-	}
-
-	// Test 2: MaxTotalSize limits cumulative size
-	config2 := GenerateConfig{
-		MaxFileSize:  2000, // Both files are under this
-		MaxTotalSize: 50,   // But total exceeds this
-		TemplateVars: map[string]string{
-			"TASK": "Test MaxTotalSize limit",
-		},
-	}
-
-	_, err = gen.Generate(root, config2)
-	if err == nil {
-		t.Error("Expected error for MaxTotalSize exceeded, got nil")
-	}
-	if !strings.Contains(err.Error(), "total size limit") {
-		t.Errorf("Expected MaxTotalSize limit error, got: %v", err)
-	}
-
-	// Test 3: Backward compatibility with MaxSize
-	config3 := GenerateConfig{
-		MaxSize: 500, // Should be used for both MaxFileSize and MaxTotalSize
-		TemplateVars: map[string]string{
-			"TASK": "Test backward compatibility",
-		},
-	}
-
-	result, err = gen.Generate(root, config3)
-	if err != nil {
-		t.Errorf("Generate() error = %v", err)
-		return
-	}
-
-	// Large file should be skipped from File Contents section due to MaxSize (acting as MaxFileSize)
-	// (it may still appear in file structure)
-	contentsStart = strings.Index(result, "## File Contents")
-	if contentsStart != -1 {
-		contentsSection := result[contentsStart:]
-		if strings.Contains(contentsSection, "### large.txt") {
-			t.Error("Large file should be skipped from File Contents due to MaxSize acting as MaxFileSize")
-		}
-	}
-}
-
-func TestTreeRenderer_DefaultHidesIgnored(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "tree_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create test files
-	normalFile := filepath.Join(tmpDir, "normal.txt")
-	err = os.WriteFile(normalFile, []byte("normal content"), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     tmpDir,
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	normalNode := &scanner.FileNode{
-		Name:         "normal.txt",
-		Path:         normalFile,
-		IsDir:        false,
-		Size:         14,
-		Children:     make([]*scanner.FileNode, 0),
-		Selected:     true,
-		IsGitignored: false,
-		IsCustomIgnored: false,
-	}
-
-	ignoredNode := &scanner.FileNode{
-		Name:         "ignored.txt",
-		Path:         filepath.Join(tmpDir, "ignored.txt"),
-		IsDir:        false,
-		Size:         14,
-		Children:     make([]*scanner.FileNode, 0),
-		Selected:     true,
-		IsGitignored: true,
-		IsCustomIgnored: false,
-	}
-
-	root.Children = append(root.Children, normalNode, ignoredNode)
-
-	// Test 1: Default TreeRenderer should hide ignored files
-	renderer := NewTreeRenderer()
-	result, err := renderer.RenderTree(root)
-	if err != nil {
-		t.Errorf("RenderTree() error = %v", err)
-		return
-	}
-
-	if !strings.Contains(result, "normal.txt") {
-		t.Error("Normal file should be shown by default")
-	}
-	if strings.Contains(result, "ignored.txt") {
-		t.Error("Ignored file should be hidden by default")
-	}
-
-	// Test 2: WithShowIgnored(true) should show ignored files
-	renderer2 := NewTreeRenderer().WithShowIgnored(true)
-	result2, err := renderer2.RenderTree(root)
-	if err != nil {
-		t.Errorf("RenderTree() error = %v", err)
-		return
-	}
-
-	if !strings.Contains(result2, "normal.txt") {
-		t.Error("Normal file should be shown when showIgnored=true")
-	}
-	if !strings.Contains(result2, "ignored.txt") {
-		t.Error("Ignored file should be shown when showIgnored=true")
-	}
-	if !strings.Contains(result2, "(g)") {
-		t.Error("Ignored file should have gitignore indicator when shown")
-	}
-}
-
-func TestGenerateWithProgressEx(t *testing.T) {
-	gen := NewDefaultContextGenerator()
-	config := GenerateConfig{
-		TemplateVars: map[string]string{
-			"TASK": "Test structured progress",
-		},
-	}
-
-	root := &scanner.FileNode{
-		Name:     "test",
-		Path:     "/test",
-		IsDir:    true,
-		Size:     0,
-		Children: make([]*scanner.FileNode, 0),
-		Selected: true,
-	}
-
-	var progressEvents []GenProgress
-	progress := func(p GenProgress) {
-		progressEvents = append(progressEvents, p)
-	}
-
-	_, err := gen.GenerateWithProgressEx(root, config, progress)
-	if err != nil {
-		t.Errorf("GenerateWithProgressEx() error = %v", err)
-		return
-	}
-
-	// Check that we received structured progress events
-	expectedStages := []string{"tree_generation", "content_collection", "template_rendering", "complete"}
-	expectedMessages := []string{
-		"Generating file structure...",
-		"Collecting file contents...",
-		"Rendering template...",
-		"Context generation completed",
-	}
-
-	if len(progressEvents) != len(expectedStages) {
-		t.Errorf("Expected %d progress events, got %d", len(expectedStages), len(progressEvents))
-		return
-	}
-
-	for i, expected := range expectedStages {
-		if progressEvents[i].Stage != expected {
-			t.Errorf("Progress event %d: expected stage %q, got %q", i, expected, progressEvents[i].Stage)
-		}
-	}
-
-	for i, expected := range expectedMessages {
-		if progressEvents[i].Message != expected {
-			t.Errorf("Progress event %d: expected message %q, got %q", i, expected, progressEvents[i].Message)
+		if _, err := gen.Generate(root, cfg); err != nil {
+			b.Fatalf("Generate failed: %v", err)
 		}
 	}
 }

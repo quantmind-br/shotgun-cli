@@ -216,12 +216,10 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 
 	// Ignore status
 	var ignoreStatus string
-	if item.node.IgnoreReason != "" {
-		if strings.Contains(item.node.IgnoreReason, "gitignore") {
-			ignoreStatus = " (g)"
-		} else {
-			ignoreStatus = " (c)"
-		}
+	if item.node.IsGitignored {
+		ignoreStatus = " (g)"
+	} else if item.node.IsCustomIgnored {
+		ignoreStatus = " (c)"
 	}
 
 	// File size (for files only)
@@ -297,7 +295,7 @@ func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, path string, d
 
 func (m *FileTreeModel) shouldShowNode(node *scanner.FileNode) bool {
 	// Check ignore status
-	if !m.showIgnored && node.IgnoreReason != "" {
+	if !m.showIgnored && (node.IsGitignored || node.IsCustomIgnored) {
 		return false
 	}
 

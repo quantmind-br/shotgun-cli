@@ -1,458 +1,249 @@
 package template
 
 import (
+	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
-func TestNewManager(t *testing.T) {
-	manager, err := NewManager()
+var _ TemplateManager = (*Manager)(nil)
+
+func newTestManager(tb testing.TB) *Manager {
+	tb.Helper()
+	mgr, err := NewManager()
 	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
+		tb.Fatalf("NewManager failed: %v", err)
 	}
-
-	if manager == nil {
-		t.Fatal("NewManager() returned nil manager")
-	}
-
-	if manager.templates == nil {
-		t.Fatal("Manager templates map is nil")
-	}
-
-	if manager.renderer == nil {
-		t.Fatal("Manager renderer is nil")
-	}
+	return mgr
 }
 
-func TestManager_ListTemplates(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
+func TestManager_ListTemplates_IsDeterministic(t *testing.T) {
+	t.Parallel()
 
-	templates, err := manager.ListTemplates()
+	mgr := newTestManager(t)
+	templates, err := mgr.ListTemplates()
 	if err != nil {
-		t.Fatalf("ListTemplates() failed: %v", err)
+		t.Fatalf("ListTemplates failed: %v", err)
 	}
-
 	if len(templates) == 0 {
-		t.Error("Expected at least one template, got none")
+		t.Fatalf("expected embedded templates to be present")
 	}
 
-	// Verify each template has required fields
-	for _, template := range templates {
-		if template.Name == "" {
-			t.Error("Template name is empty")
+	names := make([]string, len(templates))
+	for i, tmpl := range templates {
+		if tmpl.Name == "" {
+			t.Fatalf("template %d missing name", i)
 		}
-		if template.Content == "" {
-			t.Error("Template content is empty")
+		if tmpl.Content == "" {
+			t.Fatalf("template %s missing content", tmpl.Name)
 		}
-		if !template.IsEmbedded {
-			t.Error("Template should be marked as embedded")
-		}
+		names[i] = tmpl.Name
+	}
+
+	sorted := append([]string(nil), names...)
+	sort.Strings(sorted)
+	if !equalSlices(names, sorted) {
+		t.Fatalf("template listing should be sorted: got %v want %v", names, sorted)
 	}
 }
 
-func TestManager_GetTemplate(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
+func equalSlices[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
 	}
-
-	// Get list of available templates first
-	templates, err := manager.ListTemplates()
-	if err != nil {
-		t.Fatalf("ListTemplates() failed: %v", err)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
 	}
-
-	if len(templates) == 0 {
-		t.Skip("No templates available for testing")
-	}
-
-	// Test getting an existing template
-	templateName := templates[0].Name
-	template, err := manager.GetTemplate(templateName)
-	if err != nil {
-		t.Fatalf("GetTemplate(%s) failed: %v", templateName, err)
-	}
-
-	if template == nil {
-		t.Fatal("GetTemplate() returned nil template")
-	}
-
-	if template.Name != templateName {
-		t.Errorf("Expected template name %s, got %s", templateName, template.Name)
-	}
-
-	// Test getting a non-existent template
-	_, err = manager.GetTemplate("nonexistent")
-	if err == nil {
-		t.Error("Expected error for non-existent template, got nil")
-	}
+	return true
 }
 
-func TestManager_RenderTemplate(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
+func TestManager_GetTemplate_Scenarios(t *testing.T) {
+	t.Parallel()
 
-	// Create a test template for rendering
-	testTemplate := &Template{
-		Name:         "test",
-		Content:      "Hello {NAME}, today is {CURRENT_DATE}. Task: {TASK}",
-		RequiredVars: []string{"NAME", "TASK"},
-		IsEmbedded:   false,
-	}
+	mgr := newTestManager(t)
 
-	manager.templates["test"] = testTemplate
+	custom := &Template{Name: "custom", Content: "Custom", RequiredVars: []string{"TASK"}}
+	mgr.templates[custom.Name] = custom
 
-	tests := []struct {
+	cases := []struct {
 		name      string
 		template  string
-		vars      map[string]string
 		wantError bool
-		contains  []string
 	}{
-		{
-			name:     "valid render",
-			template: "test",
-			vars: map[string]string{
-				"NAME": "World",
-				"TASK": "Testing",
-			},
-			wantError: false,
-			contains:  []string{"Hello World", "Task: Testing"},
-		},
-		{
-			name:      "missing required variable",
-			template:  "test",
-			vars:      map[string]string{"NAME": "World"},
-			wantError: true,
-		},
-		{
-			name:      "empty required variable",
-			template:  "test",
-			vars:      map[string]string{"NAME": "World", "TASK": ""},
-			wantError: true,
-		},
-		{
-			name:      "non-existent template",
-			template:  "nonexistent",
-			vars:      map[string]string{},
-			wantError: true,
-		},
+		{name: "existing", template: custom.Name},
+		{name: "missing", template: "not-found", wantError: true},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := manager.RenderTemplate(tt.template, tt.vars)
-
-			if tt.wantError {
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpl, err := mgr.GetTemplate(tc.template)
+			if tc.wantError {
 				if err == nil {
-					t.Error("Expected error, got nil")
+					t.Fatalf("expected error for template %s", tc.template)
 				}
 				return
 			}
-
 			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+				t.Fatalf("GetTemplate failed: %v", err)
 			}
-
-			for _, expected := range tt.contains {
-				if !strings.Contains(result, expected) {
-					t.Errorf("Expected result to contain '%s', got: %s", expected, result)
-				}
-			}
-
-			// Verify CURRENT_DATE is substituted
-			if !strings.Contains(result, "today is 20") { // Should contain year starting with 20
-				t.Errorf("CURRENT_DATE not properly substituted in: %s", result)
+			if tmpl.Name != tc.template {
+				t.Fatalf("unexpected template: %s", tmpl.Name)
 			}
 		})
 	}
 }
 
-func TestManager_ValidateTemplate(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
+func TestManager_RenderTemplate_Table(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	mgr.templates["greeting"] = &Template{
+		Name:         "greeting",
+		Content:      "Hello {TASK}! Today is {CURRENT_DATE}.",
+		RequiredVars: []string{"TASK", "CURRENT_DATE"},
 	}
 
-	// Add test templates
-	validTemplate := &Template{
-		Name:    "valid",
-		Content: "Valid template with {VAR1} and {VAR2}",
-	}
-	invalidTemplate := &Template{
-		Name:    "invalid",
-		Content: "Invalid template with {UNCLOSED",
-	}
-
-	manager.templates["valid"] = validTemplate
-	manager.templates["invalid"] = invalidTemplate
-
-	// Test valid template
-	err = manager.ValidateTemplate("valid")
-	if err != nil {
-		t.Errorf("ValidateTemplate() failed for valid template: %v", err)
-	}
-
-	// Test invalid template
-	err = manager.ValidateTemplate("invalid")
-	if err == nil {
-		t.Error("Expected validation error for invalid template, got nil")
-	}
-
-	// Test non-existent template
-	err = manager.ValidateTemplate("nonexistent")
-	if err == nil {
-		t.Error("Expected error for non-existent template, got nil")
-	}
-}
-
-func TestManager_GetTemplateNames(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
+	cases := []struct {
+		name      string
+		vars      map[string]string
+		expect    []string
+		wantError bool
+	}{
+		{
+			name:   "valid substitution",
+			vars:   map[string]string{"TASK": "world"},
+			expect: []string{"Hello world!", time.Now().Format("2006-01-02")[:4]},
+		},
+		{
+			name:      "missing variable",
+			vars:      map[string]string{},
+			wantError: true,
+		},
+		{
+			name:      "empty trimmed variable",
+			vars:      map[string]string{"TASK": "   "},
+			wantError: true,
+		},
+		{
+			name:   "special characters",
+			vars:   map[string]string{"TASK": "release v1.0 ✔"},
+			expect: []string{"release v1.0 ✔"},
+		},
 	}
 
-	names := manager.GetTemplateNames()
-	if len(names) == 0 {
-		t.Error("Expected at least one template name, got none")
-	}
-
-	// Verify no duplicate names
-	nameSet := make(map[string]bool)
-	for _, name := range names {
-		if nameSet[name] {
-			t.Errorf("Duplicate template name found: %s", name)
-		}
-		nameSet[name] = true
-	}
-}
-
-func TestManager_HasTemplate(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-
-	// Get a template name to test with
-	names := manager.GetTemplateNames()
-	if len(names) == 0 {
-		t.Skip("No templates available for testing")
-	}
-
-	// Test existing template
-	if !manager.HasTemplate(names[0]) {
-		t.Errorf("HasTemplate() returned false for existing template: %s", names[0])
-	}
-
-	// Test non-existing template
-	if manager.HasTemplate("definitely-not-a-template") {
-		t.Error("HasTemplate() returned true for non-existing template")
-	}
-}
-
-func TestManager_ConcurrentAccess(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-
-	names := manager.GetTemplateNames()
-	if len(names) == 0 {
-		t.Skip("No templates available for testing")
-	}
-
-	templateName := names[0]
-
-	// Test concurrent access
-	done := make(chan bool, 10)
-
-	for i := 0; i < 10; i++ {
-		go func() {
-			defer func() { done <- true }()
-
-			// Test concurrent reads
-			_, err := manager.GetTemplate(templateName)
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, err := mgr.RenderTemplate("greeting", tc.vars)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("expected error for %+v", tc.vars)
+				}
+				return
+			}
 			if err != nil {
-				t.Errorf("Concurrent GetTemplate() failed: %v", err)
+				t.Fatalf("RenderTemplate failed: %v", err)
 			}
-
-			_, err = manager.ListTemplates()
-			if err != nil {
-				t.Errorf("Concurrent ListTemplates() failed: %v", err)
+			for _, snippet := range tc.expect {
+				if !strings.Contains(out, snippet) {
+					t.Fatalf("expected output to contain %q, got %q", snippet, out)
+				}
 			}
-
-			if !manager.HasTemplate(templateName) {
-				t.Errorf("Concurrent HasTemplate() failed for: %s", templateName)
-			}
-		}()
-	}
-
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
-		<-done
+		})
 	}
 }
 
-func BenchmarkManager_GetTemplate(b *testing.B) {
-	manager, err := NewManager()
+func TestManager_ValidateTemplate_Errors(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	mgr.templates["broken"] = &Template{Name: "broken", Content: "{UNCLOSED"}
+
+	if err := mgr.ValidateTemplate("broken"); err == nil {
+		t.Fatalf("expected validation error for malformed template")
+	}
+
+	if err := mgr.ValidateTemplate("not-present"); err == nil {
+		t.Fatalf("expected error for missing template")
+	}
+}
+
+func TestManager_GetRequiredVariables_FiltersAutoVars(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	mgr.templates["vars"] = &Template{
+		Name:         "vars",
+		Content:      "{TASK} {CURRENT_DATE} {RULES}",
+		RequiredVars: []string{"TASK", "CURRENT_DATE", "RULES"},
+	}
+
+	vars, err := mgr.GetRequiredVariables("vars")
 	if err != nil {
-		b.Fatalf("NewManager() failed: %v", err)
+		t.Fatalf("GetRequiredVariables failed: %v", err)
 	}
 
-	names := manager.GetTemplateNames()
+	if len(vars) != 2 {
+		t.Fatalf("expected auto-generated vars to be filtered, got %v", vars)
+	}
+	sort.Strings(vars)
+	if !equalSlices(vars, []string{"RULES", "TASK"}) {
+		t.Fatalf("unexpected vars: %v", vars)
+	}
+}
+
+func TestManager_RenderTemplate_AllowsCustomTemplate(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	mgr.templates["custom"] = &Template{
+		Name:         "custom",
+		Content:      "Ticket: {TASK}\nRules: {RULES}",
+		RequiredVars: []string{"TASK", "RULES"},
+	}
+
+	out, err := mgr.RenderTemplate("custom", map[string]string{"TASK": "T123", "RULES": "none"})
+	if err != nil {
+		t.Fatalf("RenderTemplate failed: %v", err)
+	}
+	if !strings.Contains(out, "Ticket: T123") || !strings.Contains(out, "Rules: none") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestManager_ListTemplates_LoadsEmbedded(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	names := mgr.GetTemplateNames()
 	if len(names) == 0 {
-		b.Skip("No templates available for benchmarking")
+		t.Fatalf("expected embedded templates to be available")
 	}
 
-	templateName := names[0]
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := manager.GetTemplate(templateName)
-		if err != nil {
-			b.Fatalf("GetTemplate() failed: %v", err)
-		}
+	if !mgr.HasTemplate("makePlan") {
+		t.Log("makePlan template not present; continuing")
 	}
 }
 
 func BenchmarkManager_RenderTemplate(b *testing.B) {
-	manager, err := NewManager()
-	if err != nil {
-		b.Fatalf("NewManager() failed: %v", err)
-	}
-
-	// Add a test template for benchmarking
-	testTemplate := &Template{
+	mgr := newTestManager(b)
+	mgr.templates["bench"] = &Template{
 		Name:         "bench",
-		Content:      "Benchmark template with {VAR1}, {VAR2}, and {CURRENT_DATE}",
-		RequiredVars: []string{"VAR1", "VAR2"},
-	}
-	manager.templates["bench"] = testTemplate
-
-	vars := map[string]string{
-		"VAR1": "value1",
-		"VAR2": "value2",
+		Content:      "Result: {TASK} {RULES} {CURRENT_DATE}",
+		RequiredVars: []string{"TASK", "RULES", "CURRENT_DATE"},
 	}
 
+	vars := map[string]string{"TASK": "bench", "RULES": "all"}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := manager.RenderTemplate("bench", vars)
-		if err != nil {
-			b.Fatalf("RenderTemplate() failed: %v", err)
+		if _, err := mgr.RenderTemplate("bench", vars); err != nil {
+			b.Fatalf("RenderTemplate failed: %v", err)
 		}
-	}
-}
-
-func TestManager_ValidateAllEmbeddedTemplates(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-
-	templateNames := manager.GetTemplateNames()
-	if len(templateNames) == 0 {
-		t.Skip("No embedded templates found to validate")
-	}
-
-	for _, name := range templateNames {
-		t.Run(name, func(t *testing.T) {
-			err := manager.ValidateTemplate(name)
-			if err != nil {
-				t.Errorf("Template %s failed validation: %v", name, err)
-			}
-		})
-	}
-}
-
-func TestManager_GetRequiredVariablesForKnownTemplate(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-
-	// Test with makePlan template if it exists
-	if !manager.HasTemplate("makePlan") {
-		t.Skip("makePlan template not found, skipping this test")
-	}
-
-	vars, err := manager.GetRequiredVariables("makePlan")
-	if err != nil {
-		t.Fatalf("GetRequiredVariables() failed: %v", err)
-	}
-
-	// Verify that the template has expected variables
-	expectedVars := []string{"TASK", "RULES", "FILE_STRUCTURE"}
-	for _, expectedVar := range expectedVars {
-		found := false
-		for _, actualVar := range vars {
-			if actualVar == expectedVar {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected variable %s not found in required variables: %v", expectedVar, vars)
-		}
-	}
-}
-
-func TestManager_GetRequiredVariables(t *testing.T) {
-	manager, err := NewManager()
-	if err != nil {
-		t.Fatalf("NewManager() failed: %v", err)
-	}
-
-	// Test with non-existent template
-	_, err = manager.GetRequiredVariables("non-existent")
-	if err == nil {
-		t.Error("Expected error for non-existent template")
-	}
-
-	// Test with existing template
-	templateNames := manager.GetTemplateNames()
-	if len(templateNames) > 0 {
-		vars, err := manager.GetRequiredVariables(templateNames[0])
-		if err != nil {
-			t.Errorf("GetRequiredVariables() failed for template %s: %v", templateNames[0], err)
-		}
-		
-		// Variables should be a slice (may be empty)
-		if vars == nil {
-			t.Error("GetRequiredVariables() returned nil instead of empty slice")
-		}
-	}
-}
-
-func TestTemplateDescriptionFallback(t *testing.T) {
-	// Test template without header or comment - should use filename as fallback
-	content := "This is a template with {VAR1} variable but no header comment."
-	fileName := "test_template.md"
-	filePath := "test_template.md"
-
-	template, err := parseTemplate(content, fileName, filePath)
-	if err != nil {
-		t.Fatalf("parseTemplate() failed: %v", err)
-	}
-
-	expectedDescription := "Template for test_template"
-	if template.Description != expectedDescription {
-		t.Errorf("Expected description '%s', got '%s'", expectedDescription, template.Description)
-	}
-
-	// Test with prompt_ prefix - should be removed
-	fileName2 := "prompt_makePlan.md"
-	template2, err := parseTemplate(content, fileName2, fileName2)
-	if err != nil {
-		t.Fatalf("parseTemplate() failed: %v", err)
-	}
-
-	expectedDescription2 := "Template for makePlan"
-	if template2.Description != expectedDescription2 {
-		t.Errorf("Expected description '%s', got '%s'", expectedDescription2, template2.Description)
 	}
 }

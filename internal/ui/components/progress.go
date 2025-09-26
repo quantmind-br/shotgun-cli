@@ -2,7 +2,6 @@ package components
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"

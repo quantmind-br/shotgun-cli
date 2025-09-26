@@ -55,7 +55,7 @@ func (m *ReviewModel) View() string {
 	fileCount := len(m.selectedFiles)
 	totalSize := m.calculateTotalSize()
 	content.WriteString(styles.TitleStyle.Render("📁 Selected Files:"))
-	content.WriteString(fmt.Sprintf(" %d files (%s)", fileCount, formatSize(totalSize)))
+	content.WriteString(fmt.Sprintf(" %d files (%s)", fileCount, formatSizeHelper(totalSize)))
 	content.WriteString("\n\n")
 
 	// Show some selected files (up to 5)
@@ -174,7 +174,7 @@ func (m *ReviewModel) calculateTotalSize() int64 {
 	return int64(len(m.selectedFiles) * 1024) // Rough estimate
 }
 
-func formatSize(bytes int64) string {
+func formatSizeHelper(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)

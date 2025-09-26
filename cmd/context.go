@@ -14,7 +14,7 @@ import (
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
-	"github.com/quantmind-br/shotgun-cli/pkg/clipboard"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 )
 
 type GenerateConfig struct {
@@ -141,43 +141,49 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 
 func generateContextHeadless(config GenerateConfig) error {
 	// Initialize scanner with configuration
-	scannerConfig := scanner.Config{
-		RootPath:         config.RootPath,
-		IncludePatterns:  config.Include,
-		ExcludePatterns:  config.Exclude,
-		MaxFiles:         viper.GetInt("scanner.max-files"),
-		MaxFileSizeBytes: parseConfigSize(viper.GetString("scanner.max-file-size")),
-		RespectGitignore: viper.GetBool("scanner.respect-gitignore"),
+	scannerConfig := scanner.ScanConfig{
+		MaxFiles:     viper.GetInt64("scanner.max-files"),
+		MaxFileSize:  parseConfigSize(viper.GetString("scanner.max-file-size")),
+		SkipBinary:   false,
+		IncludeHidden: false,
+		Workers:      1,
+		IgnorePatterns: config.Exclude,
 	}
 
 	log.Debug().Interface("config", scannerConfig).Msg("Scanner configuration")
 
 	// Create and run scanner
-	fs := scanner.NewFileSystemScanner(scannerConfig)
-	files, err := fs.ScanFiles()
+	fs := scanner.NewFileSystemScanner()
+	tree, err := fs.Scan(config.RootPath, &scannerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to scan files: %w", err)
 	}
 
-	log.Info().Int("files", len(files)).Msg("Files scanned")
+	// TODO: Extract file list from tree
+	fileCount := countFilesInTree(tree)
+	log.Info().Int("files", fileCount).Msg("Files scanned")
 
 	// Initialize context generator
-	contextConfig := context.Config{
-		IncludeTree:    viper.GetBool("context.include-tree"),
-		IncludeSummary: viper.GetBool("context.include-summary"),
-		MaxSizeBytes:   config.MaxSize,
+	generator := context.NewDefaultContextGenerator()
+
+	contextConfig := context.GenerateConfig{
+		MaxTotalSize: config.MaxSize,
+		TemplateVars: map[string]string{
+			"TASK":          "Context generation",
+			"RULES":         "",
+			"FILE_STRUCTURE": "",
+			"CURRENT_DATE":   time.Now().Format("2006-01-02"),
+		},
 	}
 
-	generator := context.NewContextGenerator(contextConfig)
-
 	// Generate context
-	contextResult, err := generator.GenerateContext(files, config.RootPath)
+	content, err := generator.Generate(tree, contextConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate context: %w", err)
 	}
 
 	// Check size limits
-	contentSize := int64(len(contextResult.Content))
+	contentSize := int64(len(content))
 	if contentSize > config.MaxSize {
 		if config.EnforceLimit {
 			return fmt.Errorf("generated context size (%s) exceeds limit (%s). Use --no-enforce-limit to allow truncation or generation without enforcement",
@@ -191,13 +197,13 @@ func generateContextHeadless(config GenerateConfig) error {
 	}
 
 	// Write output file
-	if err := os.WriteFile(config.Output, []byte(contextResult.Content), 0644); err != nil {
+	if err := os.WriteFile(config.Output, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to write output file '%s': %w", config.Output, err)
 	}
 
 	// Copy to clipboard if enabled
 	if viper.GetBool("output.clipboard") {
-		if err := clipboard.Copy(contextResult.Content); err != nil {
+		if err := clipboard.Copy(content); err != nil {
 			log.Warn().Err(err).Msg("Failed to copy to clipboard")
 		} else {
 			log.Info().Msg("Context copied to clipboard")
@@ -208,8 +214,8 @@ func generateContextHeadless(config GenerateConfig) error {
 	fmt.Printf("✅ Context generated successfully!\n")
 	fmt.Printf("📁 Root path: %s\n", config.RootPath)
 	fmt.Printf("📄 Output file: %s\n", config.Output)
-	fmt.Printf("📊 Files processed: %d\n", contextResult.Stats.FilesProcessed)
-	fmt.Printf("📏 Total size: %s\n", formatBytes(int64(len(contextResult.Content))))
+	fmt.Printf("📊 Files processed: %d\n", fileCount)
+	fmt.Printf("📏 Total size: %s\n", formatBytes(int64(len(content))))
 	fmt.Printf("🎯 Size limit: %s\n", formatBytes(config.MaxSize))
 
 	return nil
@@ -272,6 +278,17 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func countFilesInTree(node *scanner.FileNode) int {
+	count := 0
+	if !node.IsDir {
+		return 1
+	}
+	for _, child := range node.Children {
+		count += countFilesInTree(child)
+	}
+	return count
 }
 
 func init() {

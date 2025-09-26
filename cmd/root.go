@@ -65,12 +65,12 @@ func launchTUIWizard() {
 	}
 
 	// Create scanner configuration from Viper settings
-	config := &scanner.Config{
-		MaxFiles:          viper.GetInt("scanner.max-files"),
-		MaxFileSize:       viper.GetString("scanner.max-file-size"),
-		RespectGitignore:  viper.GetBool("scanner.respect-gitignore"),
-		IncludeHidden:     false, // Default for TUI
-		FollowSymlinks:    false, // Default for TUI
+	config := &scanner.ScanConfig{
+		MaxFiles:     viper.GetInt64("scanner.max-files"),
+		MaxFileSize:  parseConfigSize(viper.GetString("scanner.max-file-size")),
+		SkipBinary:   false,
+		IncludeHidden: false,
+		Workers:      1,
 	}
 
 	// Create wizard model
