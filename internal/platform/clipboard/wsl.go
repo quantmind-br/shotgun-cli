@@ -108,3 +108,14 @@ func (wsl *WSLClipboard) GetCommand() (string, []string) {
 func (wsl *WSLClipboard) GetPlatform() string {
 	return "wsl"
 }
+
+func (wsl *WSLClipboard) SetSelectedTool(name string) error {
+	if name != "clip.exe" {
+		return &ClipboardError{
+			Platform: "wsl",
+			Command:  name,
+			Err:      fmt.Errorf("unknown tool %s, only clip.exe is supported in WSL", name),
+		}
+	}
+	return nil
+}

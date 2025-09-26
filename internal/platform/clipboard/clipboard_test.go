@@ -1,7 +1,6 @@
 package clipboard
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"

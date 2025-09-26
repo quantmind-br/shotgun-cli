@@ -66,3 +66,14 @@ func (dc *DarwinClipboard) GetCommand() (string, []string) {
 func (dc *DarwinClipboard) GetPlatform() string {
 	return "darwin"
 }
+
+func (dc *DarwinClipboard) SetSelectedTool(name string) error {
+	if name != "pbcopy" {
+		return &ClipboardError{
+			Platform: "darwin",
+			Command:  name,
+			Err:      fmt.Errorf("unknown tool %s, only pbcopy is supported", name),
+		}
+	}
+	return nil
+}

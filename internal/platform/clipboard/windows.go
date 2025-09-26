@@ -95,8 +95,8 @@ func (wc *WindowsClipboard) copyWithClipContext(ctx context.Context, content str
 }
 
 func (wc *WindowsClipboard) copyWithPowerShell(content string) error {
-	escapedContent := strings.ReplaceAll(content, "'", "''")
-	cmd := exec.Command("powershell", "-Command", fmt.Sprintf("Set-Clipboard -Value '%s'", escapedContent))
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
+	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		return &ClipboardError{
@@ -110,8 +110,8 @@ func (wc *WindowsClipboard) copyWithPowerShell(content string) error {
 }
 
 func (wc *WindowsClipboard) copyWithPowerShellContext(ctx context.Context, content string) error {
-	escapedContent := strings.ReplaceAll(content, "'", "''")
-	cmd := exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf("Set-Clipboard -Value '%s'", escapedContent))
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
+	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
@@ -156,4 +156,35 @@ func (wc *WindowsClipboard) GetCommand() (string, []string) {
 
 func (wc *WindowsClipboard) GetPlatform() string {
 	return "windows"
+}
+
+func (wc *WindowsClipboard) SetSelectedTool(name string) error {
+	switch name {
+	case "clip":
+		if _, err := exec.LookPath("clip"); err != nil {
+			return &ClipboardError{
+				Platform: "windows",
+				Command:  name,
+				Err:      fmt.Errorf("tool %s is not available", name),
+			}
+		}
+		wc.preferredTool = name
+		return nil
+	case "powershell":
+		if _, err := exec.LookPath("powershell"); err != nil {
+			return &ClipboardError{
+				Platform: "windows",
+				Command:  name,
+				Err:      fmt.Errorf("tool %s is not available", name),
+			}
+		}
+		wc.preferredTool = name
+		return nil
+	default:
+		return &ClipboardError{
+			Platform: "windows",
+			Command:  name,
+			Err:      fmt.Errorf("unknown tool %s, supported tools: clip, powershell", name),
+		}
+	}
 }

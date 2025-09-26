@@ -1,13 +1,9 @@
 package clipboard
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 const (
@@ -71,7 +67,7 @@ func (m *Manager) copyViaTempFile(content string) error {
 		return m.Copy(content)
 	}
 
-	tmpFile, err := os.CreateTemp("", "clipboard-*.txt")
+	tmpPath, cleanup, err := CreateTempFile(content, ".txt")
 	if err != nil {
 		return &ClipboardError{
 			Platform: m.platform,
@@ -79,29 +75,29 @@ func (m *Manager) copyViaTempFile(content string) error {
 			Err:      fmt.Errorf("failed to create temp file: %v", err),
 		}
 	}
-	defer func() {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
-	}()
+	defer cleanup()
 
-	if _, err := tmpFile.WriteString(content); err != nil {
+	f, err := os.Open(tmpPath)
+	if err != nil {
 		return &ClipboardError{
 			Platform: m.platform,
 			Command:  "tempfile",
-			Err:      fmt.Errorf("failed to write temp file: %v", err),
+			Err:      fmt.Errorf("failed to open temp file: %v", err),
 		}
 	}
-	tmpFile.Close()
+	defer f.Close()
 
 	var cmd *exec.Cmd
 	switch toolName {
 	case "xclip":
-		cmd = exec.Command("xclip", "-selection", "clipboard", tmpFile.Name())
+		cmd = exec.Command("xclip", "-selection", "clipboard", "-i")
 	case "xsel":
-		cmd = exec.Command("xsel", "--clipboard", "--input", "<", tmpFile.Name())
+		cmd = exec.Command("xsel", "--clipboard", "--input")
 	default:
 		return m.Copy(content)
 	}
+
+	cmd.Stdin = f
 
 	if err := cmd.Run(); err != nil {
 		return &ClipboardError{
@@ -114,57 +110,27 @@ func (m *Manager) copyViaTempFile(content string) error {
 	return nil
 }
 
-func (m *Manager) copyWithContext(ctx context.Context, content string) error {
-	if m.clipboard == nil {
-		return &ClipboardError{
-			Platform: m.platform,
-			Command:  "none",
-			Err:      fmt.Errorf("no clipboard implementation available"),
-		}
-	}
-
-	if m.selectedTool == nil {
-		return &ClipboardError{
-			Platform: m.platform,
-			Command:  "none",
-			Err:      fmt.Errorf("no clipboard tools available"),
-		}
-	}
-
-	cmd := exec.CommandContext(ctx, m.selectedTool.Command, m.selectedTool.Args...)
-	cmd.Stdin = strings.NewReader(content)
-
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return &ClipboardError{
-				Platform: m.platform,
-				Command:  m.selectedTool.Command,
-				Err:      fmt.Errorf("clipboard operation timed out"),
-			}
-		}
-		return &ClipboardError{
-			Platform: m.platform,
-			Command:  m.selectedTool.Command,
-			Err:      err,
-		}
-	}
-
-	return nil
-}
 
 func (m *Manager) GetStatus() ClipboardStatus {
+	platform := m.platform
+	if m.clipboard != nil {
+		platform = m.clipboard.GetPlatform()
+	}
+
 	status := ClipboardStatus{
-		Platform:  m.platform,
+		Platform:  platform,
 		Available: m.IsAvailable(),
 		Tools:     make([]ToolStatus, 0, len(m.tools)),
 	}
+
+	cmd, _ := m.clipboard.GetCommand()
 
 	for _, tool := range m.tools {
 		toolStatus := ToolStatus{
 			Name:      tool.Name,
 			Command:   tool.Command,
 			Available: tool.Available,
-			Selected:  m.selectedTool != nil && m.selectedTool.Name == tool.Name,
+			Selected:  tool.Command == cmd,
 		}
 		status.Tools = append(status.Tools, toolStatus)
 	}
@@ -201,6 +167,14 @@ func (m *Manager) ForceToolSelection(toolName string) error {
 				}
 			}
 			m.selectedTool = tool
+
+			// Also update the platform-specific implementation
+			if m.clipboard != nil {
+				if err := m.clipboard.SetSelectedTool(toolName); err != nil {
+					return err
+				}
+			}
+
 			return nil
 		}
 	}

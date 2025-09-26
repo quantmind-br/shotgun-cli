@@ -7,12 +7,15 @@ import (
 	"time"
 )
 
+const DefaultClipboardTimeout = 10 * time.Second
+
 type ClipboardManager interface {
 	Copy(content string) error
 	CopyWithTimeout(content string, timeout time.Duration) error
 	IsAvailable() bool
 	GetCommand() (string, []string)
 	GetPlatform() string
+	SetSelectedTool(name string) error
 }
 
 type ClipboardError struct {
@@ -48,6 +51,7 @@ func NewManager() *Manager {
 	switch manager.platform {
 	case "linux":
 		if isWSL() {
+			manager.platform = "wsl"
 			manager.clipboard = NewWSLClipboard()
 		} else {
 			manager.clipboard = NewLinuxClipboard()
@@ -71,6 +75,10 @@ func (m *Manager) initializeTools() {
 			{Name: "wl-copy", Command: "wl-copy", Args: []string{}, Priority: 1},
 			{Name: "xclip", Command: "xclip", Args: []string{"-selection", "clipboard"}, Priority: 2},
 			{Name: "xsel", Command: "xsel", Args: []string{"--clipboard", "--input"}, Priority: 3},
+		}
+	case "wsl":
+		m.tools = []ClipboardTool{
+			{Name: "clip.exe", Command: "clip.exe", Args: nil, Priority: 1},
 		}
 	case "darwin":
 		m.tools = []ClipboardTool{
@@ -103,14 +111,7 @@ func (m *Manager) checkAvailability() {
 }
 
 func (m *Manager) Copy(content string) error {
-	if m.clipboard != nil {
-		return m.clipboard.Copy(content)
-	}
-	return &ClipboardError{
-		Platform: m.platform,
-		Command:  "none",
-		Err:      fmt.Errorf("no clipboard implementation available"),
-	}
+	return m.CopyWithTimeout(content, DefaultClipboardTimeout)
 }
 
 func (m *Manager) CopyWithTimeout(content string, timeout time.Duration) error {

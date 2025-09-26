@@ -146,3 +146,26 @@ func (lc *LinuxClipboard) GetCommand() (string, []string) {
 func (lc *LinuxClipboard) GetPlatform() string {
 	return "linux"
 }
+
+func (lc *LinuxClipboard) SetSelectedTool(name string) error {
+	for i := range lc.tools {
+		tool := &lc.tools[i]
+		if tool.Name == name {
+			if !tool.Available {
+				return &ClipboardError{
+					Platform: "linux",
+					Command:  name,
+					Err:      fmt.Errorf("tool %s is not available", name),
+				}
+			}
+			lc.selectedTool = tool
+			return nil
+		}
+	}
+
+	return &ClipboardError{
+		Platform: "linux",
+		Command:  name,
+		Err:      fmt.Errorf("unknown tool %s", name),
+	}
+}
