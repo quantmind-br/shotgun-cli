@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/diogo-plex/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 )
 
 var templateCmd = &cobra.Command{
@@ -29,7 +29,10 @@ Example:
   shotgun-cli template list`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		manager := template.NewTemplateManager()
+		manager, err := template.NewManager()
+		if err != nil {
+			return fmt.Errorf("failed to initialize template manager: %w", err)
+		}
 
 		templates, err := manager.ListTemplates()
 		if err != nil {
@@ -85,7 +88,11 @@ Examples:
 
 	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		manager := template.NewTemplateManager()
+		manager, err := template.NewManager()
+		if err != nil {
+			log.Debug().Err(err).Msg("Failed to initialize template manager for completion")
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
 		templates, err := manager.ListTemplates()
 		if err != nil {
 			log.Debug().Err(err).Msg("Failed to list templates for completion")
@@ -106,7 +113,10 @@ Examples:
 		templateName := args[0]
 
 		// Verify template exists
-		manager := template.NewTemplateManager()
+		manager, err := template.NewManager()
+		if err != nil {
+			return fmt.Errorf("failed to initialize template manager: %w", err)
+		}
 		templates, err := manager.ListTemplates()
 		if err != nil {
 			return fmt.Errorf("failed to verify template existence: %w", err)
@@ -158,33 +168,33 @@ Examples:
 }
 
 func renderTemplate(templateName string, variables map[string]string, output string) error {
-	manager := template.NewTemplateManager()
+	manager, err := template.NewManager()
+	if err != nil {
+		return fmt.Errorf("failed to initialize template manager: %w", err)
+	}
 
 	// Pre-validate required template variables
-	if templateInfo, err := manager.GetTemplateInfo(templateName); err != nil {
-		// If GetTemplateInfo doesn't exist yet, we can create a fallback method
-		log.Debug().Err(err).Msg("Could not get template info for validation, proceeding with rendering")
-	} else if len(templateInfo.RequiredVars) > 0 {
+	requiredVars, err := manager.GetRequiredVariables(templateName)
+	if err != nil {
+		return fmt.Errorf("template '%s' not found", templateName)
+	}
+
+	if len(requiredVars) > 0 {
 		var missingVars []string
-		for _, requiredVar := range templateInfo.RequiredVars {
+		for _, requiredVar := range requiredVars {
 			if _, exists := variables[requiredVar]; !exists {
 				missingVars = append(missingVars, requiredVar)
 			}
 		}
 
 		if len(missingVars) > 0 {
-			return fmt.Errorf("missing required template variables for '%s': %s. Use --var %s=value to provide them",
-				templateName, strings.Join(missingVars, ", "), strings.Join(missingVars, "=value --var "))
+			return fmt.Errorf("missing required variables for '%s': %s. Provide via --var key=value",
+				templateName, strings.Join(missingVars, ", "))
 		}
 	}
 
-	// Prepare template configuration
-	config := template.RenderConfig{
-		Variables: variables,
-	}
-
 	// Render template
-	result, err := manager.RenderTemplate(templateName, config)
+	content, err := manager.RenderTemplate(templateName, variables)
 	if err != nil {
 		return fmt.Errorf("failed to render template '%s': %w", templateName, err)
 	}
@@ -192,19 +202,12 @@ func renderTemplate(templateName string, variables map[string]string, output str
 	// Handle output
 	if output != "" {
 		// Write to file
-		if err := os.WriteFile(output, []byte(result.Content), 0644); err != nil {
+		if err := os.WriteFile(output, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write output file '%s': %w", output, err)
 		}
 	} else {
 		// Write to stdout
-		fmt.Print(result.Content)
-	}
-
-	// Log any warnings
-	if len(result.Warnings) > 0 {
-		for _, warning := range result.Warnings {
-			log.Warn().Str("template", templateName).Msg(warning)
-		}
+		fmt.Print(content)
 	}
 
 	return nil
