@@ -287,11 +287,12 @@ func (e *LayeredIgnoreEngine) AddCustomRules(patterns []string) error {
 		return nil
 	}
 
-	// Filter out empty patterns
+	// Filter out empty patterns and trim whitespace
 	validPatterns := make([]string, 0, len(patterns))
 	for _, pattern := range patterns {
-		if strings.TrimSpace(pattern) != "" {
-			validPatterns = append(validPatterns, strings.TrimSpace(pattern))
+		trimmed := strings.TrimSpace(pattern)
+		if trimmed != "" {
+			validPatterns = append(validPatterns, trimmed)
 		}
 	}
 
@@ -299,8 +300,11 @@ func (e *LayeredIgnoreEngine) AddCustomRules(patterns []string) error {
 		return nil
 	}
 
-	// Create new matcher with all patterns
-	e.customMatcher = gitignore.CompileIgnoreLines(validPatterns...)
+	// Accumulate patterns with existing customPatterns
+	e.customPatterns = append(e.customPatterns, validPatterns...)
+	
+	// Recompile matcher with all accumulated patterns
+	e.customMatcher = gitignore.CompileIgnoreLines(e.customPatterns...)
 	return nil
 }
 

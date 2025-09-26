@@ -270,13 +270,23 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 			return nil
 		}
 
-		// Check if should be ignored
-		isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, d.IsDir(), config)
-		if (isGitignored || isCustomIgnored) && !fs.shouldIncludeIgnored(config) {
+		// Check if should be ignored using shouldIgnore method (mirrors countItems)
+		if fs.shouldIgnore(relPath, d.IsDir(), config) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
+		}
+
+		// Apply hidden file filtering if not using ignore engine (for consistency with countItems)
+		if fs.ignoreEngine == nil && !config.IncludeHidden {
+			baseName := filepath.Base(relPath)
+			if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 		}
 
 		// Get file size for files
@@ -291,6 +301,9 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 				}
 			}
 		}
+
+		// Get ignore status flags for UI purposes (after inclusion decision is made)
+		isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, d.IsDir(), config)
 
 		// Create file node
 		node := &FileNode{
