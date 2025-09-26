@@ -6,9 +6,13 @@ BUILD_DIR := build
 COVERAGE_FILE := coverage.out
 GO_FILES := $(shell find . -name '*.go' -not -path './vendor/*')
 
+# Installation paths
+PREFIX ?= /usr/local
+INSTALL_DIR := $(PREFIX)/bin
+
 OS_ARCHES := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install deps generate coverage release
+.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install install-local install-system uninstall deps generate coverage release
 
 help:
 	@echo "Usage: make <target>"
@@ -52,8 +56,33 @@ vet: ## Run go vet static analysis
 clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR) $(COVERAGE_FILE)
 
-install: ## Install the binary into GOPATH/bin
+install: install-local ## Install the binary (default: local GOPATH/bin)
+
+install-local: ## Install the binary into GOPATH/bin
+	@echo "Installing $(BINARY) to GOPATH/bin..."
 	$(GO) install .
+	@echo "✅ $(BINARY) installed successfully to GOPATH/bin"
+	@echo "Make sure $(shell go env GOPATH)/bin is in your PATH"
+
+install-system: build ## Install the binary to system-wide location (requires sudo)
+	@echo "Installing $(BINARY) to $(INSTALL_DIR)..."
+	@if [ ! -f "$(BUILD_DIR)/$(BINARY)" ]; then \
+		echo "Binary not found. Building first..."; \
+		$(MAKE) build; \
+	fi
+	sudo install -m 755 $(BUILD_DIR)/$(BINARY) $(INSTALL_DIR)/$(BINARY)
+	@echo "✅ $(BINARY) installed successfully to $(INSTALL_DIR)"
+	@echo "You can now use '$(BINARY)' from anywhere"
+
+uninstall: ## Remove installed binary from system
+	@echo "Removing $(BINARY) from system..."
+	@if [ -f "$(INSTALL_DIR)/$(BINARY)" ]; then \
+		sudo rm -f $(INSTALL_DIR)/$(BINARY); \
+		echo "✅ $(BINARY) removed from $(INSTALL_DIR)"; \
+	else \
+		echo "$(BINARY) not found in $(INSTALL_DIR)"; \
+	fi
+	@echo "Note: To remove from GOPATH/bin, run: rm $(shell go env GOPATH)/bin/$(BINARY)"
 
 deps: ## Download and verify module dependencies
 	$(GO) mod download

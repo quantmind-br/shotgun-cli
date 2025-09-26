@@ -15,16 +15,41 @@ A cross-platform CLI tool that generates LLM-optimized codebase contexts with bo
 
 ## Installation
 
-### From Source
+### Option 1: Install from Source (Go)
 ```bash
 go install github.com/quantmind-br/shotgun-cli@latest
 ```
 
-### Build from Repository
+### Option 2: Build and Install Locally
+```bash
+git clone https://github.com/quantmind-br/shotgun-cli
+cd shotgun-cli
+
+# Install to GOPATH/bin (user-local)
+make install
+
+# Or install system-wide (requires sudo)
+make install-system
+```
+
+### Option 3: Manual Build
 ```bash
 git clone https://github.com/quantmind-br/shotgun-cli
 cd shotgun-cli
 make build
+# Binary will be in build/shotgun-cli
+```
+
+### Installation Options
+
+- **`make install`**: Installs to `$GOPATH/bin` (default, user-local)
+- **`make install-local`**: Same as above, explicitly local installation
+- **`make install-system`**: Installs to `/usr/local/bin` (system-wide, requires sudo)
+- **`make uninstall`**: Removes system-wide installation
+
+### Verify Installation
+```bash
+shotgun-cli --version
 ```
 
 ## Usage
