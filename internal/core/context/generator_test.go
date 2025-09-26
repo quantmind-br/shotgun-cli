@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 )
 
 func TestNewDefaultContextGenerator(t *testing.T) {

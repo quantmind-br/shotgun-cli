@@ -1,4 +1,4 @@
-module github.com/shotgun-cli/shotgun-cli
+module github.com/quantmind-br/shotgun-cli
 
 go 1.24
 

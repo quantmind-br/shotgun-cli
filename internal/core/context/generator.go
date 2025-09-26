@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 )
 
 const (

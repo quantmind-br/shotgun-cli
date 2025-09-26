@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shotgun-cli/shotgun-cli/internal/core/ignore"
+	"github.com/quantmind-br/shotgun-cli/internal/core/ignore"
 	gitignorelib "github.com/sabhiram/go-gitignore"
 )
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/shotgun-cli/shotgun-cli/cmd"
+	"github.com/quantmind-br/shotgun-cli/cmd"
 )
 
 func main() {
