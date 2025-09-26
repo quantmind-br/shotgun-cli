@@ -1,0 +1,1 @@
+- Sempre que você terminar uma lista de tarefas, faça um commit.

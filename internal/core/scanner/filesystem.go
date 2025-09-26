@@ -61,7 +61,7 @@ func NewFileSystemScannerWithIgnore(ignoreRules []string) (*FileSystemScanner, e
 func NewFileSystemScannerWithMatcher(m PathMatcher) *FileSystemScanner {
 	return &FileSystemScanner{
 		pathMatcher:  m,
-		ignoreEngine: ignore.NewIgnoreEngine(),
+		ignoreEngine: nil, // Don't initialize ignore engine to give pathMatcher precedence
 	}
 }
 
@@ -396,6 +396,13 @@ func (fs *FileSystemScanner) sortChildren(node *FileNode) {
 
 // shouldIgnore checks if a path should be ignored based on all rules
 func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *ScanConfig) bool {
+	// Use the new ignore engine if available - it properly handles explicit includes/excludes
+	if fs.ignoreEngine != nil {
+		ignored, _ := fs.ignoreEngine.ShouldIgnore(relPath)
+		return ignored && !fs.shouldIncludeIgnored(config)
+	}
+	
+	// Fallback to old logic for backward compatibility when using pathMatcher
 	isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, isDir, config)
 	return (isGitignored || isCustomIgnored) && !fs.shouldIncludeIgnored(config)
 }

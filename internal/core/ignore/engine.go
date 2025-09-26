@@ -76,6 +76,11 @@ type LayeredIgnoreEngine struct {
 	customMatcher     *gitignore.GitIgnore
 	explicitExcludes  *gitignore.GitIgnore
 	explicitIncludes  *gitignore.GitIgnore
+	
+	// Store patterns for accumulation across calls
+	customPatterns         []string
+	explicitExcludePatterns []string
+	explicitIncludePatterns []string
 }
 
 // NewIgnoreEngine creates a new layered ignore engine with built-in patterns
@@ -190,22 +195,72 @@ func (e *LayeredIgnoreEngine) ShouldIgnore(relPath string) (bool, IgnoreReason) 
 
 // LoadGitignore loads .gitignore rules from the specified directory
 func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
-	gitignorePath := filepath.Join(rootDir, ".gitignore")
-
-	// Check if .gitignore exists
-	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
-		// No .gitignore file, use empty matcher
-		e.gitignoreMatcher = gitignore.CompileIgnoreLines()
+	// Collect all .gitignore files in the directory tree
+	var gitignoreFiles []string
+	
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		if !info.IsDir() && info.Name() == ".gitignore" {
+			gitignoreFiles = append(gitignoreFiles, path)
+		}
+		
 		return nil
-	}
-
-	// Load .gitignore file
-	matcher, err := gitignore.CompileIgnoreFile(gitignorePath)
+	})
+	
 	if err != nil {
 		return err
 	}
-
-	e.gitignoreMatcher = matcher
+	
+	// If no .gitignore files found, use empty matcher
+	if len(gitignoreFiles) == 0 {
+		e.gitignoreMatcher = gitignore.CompileIgnoreLines()
+		return nil
+	}
+	
+	// Collect all patterns from all .gitignore files
+	var allPatterns []string
+	
+	for _, gitignoreFile := range gitignoreFiles {
+		// Read the file content
+		content, err := os.ReadFile(gitignoreFile)
+		if err != nil {
+			continue // Skip files we can't read
+		}
+		
+		// Get relative path from root to adjust patterns
+		relDir, err := filepath.Rel(rootDir, filepath.Dir(gitignoreFile))
+		if err != nil {
+			continue
+		}
+		
+		// Split content into lines and process each pattern
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue // Skip empty lines and comments
+			}
+			
+			// If this is a nested .gitignore (not root), prefix patterns with relative path
+			if relDir != "." && relDir != "" {
+				// Adjust pattern for nested location
+				if strings.HasPrefix(line, "!") {
+					// Negation pattern - prefix after the !
+					line = "!" + filepath.Join(relDir, line[1:])
+				} else {
+					line = filepath.Join(relDir, line)
+				}
+			}
+			
+			allPatterns = append(allPatterns, line)
+		}
+	}
+	
+	// Compile all patterns into a single matcher
+	e.gitignoreMatcher = gitignore.CompileIgnoreLines(allPatterns...)
 	return nil
 }
 
@@ -215,19 +270,12 @@ func (e *LayeredIgnoreEngine) AddCustomRule(pattern string) error {
 		return nil
 	}
 
-	// Get existing patterns and add new one
-	patterns := []string{pattern}
-
-	// Create new matcher with the additional pattern
-	newMatcher := gitignore.CompileIgnoreLines(patterns...)
-
-	// Combine with existing custom matcher
-	if e.customMatcher != nil {
-		// We need to rebuild the matcher with all patterns
-		// This is a limitation of the go-gitignore library
-		e.customMatcher = newMatcher
-	} else {
-		e.customMatcher = newMatcher
+	// Add pattern to accumulated list
+	e.customPatterns = append(e.customPatterns, pattern)
+	
+	// Recompile matcher with all accumulated patterns
+	if len(e.customPatterns) > 0 {
+		e.customMatcher = gitignore.CompileIgnoreLines(e.customPatterns...)
 	}
 
 	return nil
@@ -262,8 +310,14 @@ func (e *LayeredIgnoreEngine) AddExplicitExclude(pattern string) error {
 		return nil
 	}
 
-	// Create new matcher with the pattern
-	e.explicitExcludes = gitignore.CompileIgnoreLines(pattern)
+	// Add pattern to accumulated list
+	e.explicitExcludePatterns = append(e.explicitExcludePatterns, pattern)
+	
+	// Recompile matcher with all accumulated patterns
+	if len(e.explicitExcludePatterns) > 0 {
+		e.explicitExcludes = gitignore.CompileIgnoreLines(e.explicitExcludePatterns...)
+	}
+
 	return nil
 }
 
@@ -273,8 +327,14 @@ func (e *LayeredIgnoreEngine) AddExplicitInclude(pattern string) error {
 		return nil
 	}
 
-	// Create new matcher with the pattern
-	e.explicitIncludes = gitignore.CompileIgnoreLines(pattern)
+	// Add pattern to accumulated list
+	e.explicitIncludePatterns = append(e.explicitIncludePatterns, pattern)
+	
+	// Recompile matcher with all accumulated patterns
+	if len(e.explicitIncludePatterns) > 0 {
+		e.explicitIncludes = gitignore.CompileIgnoreLines(e.explicitIncludePatterns...)
+	}
+
 	return nil
 }
 

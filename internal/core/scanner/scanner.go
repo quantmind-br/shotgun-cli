@@ -89,6 +89,9 @@ type ScanConfig struct {
 	Workers int `json:"workers"`
 
 	// IgnorePatterns contains custom ignore patterns
+	// NOTE: These patterns now use gitignore semantics instead of legacy glob patterns.
+	// Use gitignore-style patterns like "*.log", "build/", or "!important.txt" for negation.
+	// Legacy glob patterns may not work as expected.
 	IgnorePatterns []string `json:"ignore_patterns,omitempty"`
 }
 
