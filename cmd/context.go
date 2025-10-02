@@ -160,7 +160,10 @@ func generateContextHeadless(config GenerateConfig) error {
 		return fmt.Errorf("failed to scan files: %w", err)
 	}
 
-	// TODO: Extract file list from tree
+	// Mark all non-ignored files as selected for content generation
+	selectAllFiles(tree)
+
+	// Extract file list from tree
 	fileCount := countFilesInTree(tree)
 	log.Info().Int("files", fileCount).Msg("Files scanned")
 
@@ -290,6 +293,25 @@ func countFilesInTree(node *scanner.FileNode) int {
 		count += countFilesInTree(child)
 	}
 	return count
+}
+
+// selectAllFiles recursively marks all non-ignored files as selected
+func selectAllFiles(node *scanner.FileNode) {
+	if node == nil {
+		return
+	}
+
+	// Mark node as selected if it's not ignored
+	if !node.IsIgnored() {
+		node.Selected = true
+	}
+
+	// Recursively select children
+	if node.IsDir {
+		for _, child := range node.Children {
+			selectAllFiles(child)
+		}
+	}
 }
 
 func init() {
