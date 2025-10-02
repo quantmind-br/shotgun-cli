@@ -9,22 +9,22 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/viper"
+	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
-	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/spf13/viper"
 )
 
 const (
-	StepFileSelection = 1
+	StepFileSelection     = 1
 	StepTemplateSelection = 2
-	StepTaskInput = 3
-	StepRulesInput = 4
-	StepReview = 5
+	StepTaskInput         = 3
+	StepRulesInput        = 4
+	StepReview            = 5
 )
 
 type Progress struct {
@@ -48,8 +48,8 @@ type WizardModel struct {
 	height        int
 	showHelp      bool
 
-	rootPath     string
-	config       *scanner.ScanConfig
+	rootPath string
+	config   *scanner.ScanConfig
 
 	fileSelection     *screens.FileSelectionModel
 	templateSelection *screens.TemplateSelectionModel
@@ -106,23 +106,23 @@ type ClipboardCompleteMsg struct {
 
 // Internal state for iterative commands
 type scanState struct {
-	scanner     *scanner.FileSystemScanner
-	rootPath    string
-	config      *scanner.ScanConfig
-	progressCh  chan scanner.Progress
-	done        chan bool
-	started     bool
+	scanner    *scanner.FileSystemScanner
+	rootPath   string
+	config     *scanner.ScanConfig
+	progressCh chan scanner.Progress
+	done       chan bool
+	started    bool
 }
 
 type generateState struct {
-	generator     context.ContextGenerator
-	fileTree      *scanner.FileNode
-	config        *context.GenerateConfig
-	rootPath      string
-	progressCh    chan context.GenProgress
-	done          chan bool
-	started       bool
-	content       string
+	generator  context.ContextGenerator
+	fileTree   *scanner.FileNode
+	config     *context.GenerateConfig
+	rootPath   string
+	progressCh chan context.GenProgress
+	done       chan bool
+	started    bool
+	content    string
 }
 
 // New message types for iterative commands
@@ -140,13 +140,12 @@ type startGenerationMsg struct {
 	rootPath      string
 }
 
-
 func NewWizard(rootPath string, config *scanner.ScanConfig) *WizardModel {
 	return &WizardModel{
-		step:          StepFileSelection,
-		selectedFiles: make(map[string]bool),
-		rootPath:      rootPath,
-		config:        config,
+		step:              StepFileSelection,
+		selectedFiles:     make(map[string]bool),
+		rootPath:          rootPath,
+		config:            config,
 		progressComponent: components.NewProgress(),
 	}
 }
@@ -183,11 +182,14 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Always handle quit commands
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "ctrl+q":
 			return m, tea.Quit
-		case "ctrl+q":
-			return m, tea.Quit
+		}
+
+		// Process navigation shortcuts ALWAYS (regardless of focus state)
+		switch msg.String() {
 		case "f8", "ctrl+pgdn":
 			if m.step < StepReview {
 				if m.canAdvanceStep() {
@@ -208,6 +210,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f1":
 			m.showHelp = !m.showHelp
 		default:
+			// For all other keys, pass to the current step
 			cmd = m.handleStepInput(msg)
 			cmds = append(cmds, cmd)
 		}
@@ -263,10 +266,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.progress.Visible = false
 
 	case ClipboardCompleteMsg:
-		if !msg.Success && msg.Err != nil {
-			m.error = fmt.Errorf("clipboard copy failed: %v", msg.Err)
-		}
-		// Update review screen with generation status
+		// Don't set error, just log the clipboard failure
+		// Update review screen with generation status (will show warning if failed)
 		if m.review != nil && m.generatedFilePath != "" {
 			m.review.SetGenerated(m.generatedFilePath, msg.Success)
 		}
@@ -281,12 +282,12 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle iterative command messages
 	case startScanMsg:
 		m.scanState = &scanState{
-			scanner:  scanner.NewFileSystemScanner(),
-			rootPath: msg.rootPath,
-			config:   msg.config,
+			scanner:    scanner.NewFileSystemScanner(),
+			rootPath:   msg.rootPath,
+			config:     msg.config,
 			progressCh: make(chan scanner.Progress, 100),
-			done:     make(chan bool),
-			started:  false,
+			done:       make(chan bool),
+			started:    false,
 		}
 		cmd = m.iterativeScanCmd()
 		cmds = append(cmds, cmd)
@@ -297,12 +298,12 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fileTree:  msg.fileTree,
 			config: &context.GenerateConfig{
 				TemplateVars: map[string]string{
-					"TASK":          msg.taskDesc,
-					"RULES":         msg.rules,
+					"TASK":           msg.taskDesc,
+					"RULES":          msg.rules,
 					"FILE_STRUCTURE": "",
 					"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 				},
-				Template: msg.template.Name,
+				Template: msg.template.Content,
 			},
 			rootPath:   msg.rootPath,
 			progressCh: make(chan context.GenProgress, 100),
