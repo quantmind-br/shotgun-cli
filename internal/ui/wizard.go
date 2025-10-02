@@ -293,6 +293,9 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case startGenerationMsg:
+		// Mark nodes as selected based on selectedFiles map
+		markNodesAsSelected(msg.fileTree, msg.selectedFiles)
+
 		m.generateState = &generateState{
 			generator: context.NewDefaultContextGenerator(),
 			fileTree:  msg.fileTree,
@@ -715,6 +718,25 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 		default:
 			// No progress yet, re-enqueue
 			return m.iterativeGenerateCmd()()
+		}
+	}
+}
+
+// markNodesAsSelected marks FileNode.Selected flag based on selectedFiles map
+func markNodesAsSelected(node *scanner.FileNode, selectedFiles map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	// Mark this node as selected if it's in the selectedFiles map
+	if !node.IsDir && selectedFiles[node.Path] {
+		node.Selected = true
+	}
+
+	// Recursively mark children
+	if node.IsDir {
+		for _, child := range node.Children {
+			markNodesAsSelected(child, selectedFiles)
 		}
 	}
 }
