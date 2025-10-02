@@ -90,7 +90,7 @@ func NewIgnoreEngine() *LayeredIgnoreEngine {
 	// Initialize built-in patterns
 	builtInPatterns := []string{
 		// Shotgun-specific patterns
-		"shotgun-prompt-*.md",
+		"shotgun-prompt*.md",
 
 		// Version control
 		".git/",

@@ -68,7 +68,7 @@ func TestLayeredIgnoreEngine_BuiltInPatterns(t *testing.T) {
 		// Shotgun-specific patterns
 		{"shotgun-prompt-test.md", true, IgnoreReasonBuiltIn, "shotgun-prompt file"},
 		{"docs/shotgun-prompt-feature.md", true, IgnoreReasonBuiltIn, "shotgun-prompt in subdirectory"},
-		{"shotgun-prompt.md", false, IgnoreReasonNone, "shotgun-prompt without suffix"},
+		{"shotgun-prompt.md", true, IgnoreReasonBuiltIn, "shotgun-prompt without suffix"},
 
 		// Version control
 		{".git/config", true, IgnoreReasonBuiltIn, "git directory"},
