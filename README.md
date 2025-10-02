@@ -5,8 +5,13 @@ A cross-platform CLI tool that generates LLM-optimized codebase contexts with bo
 ## Features
 
 - **Interactive TUI Wizard**: 5-step guided interface for easy context generation
+  - Vim-style navigation support (hjkl keys)
+  - Live file filtering with `/` key
+  - Directory tree expansion and selection
+  - F5 rescan for real-time updates
 - **Headless CLI Mode**: Command-line interface for automation and scripting
 - **Smart File Filtering**: Gitignore-style pattern matching with include/exclude support
+- **Enhanced File Structure**: Generates both tree view and complete file contents in XML-like blocks
 - **Size Management**: Configurable size limits with enforcement options
 - **Multi-format Output**: Markdown output with optional clipboard integration
 - **Cross-platform**: Works on Linux, macOS, and Windows
@@ -66,8 +71,43 @@ The wizard guides you through:
 1. **File Selection**: Choose which files to include in the context
 2. **Template Selection**: Pick from built-in prompt templates
 3. **Task Input**: Define your specific task or question
-4. **Rules Input**: Add custom rules or constraints
+4. **Rules Input**: Add custom rules or constraints (optional)
 5. **Review & Generate**: Preview and generate the final context
+
+#### TUI Keyboard Shortcuts
+
+**Global Navigation:**
+- `F8` / `Ctrl+PgDn`: Next step / Generate (on review step)
+- `F10` / `Ctrl+PgUp`: Previous step
+- `F1`: Toggle help screen
+- `Ctrl+Q` / `Ctrl+C`: Quit application
+
+**File Selection Step:**
+- `↑` / `↓` or `k` / `j`: Navigate up/down (Vim-style supported)
+- `←` / `→` or `h` / `l`: Collapse/expand directories
+- `Space`: Toggle file selection
+- `d`: Toggle directory selection (select/deselect all files in directory)
+- `i`: Toggle display of ignored files
+- `/`: Enter filter mode (type to filter, `Enter` to apply, `Esc` to cancel)
+- `Ctrl+C`: Clear active filter
+- `F5`: Rescan directory (refresh file tree)
+
+**Template/Task/Rules Steps:**
+- `↑` / `↓`: Navigate options (template selection)
+- `Enter`: Confirm selection
+- `Esc`: Toggle focus (for text input fields)
+
+### Output Format
+
+The generated context includes:
+- **File Tree Structure**: A hierarchical view of selected files and directories
+- **File Content Blocks**: Full content of selected files in XML-like format:
+  ```xml
+  <file path="relative/path/to/file.go">
+  // File content here
+  </file>
+  ```
+- **Template Variables**: Integrated task description, rules, and metadata
 
 ### Headless CLI Mode
 
