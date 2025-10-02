@@ -94,6 +94,9 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(root *scanner.FileNode,
 		return "", fmt.Errorf("failed to collect file contents: %w", err)
 	}
 
+	// Combine tree structure with file content blocks
+	fileStructureComplete := g.buildCompleteFileStructure(fileStructure, files)
+
 	if progress != nil {
 		progress(GenProgress{Stage: "template_rendering", Message: "Rendering template..."})
 	}
@@ -101,7 +104,7 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(root *scanner.FileNode,
 	contextData := ContextData{
 		Task:          config.TemplateVars["TASK"],
 		Rules:         config.TemplateVars["RULES"],
-		FileStructure: fileStructure,
+		FileStructure: fileStructureComplete,
 		Files:         files,
 		CurrentDate:   time.Now().Format("2006-01-02 15:04:05"),
 		Config:        config,
@@ -164,6 +167,24 @@ func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 
 func (g *DefaultContextGenerator) collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileContent, error) {
 	return collectFileContents(root, config)
+}
+
+// buildCompleteFileStructure combines ASCII tree with file content blocks
+func (g *DefaultContextGenerator) buildCompleteFileStructure(tree string, files []FileContent) string {
+	var builder strings.Builder
+
+	// First part: ASCII tree structure
+	builder.WriteString(tree)
+
+	// Add separator if there are files
+	if len(files) > 0 {
+		builder.WriteString("\n")
+
+		// Second part: File content blocks in XML-like format
+		builder.WriteString(renderFileContentBlocks(files))
+	}
+
+	return builder.String()
 }
 
 // convertTemplateVariables converts {VARIABLE} syntax to {{.Variable}} syntax for Go templates

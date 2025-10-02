@@ -272,3 +272,20 @@ func shouldSkipFile(node *scanner.FileNode, config GenerateConfig) bool {
 
 	return false
 }
+
+// renderFileContentBlocks renders file contents in XML-like format
+func renderFileContentBlocks(files []FileContent) string {
+	var builder strings.Builder
+
+	for _, file := range files {
+		builder.WriteString(fmt.Sprintf("<file path=\"%s\">\n", file.RelPath))
+		builder.WriteString(file.Content)
+		// Ensure content ends with newline before closing tag
+		if len(file.Content) > 0 && !strings.HasSuffix(file.Content, "\n") {
+			builder.WriteString("\n")
+		}
+		builder.WriteString("</file>\n")
+	}
+
+	return builder.String()
+}
