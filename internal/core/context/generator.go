@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
@@ -111,6 +112,9 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(root *scanner.FileNode,
 		template = g.templateRenderer.getDefaultTemplate()
 	}
 
+	// Convert {VARIABLE} syntax to {{.Variable}} syntax for Go templates
+	template = convertTemplateVariables(template)
+
 	result, err := g.templateRenderer.RenderTemplate(template, contextData)
 	if err != nil {
 		return "", fmt.Errorf("failed to render template: %w", err)
@@ -160,4 +164,22 @@ func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 
 func (g *DefaultContextGenerator) collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileContent, error) {
 	return collectFileContents(root, config)
+}
+
+// convertTemplateVariables converts {VARIABLE} syntax to {{.Variable}} syntax for Go templates
+func convertTemplateVariables(template string) string {
+	// Map of variable conversions from {UPPERCASE} to {{.TitleCase}}
+	conversions := map[string]string{
+		"{TASK}":           "{{.Task}}",
+		"{RULES}":          "{{.Rules}}",
+		"{FILE_STRUCTURE}": "{{.FileStructure}}",
+		"{CURRENT_DATE}":   "{{.CurrentDate}}",
+	}
+
+	result := template
+	for old, new := range conversions {
+		result = strings.Replace(result, old, new, -1)
+	}
+
+	return result
 }
