@@ -95,6 +95,11 @@ Examples:
 		}
 		fmt.Printf("📁 Config file: %s\n", configPath)
 
+		// Add helpful message for template.custom-path
+		if key == "template.custom-path" && value != "" {
+			fmt.Println("\n💡 The custom template directory will be created automatically on first use.")
+		}
+
 		return nil
 	},
 }
@@ -258,9 +263,25 @@ func validateConfigValue(key, value string) error {
 
 	case "template.custom-path":
 		// Any string value is acceptable, including empty
+		// Path doesn't need to exist - it will be created on first use
 		if value != "" {
-			if _, err := os.Stat(value); os.IsNotExist(err) {
-				return fmt.Errorf("path does not exist: %s", value)
+			// Expand home directory if needed
+			if strings.HasPrefix(value, "~/") {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("failed to expand home directory: %w", err)
+				}
+				value = filepath.Join(home, value[2:])
+			}
+
+			// Validate that parent directory is accessible
+			parentDir := filepath.Dir(value)
+			if parentDir != "." && parentDir != "/" {
+				if info, err := os.Stat(parentDir); err == nil {
+					if !info.IsDir() {
+						return fmt.Errorf("parent path exists but is not a directory: %s", parentDir)
+					}
+				}
 			}
 		}
 	}

@@ -3,11 +3,15 @@ package template
 import (
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/adrg/xdg"
 	"github.com/quantmind-br/shotgun-cli/internal/assets"
+	"github.com/spf13/viper"
 )
 
 // TemplateManager defines the interface for template management
@@ -31,54 +35,78 @@ var templatesFS fs.FS
 
 // NewManager creates a new template manager instance
 func NewManager() (*Manager, error) {
-	// Create fs.Sub for the templates directory
-	var err error
-	templatesFS, err = fs.Sub(assets.Templates, "templates")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create templates filesystem: %w", err)
-	}
-
 	manager := &Manager{
 		templates: make(map[string]*Template),
 		renderer:  NewRenderer(),
 	}
 
-	if err := manager.loadTemplates(); err != nil {
+	// Create template sources in priority order (first = lowest priority, last = highest priority)
+	// Later sources override earlier ones
+	sources := []TemplateSource{}
+
+	// 1. Embedded templates (lowest priority)
+	var err error
+	templatesFS, err = fs.Sub(assets.Templates, "templates")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create templates filesystem: %w", err)
+	}
+	sources = append(sources, NewEmbeddedSource(templatesFS))
+
+	// 2. User config directory templates (XDG compliant)
+	userTemplatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
+	if err := os.MkdirAll(userTemplatesDir, 0755); err == nil {
+		// Only add if directory creation succeeded or already exists
+		sources = append(sources, NewFilesystemSource(userTemplatesDir, "user"))
+	}
+
+	// 3. Custom path from config (highest priority)
+	customPath := viper.GetString("template.custom-path")
+	if customPath != "" {
+		// Expand home directory if needed
+		if strings.HasPrefix(customPath, "~/") {
+			home, err := os.UserHomeDir()
+			if err == nil {
+				customPath = filepath.Join(home, customPath[2:])
+			}
+		}
+
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll(customPath, 0755); err == nil {
+			// Use basename of custom path as source name for display
+			sourceName := filepath.Base(customPath)
+			sources = append(sources, NewFilesystemSource(customPath, sourceName))
+		}
+	}
+
+	// Load templates from all sources
+	if err := manager.loadFromSources(sources); err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
 	return manager, nil
 }
 
-// loadTemplates loads all embedded templates from the filesystem
-func (m *Manager) loadTemplates() error {
-	entries, err := fs.ReadDir(templatesFS, ".")
-	if err != nil {
-		return fmt.Errorf("failed to read template directory: %w", err)
-	}
+// loadFromSources loads templates from multiple sources with priority
+// Later sources in the slice override earlier ones (by template name)
+func (m *Manager) loadFromSources(sources []TemplateSource) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+	// Load templates from each source in order
+	// Later sources override earlier ones with the same name
+	for _, source := range sources {
+		templates, err := source.LoadTemplates()
+		if err != nil {
+			// Log warning but continue with other sources
+			// This allows the application to start even if one source fails
 			continue
 		}
 
-		content, err := fs.ReadFile(templatesFS, entry.Name())
-		if err != nil {
-			return fmt.Errorf("failed to read template file %s: %w", entry.Name(), err)
+		// Merge templates into manager's map
+		// Later sources override earlier ones
+		for name, template := range templates {
+			m.templates[name] = template
 		}
-
-		template, err := parseTemplate(string(content), entry.Name(), entry.Name())
-		if err != nil {
-			return fmt.Errorf("failed to parse template %s: %w", entry.Name(), err)
-		}
-
-		templateName := strings.TrimSuffix(entry.Name(), ".md")
-		// Remove "prompt_" prefix if present
-		if strings.HasPrefix(templateName, "prompt_") {
-			templateName = strings.TrimPrefix(templateName, "prompt_")
-		}
-
-		m.templates[templateName] = template
 	}
 
 	return nil

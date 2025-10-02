@@ -13,7 +13,8 @@ type Template struct {
 	Content      string   `json:"content"`
 	RequiredVars []string `json:"required_vars"`
 	FilePath     string   `json:"file_path"`
-	IsEmbedded   bool     `json:"is_embedded"`
+	IsEmbedded   bool     `json:"is_embedded"` // true if from embedded filesystem
+	Source       string   `json:"source"`       // "embedded", "user", or custom path
 }
 
 // Common template variable constants

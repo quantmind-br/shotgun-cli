@@ -39,7 +39,7 @@ shotgun-cli is a cross-platform CLI tool that generates LLM-optimized codebase c
 All commands use Cobra framework with Viper configuration:
 - **root.go**: Main entry point - launches TUI wizard when no args provided
 - **context.go**: `context generate` command for headless context generation
-- **template.go**: `template list/render` commands for template management
+- **template.go**: `template list/render/import/export` commands for template management
 - **diff.go**: `diff split` command for splitting large diff files
 - **config.go**: `config show/set` commands for configuration management
 - **completion.go**: Shell completion generation
@@ -48,7 +48,28 @@ All commands use Cobra framework with Viper configuration:
 - **scanner/**: File system scanning with gitignore-style pattern matching
 - **context/**: Context generation logic (creates LLM-optimized text output)
 - **template/**: Template rendering with variable substitution
+  - Multi-source template loading: embedded, user directory, custom paths
+  - Template priority: custom path > user directory (~/.config/shotgun-cli/templates/) > embedded
+  - XDG Base Directory compliance for user templates
+  - Import/export commands for template sharing
 - **ignore/**: Gitignore pattern matching using `github.com/sabhiram/go-gitignore`
+
+### Custom Templates
+Users can extend the application with custom templates without rebuilding:
+
+**Template Locations (in priority order):**
+1. Custom path from config (`template.custom-path`) - highest priority
+2. User directory (`~/.config/shotgun-cli/templates/`) - XDG compliant
+3. Embedded templates (shipped with the application) - fallback
+
+**Template Management:**
+- `shotgun-cli template list` - shows all templates with their source (embedded/user/custom)
+- `shotgun-cli template import <file> [name]` - import template to user directory
+- `shotgun-cli template export <name> <file>` - export template to filesystem
+- `shotgun-cli config set template.custom-path /path` - set custom template directory
+
+**Template Override Behavior:**
+Custom templates with the same name as embedded templates will override them. This allows users to customize built-in templates while keeping the originals as fallback.
 
 ### TUI Components (internal/ui/)
 The wizard uses Bubble Tea's Elm Architecture (Model-Update-View):

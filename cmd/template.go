@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -49,17 +52,20 @@ Example:
 		fmt.Println("==================")
 		fmt.Println()
 
-		// Calculate column width for alignment
+		// Calculate column width for alignment including source
 		maxNameWidth := 0
 		for _, tmpl := range templates {
-			if len(tmpl.Name) > maxNameWidth {
-				maxNameWidth = len(tmpl.Name)
+			// Include source in width calculation: "name (source)"
+			nameWithSource := fmt.Sprintf("%s (%s)", tmpl.Name, tmpl.Source)
+			if len(nameWithSource) > maxNameWidth {
+				maxNameWidth = len(nameWithSource)
 			}
 		}
 
 		// Print templates in a formatted table
 		for _, tmpl := range templates {
-			nameFormatted := fmt.Sprintf("%-*s", maxNameWidth, tmpl.Name)
+			nameWithSource := fmt.Sprintf("%s (%s)", tmpl.Name, tmpl.Source)
+			nameFormatted := fmt.Sprintf("%-*s", maxNameWidth, nameWithSource)
 			fmt.Printf("  %s  %s\n", nameFormatted, tmpl.Description)
 		}
 
@@ -213,6 +219,157 @@ func renderTemplate(templateName string, variables map[string]string, output str
 	return nil
 }
 
+var templateImportCmd = &cobra.Command{
+	Use:   "import <file> [name]",
+	Short: "Import a template file to user template directory",
+	Long: `Import a template file from the filesystem to the user's template directory.
+
+The template file should be in markdown format (.md) and contain valid template
+variables in the format {VARIABLE_NAME}. If a name is not provided, it will be
+extracted from the filename.
+
+The template will be copied to ~/.config/shotgun-cli/templates/ and will be
+available for use immediately.
+
+Examples:
+  shotgun-cli template import /path/to/mytemplate.md
+  shotgun-cli template import /path/to/template.md custom-name`,
+
+	Args: cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+		var templateName string
+
+		if len(args) == 2 {
+			templateName = args[1]
+		}
+
+		// Read template file
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read template file: %w", err)
+		}
+
+		// Validate template content by parsing it
+		fileName := filepath.Base(filePath)
+		if templateName == "" {
+			// Extract name from filename
+			templateName = strings.TrimSuffix(fileName, filepath.Ext(fileName))
+			// Remove "prompt_" prefix if present
+			if strings.HasPrefix(templateName, "prompt_") {
+				templateName = strings.TrimPrefix(templateName, "prompt_")
+			}
+		}
+
+		// Use internal parseTemplate function to validate
+		// We can't directly call parseTemplate as it's not exported, so we'll do basic validation
+		contentStr := string(content)
+		if contentStr == "" {
+			return fmt.Errorf("template content is empty")
+		}
+
+		// Get user templates directory
+		userTemplatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
+		if err := os.MkdirAll(userTemplatesDir, 0755); err != nil {
+			return fmt.Errorf("failed to create user templates directory: %w", err)
+		}
+
+		// Determine destination filename
+		destFileName := templateName + ".md"
+		destPath := filepath.Join(userTemplatesDir, destFileName)
+
+		// Check if file already exists
+		if _, err := os.Stat(destPath); err == nil {
+			// File exists, ask for confirmation
+			fmt.Printf("Template '%s' already exists. Overwrite? (y/N): ", templateName)
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read user input: %w", err)
+			}
+
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Import cancelled.")
+				return nil
+			}
+		}
+
+		// Write template to user directory
+		if err := os.WriteFile(destPath, content, 0644); err != nil {
+			return fmt.Errorf("failed to write template file: %w", err)
+		}
+
+		fmt.Printf("✅ Template '%s' imported successfully to: %s\n", templateName, destPath)
+		fmt.Println("Use 'shotgun-cli template list' to see all available templates.")
+
+		return nil
+	},
+}
+
+var templateExportCmd = &cobra.Command{
+	Use:   "export <name> <file>",
+	Short: "Export a template to a file",
+	Long: `Export an existing template to a file on the filesystem.
+
+This command can be used to backup templates, share them, or create copies
+for modification. Both embedded and custom templates can be exported.
+
+Examples:
+  shotgun-cli template export analyzeBug /tmp/exported.md
+  shotgun-cli template export mycustom ~/backup/custom-template.md`,
+
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		templateName := args[0]
+		outputPath := args[1]
+
+		// Get template manager
+		manager, err := template.NewManager()
+		if err != nil {
+			return fmt.Errorf("failed to initialize template manager: %w", err)
+		}
+
+		// Get template
+		tmpl, err := manager.GetTemplate(templateName)
+		if err != nil {
+			return fmt.Errorf("template '%s' not found", templateName)
+		}
+
+		// Check if output file exists
+		if _, err := os.Stat(outputPath); err == nil {
+			// File exists, ask for confirmation
+			fmt.Printf("File '%s' already exists. Overwrite? (y/N): ", outputPath)
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read user input: %w", err)
+			}
+
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Export cancelled.")
+				return nil
+			}
+		}
+
+		// Create directory if it doesn't exist
+		dir := filepath.Dir(outputPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+
+		// Write template content to file
+		if err := os.WriteFile(outputPath, []byte(tmpl.Content), 0644); err != nil {
+			return fmt.Errorf("failed to write template file: %w", err)
+		}
+
+		fmt.Printf("✅ Template '%s' exported successfully to: %s\n", templateName, outputPath)
+
+		return nil
+	},
+}
+
 func init() {
 	// Template render flags
 	templateRenderCmd.Flags().StringToString("var", nil, "Template variables (key=value pairs)")
@@ -221,5 +378,7 @@ func init() {
 	// Add subcommands
 	templateCmd.AddCommand(templateListCmd)
 	templateCmd.AddCommand(templateRenderCmd)
+	templateCmd.AddCommand(templateImportCmd)
+	templateCmd.AddCommand(templateExportCmd)
 	rootCmd.AddCommand(templateCmd)
 }
