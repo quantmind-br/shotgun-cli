@@ -6,16 +6,17 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 const maxRulesLength = 1500
 
 type RulesInputModel struct {
-	textarea   textarea.Model
-	width      int
-	height     int
-	focused    bool
+	textarea textarea.Model
+	width    int
+	height   int
+	focused  bool
 }
 
 func NewRulesInput(initialValue string) *RulesInputModel {
@@ -24,6 +25,23 @@ func NewRulesInput(initialValue string) *RulesInputModel {
 	ta.Focus()
 	ta.CharLimit = maxRulesLength
 	ta.SetValue(initialValue)
+	ta.ShowLineNumbers = false // Disable line numbers for cleaner display
+
+	// Configure textarea styles for better visibility on dark backgrounds
+	textColor := lipgloss.Color("#ECEFF4")        // Light gray/white for text
+	cursorColor := lipgloss.Color("#A3BE8C")      // Green for cursor
+	placeholderColor := lipgloss.Color("#5C7E8C") // Muted color for placeholder
+
+	// Modify existing styles instead of replacing them
+	ta.FocusedStyle.Text = ta.FocusedStyle.Text.Foreground(textColor).UnsetBackground()
+	ta.FocusedStyle.Placeholder = ta.FocusedStyle.Placeholder.Foreground(placeholderColor).UnsetBackground()
+	ta.FocusedStyle.Base = ta.FocusedStyle.Base.Foreground(textColor).UnsetBackground()
+	ta.FocusedStyle.CursorLine = ta.FocusedStyle.CursorLine.UnsetBackground()
+	ta.BlurredStyle.Text = ta.BlurredStyle.Text.Foreground(textColor).UnsetBackground()
+	ta.BlurredStyle.Placeholder = ta.BlurredStyle.Placeholder.Foreground(placeholderColor).UnsetBackground()
+	ta.BlurredStyle.Base = ta.BlurredStyle.Base.Foreground(textColor).UnsetBackground()
+	ta.Cursor.Style = ta.Cursor.Style.Foreground(cursorColor)
+	ta.Prompt = "" // Remove prompt to avoid clutter
 
 	return &RulesInputModel{
 		textarea: ta,
@@ -54,8 +72,6 @@ func (m *RulesInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg.String() {
-	case "ctrl+c":
-		return m.textarea.Value(), tea.Quit
 	case "esc":
 		if m.textarea.Focused() {
 			m.textarea.Blur()
@@ -121,4 +137,8 @@ func (m *RulesInputModel) GetValue() string {
 func (m *RulesInputModel) IsValid() bool {
 	// Rules are always valid since they're optional
 	return true
+}
+
+func (m *RulesInputModel) IsFocused() bool {
+	return m.textarea.Focused()
 }

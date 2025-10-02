@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const DefaultClipboardTimeout = 10 * time.Second
+const DefaultClipboardTimeout = 2 * time.Second // Reduced timeout to avoid hanging
 
 type ClipboardManager interface {
 	Copy(content string) error

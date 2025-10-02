@@ -195,11 +195,13 @@ func TestWizardClipboardFailureStored(t *testing.T) {
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
 	wizard.review = screens.NewReview(map[string]bool{}, nil, "", "")
+	wizard.generatedFilePath = "/tmp/test.md"
 
 	model, _ := wizard.Update(ClipboardCompleteMsg{Success: false, Err: fmt.Errorf("copy failed")})
 	wizard = model.(*WizardModel)
-	if wizard.error == nil {
-		t.Fatalf("expected clipboard error to be surfaced")
+	// Clipboard failure should not set error anymore (it just updates review screen)
+	if wizard.error != nil {
+		t.Fatalf("clipboard error should not be stored in model.error, got: %v", wizard.error)
 	}
 }
 

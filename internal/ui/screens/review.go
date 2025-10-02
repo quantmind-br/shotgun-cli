@@ -10,16 +10,16 @@ import (
 )
 
 type ReviewModel struct {
-	selectedFiles  map[string]bool
-	template       *template.Template
-	taskDesc       string
-	rules          string
-	width          int
-	height         int
-	generated      bool
-	generatedPath  string
+	selectedFiles   map[string]bool
+	template        *template.Template
+	taskDesc        string
+	rules           string
+	width           int
+	height          int
+	generated       bool
+	generatedPath   string
 	clipboardCopied bool
-	estimatedSize  string
+	estimatedSize   string
 }
 
 func NewReview(selectedFiles map[string]bool, template *template.Template, taskDesc, rules string) *ReviewModel {
@@ -128,7 +128,9 @@ func (m *ReviewModel) View() string {
 		if m.clipboardCopied {
 			content.WriteString(styles.SuccessStyle.Render("📋 Copied to clipboard"))
 		} else {
-			content.WriteString(styles.ErrorStyle.Render("⚠ Failed to copy to clipboard"))
+			content.WriteString(styles.HelpStyle.Render("📋 Clipboard copy failed (file saved successfully)"))
+			content.WriteString("\n")
+			content.WriteString(styles.HelpStyle.Render("   Tip: Copy manually from the file or use 'cat " + m.generatedPath + " | wl-copy'"))
 		}
 		content.WriteString("\n\n")
 
