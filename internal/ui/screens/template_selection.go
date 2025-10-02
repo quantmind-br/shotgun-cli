@@ -10,12 +10,13 @@ import (
 )
 
 type TemplateSelectionModel struct {
-	templates     []*template.Template
-	cursor        int
-	width         int
-	height        int
-	loading       bool
-	err           error
+	templates        []*template.Template
+	cursor           int
+	selectedTemplate *template.Template
+	width            int
+	height           int
+	loading          bool
+	err              error
 }
 
 type TemplatesLoadedMsg struct {
@@ -73,6 +74,7 @@ func (m *TemplateSelectionModel) Update(msg tea.KeyMsg) (*template.Template, tea
 		}
 	case "enter", " ":
 		if m.cursor >= 0 && m.cursor < len(m.templates) {
+			m.selectedTemplate = m.templates[m.cursor]
 			return m.templates[m.cursor], nil
 		}
 	case "home":
@@ -139,15 +141,28 @@ func (m *TemplateSelectionModel) View() string {
 	// Render template list
 	for i := startIdx; i < endIdx && i < len(m.templates); i++ {
 		template := m.templates[i]
-		prefix := "  "
+
+		// Check if this template is selected
+		isSelected := m.selectedTemplate != nil && m.selectedTemplate.Name == template.Name
+
+		// Build the line with visual indicators
+		var line string
 		if i == m.cursor {
-			prefix = styles.SelectedStyle.Render("▶ ")
+			// Current cursor position - highlighted background
+			prefix := "▶ "
+			suffix := ""
+			if isSelected {
+				suffix = " " + styles.SuccessStyle.Render("✓")
+			}
+			line = styles.SelectedStyle.Render(prefix+template.Name) + suffix
+		} else if isSelected {
+			// Previously selected but not current cursor position
+			line = "  " + template.Name + " " + styles.SuccessStyle.Render("✓")
+		} else {
+			// Regular unselected item
+			line = "  " + template.Name
 		}
 
-		line := fmt.Sprintf("%s%s", prefix, template.Name)
-		if i == m.cursor {
-			line = styles.SelectedStyle.Render(line)
-		}
 		content.WriteString(line)
 		content.WriteString("\n")
 	}
