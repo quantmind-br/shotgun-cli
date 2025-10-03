@@ -105,28 +105,52 @@ func (m *TemplateSelectionModel) HandleMessage(msg tea.Msg) tea.Cmd {
 func (m *TemplateSelectionModel) View() string {
 	header := styles.RenderHeader(2, "Choose Template")
 
-	if m.loading {
-		return header + "\n\nLoading templates..."
-	}
-
-	if m.err != nil {
-		return header + "\n\n" + styles.RenderError(fmt.Sprintf("Error loading templates: %v", m.err))
-	}
-
-	if len(m.templates) == 0 {
-		return header + "\n\nNo templates found."
+	if earlyReturn := m.checkEarlyReturns(header); earlyReturn != "" {
+		return earlyReturn
 	}
 
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Calculate available height for list
-	availableHeight := m.height - 8 // Reserve space for header, footer, and description
+	m.renderTemplateList(&content)
+	m.renderTemplateDetails(&content)
+
+	footer := m.renderFooter()
+	content.WriteString("\n")
+	content.WriteString(footer)
+
+	return content.String()
+}
+
+func (m *TemplateSelectionModel) checkEarlyReturns(header string) string {
+	if m.loading {
+		return header + "\n\nLoading templates..."
+	}
+	if m.err != nil {
+		return header + "\n\n" + styles.RenderError(fmt.Sprintf("Error loading templates: %v", m.err))
+	}
+	if len(m.templates) == 0 {
+		return header + "\n\nNo templates found."
+	}
+	return ""
+}
+
+func (m *TemplateSelectionModel) renderTemplateList(content *strings.Builder) {
+	startIdx, endIdx := m.calculateScrollBounds()
+
+	for i := startIdx; i < endIdx && i < len(m.templates); i++ {
+		line := m.formatTemplateLine(i)
+		content.WriteString(line)
+		content.WriteString("\n")
+	}
+}
+
+func (m *TemplateSelectionModel) calculateScrollBounds() (int, int) {
+	availableHeight := m.height - 8
 	startIdx := 0
 	endIdx := len(m.templates)
 
-	// Implement scrolling if needed
 	if len(m.templates) > availableHeight {
 		if m.cursor < availableHeight/2 {
 			endIdx = availableHeight
@@ -138,55 +162,53 @@ func (m *TemplateSelectionModel) View() string {
 		}
 	}
 
-	// Render template list
-	for i := startIdx; i < endIdx && i < len(m.templates); i++ {
-		template := m.templates[i]
+	return startIdx, endIdx
+}
 
-		// Check if this template is selected
-		isSelected := m.selectedTemplate != nil && m.selectedTemplate.Name == template.Name
+func (m *TemplateSelectionModel) formatTemplateLine(i int) string {
+	template := m.templates[i]
+	isSelected := m.selectedTemplate != nil && m.selectedTemplate.Name == template.Name
 
-		// Build the line with visual indicators
-		var line string
-		if i == m.cursor {
-			// Current cursor position - highlighted background
-			prefix := "▶ "
-			suffix := ""
-			if isSelected {
-				suffix = " " + styles.SuccessStyle.Render("✓")
-			}
-			line = styles.SelectedStyle.Render(prefix+template.Name) + suffix
-		} else if isSelected {
-			// Previously selected but not current cursor position
-			line = "  " + template.Name + " " + styles.SuccessStyle.Render("✓")
-		} else {
-			// Regular unselected item
-			line = "  " + template.Name
+	if i == m.cursor {
+		prefix := "▶ "
+		suffix := ""
+		if isSelected {
+			suffix = " " + styles.SuccessStyle.Render("✓")
 		}
-
-		content.WriteString(line)
-		content.WriteString("\n")
+		return styles.SelectedStyle.Render(prefix+template.Name) + suffix
 	}
 
-	// Show selected template description
-	if m.cursor >= 0 && m.cursor < len(m.templates) {
-		selectedTemplate := m.templates[m.cursor]
-		content.WriteString("\n")
-		content.WriteString(styles.TitleStyle.Render("Description:"))
-		content.WriteString("\n")
-		content.WriteString(selectedTemplate.Description)
-		content.WriteString("\n")
-
-		if len(selectedTemplate.RequiredVars) > 0 {
-			content.WriteString("\n")
-			content.WriteString(styles.TitleStyle.Render("Required Variables:"))
-			content.WriteString("\n")
-			for _, variable := range selectedTemplate.RequiredVars {
-				content.WriteString(fmt.Sprintf("  • %s", variable))
-				content.WriteString("\n")
-			}
-		}
+	if isSelected {
+		return "  " + template.Name + " " + styles.SuccessStyle.Render("✓")
 	}
 
+	return "  " + template.Name
+}
+
+func (m *TemplateSelectionModel) renderTemplateDetails(content *strings.Builder) {
+	if m.cursor < 0 || m.cursor >= len(m.templates) {
+		return
+	}
+
+	selectedTemplate := m.templates[m.cursor]
+	content.WriteString("\n")
+	content.WriteString(styles.TitleStyle.Render("Description:"))
+	content.WriteString("\n")
+	content.WriteString(selectedTemplate.Description)
+	content.WriteString("\n")
+
+	if len(selectedTemplate.RequiredVars) > 0 {
+		content.WriteString("\n")
+		content.WriteString(styles.TitleStyle.Render("Required Variables:"))
+		content.WriteString("\n")
+		for _, variable := range selectedTemplate.RequiredVars {
+			content.WriteString(fmt.Sprintf("  • %s", variable))
+			content.WriteString("\n")
+		}
+	}
+}
+
+func (m *TemplateSelectionModel) renderFooter() string {
 	shortcuts := []string{
 		"↑/↓: Navigate",
 		"Enter/Space: Select",
@@ -195,9 +217,5 @@ func (m *TemplateSelectionModel) View() string {
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
-	footer := styles.RenderFooter(shortcuts)
-	content.WriteString("\n")
-	content.WriteString(footer)
-
-	return content.String()
+	return styles.RenderFooter(shortcuts)
 }

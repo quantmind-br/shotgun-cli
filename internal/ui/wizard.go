@@ -160,168 +160,54 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-
-		if m.fileSelection != nil {
-			m.fileSelection.SetSize(m.width, m.height)
-		}
-		if m.templateSelection != nil {
-			m.templateSelection.SetSize(m.width, m.height)
-		}
-		if m.taskInput != nil {
-			m.taskInput.SetSize(m.width, m.height)
-		}
-		if m.rulesInput != nil {
-			m.rulesInput.SetSize(m.width, m.height)
-		}
-		if m.review != nil {
-			m.review.SetSize(m.width, m.height)
-		}
-
-		return m, nil
+		cmd = m.handleWindowResize(msg)
+		return m, cmd
 
 	case tea.KeyMsg:
-		// Always handle quit commands
-		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
-			return m, tea.Quit
-		}
-
-		// Process navigation shortcuts ALWAYS (regardless of focus state)
-		switch msg.String() {
-		case "f8", "ctrl+pgdn":
-			if m.step < StepReview {
-				if m.canAdvanceStep() {
-					m.step++
-					cmd = m.initStep()
-					cmds = append(cmds, cmd)
-				}
-			} else if m.step == StepReview {
-				cmd = m.generateContext()
-				cmds = append(cmds, cmd)
-			}
-		case "f10", "ctrl+pgup":
-			if m.step > StepFileSelection {
-				m.step--
-				cmd = m.initStep()
-				cmds = append(cmds, cmd)
-			}
-		case "f1":
-			m.showHelp = !m.showHelp
-		default:
-			// For all other keys, pass to the current step
-			cmd = m.handleStepInput(msg)
-			cmds = append(cmds, cmd)
-		}
+		return m.handleKeyPress(msg)
 
 	case ScanProgressMsg:
-		m.progress = Progress{
-			Current: msg.Current,
-			Total:   msg.Total,
-			Stage:   msg.Stage,
-			Visible: true,
-		}
-		m.progressComponent.Update(msg.Current, msg.Total, msg.Stage, "")
-		// Re-enqueue the iterative scan command
-		if m.scanState != nil {
-			cmd = m.iterativeScanCmd()
-			cmds = append(cmds, cmd)
-		}
+		cmd = m.handleScanProgress(msg)
+		cmds = append(cmds, cmd)
 
 	case ScanCompleteMsg:
-		m.fileTree = msg.Tree
-		m.progress.Visible = false
-		m.fileSelection = screens.NewFileSelection(msg.Tree, m.selectedFiles)
-		m.fileSelection.SetSize(m.width, m.height)
+		m.handleScanComplete(msg)
 
 	case ScanErrorMsg:
-		m.error = msg.Err
-		m.progress.Visible = false
+		m.handleScanError(msg)
 
 	case TemplateSelectedMsg:
 		m.template = msg.Template
 
 	case GenerationProgressMsg:
-		m.progress = Progress{
-			Stage:   msg.Stage,
-			Message: msg.Message,
-			Visible: true,
-		}
-		m.progressComponent.UpdateMessage(msg.Stage, msg.Message)
-		// Re-enqueue the iterative generate command
-		if m.generateState != nil {
-			cmd = m.iterativeGenerateCmd()
-			cmds = append(cmds, cmd)
-		}
+		cmd = m.handleGenerationProgress(msg)
+		cmds = append(cmds, cmd)
 
 	case GenerationCompleteMsg:
-		m.progress.Visible = false
-		m.generatedFilePath = msg.FilePath
-		cmd = m.clipboardCopyCmd(msg.Content)
+		cmd = m.handleGenerationComplete(msg)
 		cmds = append(cmds, cmd)
 
 	case GenerationErrorMsg:
-		m.error = msg.Err
-		m.progress.Visible = false
+		m.handleGenerationError(msg)
 
 	case ClipboardCompleteMsg:
-		// Don't set error, just log the clipboard failure
-		// Update review screen with generation status (will show warning if failed)
-		if m.review != nil && m.generatedFilePath != "" {
-			m.review.SetGenerated(m.generatedFilePath, msg.Success)
-		}
+		m.handleClipboardComplete(msg)
 
-	// Handle template messages for TemplateSelection step
 	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
-		if m.step == StepTemplateSelection && m.templateSelection != nil {
-			cmd = m.templateSelection.HandleMessage(msg)
-			cmds = append(cmds, cmd)
-		}
+		cmd = m.handleTemplateMessage(msg)
+		cmds = append(cmds, cmd)
 
-	// Handle iterative command messages
 	case startScanMsg:
-		m.scanState = &scanState{
-			scanner:    scanner.NewFileSystemScanner(),
-			rootPath:   msg.rootPath,
-			config:     msg.config,
-			progressCh: make(chan scanner.Progress, 100),
-			done:       make(chan bool),
-			started:    false,
-		}
-		cmd = m.iterativeScanCmd()
+		cmd = m.handleStartScan(msg)
 		cmds = append(cmds, cmd)
 
 	case startGenerationMsg:
-		// Mark nodes as selected based on selectedFiles map
-		markNodesAsSelected(msg.fileTree, msg.selectedFiles)
-
-		m.generateState = &generateState{
-			generator: context.NewDefaultContextGenerator(),
-			fileTree:  msg.fileTree,
-			config: &context.GenerateConfig{
-				TemplateVars: map[string]string{
-					"TASK":           msg.taskDesc,
-					"RULES":          msg.rules,
-					"FILE_STRUCTURE": "",
-					"CURRENT_DATE":   time.Now().Format("2006-01-02"),
-				},
-				Template: msg.template.Content,
-			},
-			rootPath:   msg.rootPath,
-			progressCh: make(chan context.GenProgress, 100),
-			done:       make(chan bool),
-			started:    false,
-		}
-		cmd = m.iterativeGenerateCmd()
+		cmd = m.handleStartGeneration(msg)
 		cmds = append(cmds, cmd)
 
 	case screens.RescanRequestMsg:
-		// Trigger rescan when in file selection step
-		if m.step == StepFileSelection {
-			cmd = scanDirectoryCmd(m.rootPath, m.config)
-			cmds = append(cmds, cmd)
-		}
+		cmd = m.handleRescanRequest()
+		cmds = append(cmds, cmd)
 	}
 
 	if len(cmds) > 0 {
@@ -378,6 +264,183 @@ func (m *WizardModel) View() string {
 	}
 
 	return mainView
+}
+
+func (m *WizardModel) handleWindowResize(msg tea.WindowSizeMsg) tea.Cmd {
+	m.width = msg.Width
+	m.height = msg.Height
+
+	if m.fileSelection != nil {
+		m.fileSelection.SetSize(m.width, m.height)
+	}
+	if m.templateSelection != nil {
+		m.templateSelection.SetSize(m.width, m.height)
+	}
+	if m.taskInput != nil {
+		m.taskInput.SetSize(m.width, m.height)
+	}
+	if m.rulesInput != nil {
+		m.rulesInput.SetSize(m.width, m.height)
+	}
+	if m.review != nil {
+		m.review.SetSize(m.width, m.height)
+	}
+	return nil
+}
+
+func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	// Always handle quit commands
+	if msg.String() == "ctrl+c" || msg.String() == "ctrl+q" {
+		return m, tea.Quit
+	}
+
+	// Process navigation shortcuts
+	switch msg.String() {
+	case "f8", "ctrl+pgdn":
+		cmd = m.handleNextStep()
+		cmds = append(cmds, cmd)
+	case "f10", "ctrl+pgup":
+		cmd = m.handlePrevStep()
+		cmds = append(cmds, cmd)
+	case "f1":
+		m.showHelp = !m.showHelp
+	default:
+		cmd = m.handleStepInput(msg)
+		cmds = append(cmds, cmd)
+	}
+
+	if len(cmds) > 0 {
+		return m, tea.Batch(cmds...)
+	}
+	return m, cmd
+}
+
+func (m *WizardModel) handleNextStep() tea.Cmd {
+	if m.step < StepReview {
+		if m.canAdvanceStep() {
+			m.step++
+			return m.initStep()
+		}
+	} else if m.step == StepReview {
+		return m.generateContext()
+	}
+	return nil
+}
+
+func (m *WizardModel) handlePrevStep() tea.Cmd {
+	if m.step > StepFileSelection {
+		m.step--
+		return m.initStep()
+	}
+	return nil
+}
+
+func (m *WizardModel) handleScanProgress(msg ScanProgressMsg) tea.Cmd {
+	m.progress = Progress{
+		Current: msg.Current,
+		Total:   msg.Total,
+		Stage:   msg.Stage,
+		Visible: true,
+	}
+	m.progressComponent.Update(msg.Current, msg.Total, msg.Stage, "")
+	if m.scanState != nil {
+		return m.iterativeScanCmd()
+	}
+	return nil
+}
+
+func (m *WizardModel) handleScanComplete(msg ScanCompleteMsg) {
+	m.fileTree = msg.Tree
+	m.progress.Visible = false
+	m.fileSelection = screens.NewFileSelection(msg.Tree, m.selectedFiles)
+	m.fileSelection.SetSize(m.width, m.height)
+}
+
+func (m *WizardModel) handleScanError(msg ScanErrorMsg) {
+	m.error = msg.Err
+	m.progress.Visible = false
+}
+
+func (m *WizardModel) handleGenerationProgress(msg GenerationProgressMsg) tea.Cmd {
+	m.progress = Progress{
+		Stage:   msg.Stage,
+		Message: msg.Message,
+		Visible: true,
+	}
+	m.progressComponent.UpdateMessage(msg.Stage, msg.Message)
+	if m.generateState != nil {
+		return m.iterativeGenerateCmd()
+	}
+	return nil
+}
+
+func (m *WizardModel) handleGenerationComplete(msg GenerationCompleteMsg) tea.Cmd {
+	m.progress.Visible = false
+	m.generatedFilePath = msg.FilePath
+	return m.clipboardCopyCmd(msg.Content)
+}
+
+func (m *WizardModel) handleGenerationError(msg GenerationErrorMsg) {
+	m.error = msg.Err
+	m.progress.Visible = false
+}
+
+func (m *WizardModel) handleClipboardComplete(msg ClipboardCompleteMsg) {
+	if m.review != nil && m.generatedFilePath != "" {
+		m.review.SetGenerated(m.generatedFilePath, msg.Success)
+	}
+}
+
+func (m *WizardModel) handleTemplateMessage(msg tea.Msg) tea.Cmd {
+	if m.step == StepTemplateSelection && m.templateSelection != nil {
+		return m.templateSelection.HandleMessage(msg)
+	}
+	return nil
+}
+
+func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
+	m.scanState = &scanState{
+		scanner:    scanner.NewFileSystemScanner(),
+		rootPath:   msg.rootPath,
+		config:     msg.config,
+		progressCh: make(chan scanner.Progress, 100),
+		done:       make(chan bool),
+		started:    false,
+	}
+	return m.iterativeScanCmd()
+}
+
+func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
+	markNodesAsSelected(msg.fileTree, msg.selectedFiles)
+
+	m.generateState = &generateState{
+		generator: context.NewDefaultContextGenerator(),
+		fileTree:  msg.fileTree,
+		config: &context.GenerateConfig{
+			TemplateVars: map[string]string{
+				"TASK":           msg.taskDesc,
+				"RULES":          msg.rules,
+				"FILE_STRUCTURE": "",
+				"CURRENT_DATE":   time.Now().Format("2006-01-02"),
+			},
+			Template: msg.template.Content,
+		},
+		rootPath:   msg.rootPath,
+		progressCh: make(chan context.GenProgress, 100),
+		done:       make(chan bool),
+		started:    false,
+	}
+	return m.iterativeGenerateCmd()
+}
+
+func (m *WizardModel) handleRescanRequest() tea.Cmd {
+	if m.step == StepFileSelection {
+		return scanDirectoryCmd(m.rootPath, m.config)
+	}
+	return nil
 }
 
 func (m *WizardModel) canAdvanceStep() bool {

@@ -199,85 +199,69 @@ func detectLanguageByBasename(base string) string {
 	return ""
 }
 
+var extensionToLanguage = map[string]string{
+	".go":         "go",
+	".js":         "javascript",
+	".jsx":        "javascript",
+	".mjs":        "javascript",
+	".ts":         "typescript",
+	".tsx":        "typescript",
+	".py":         "python",
+	".pyw":        "python",
+	".java":       "java",
+	".c":          "c",
+	".cpp":        "cpp",
+	".cc":         "cpp",
+	".cxx":        "cpp",
+	".c++":        "cpp",
+	".h":          "cpp",
+	".hpp":        "cpp",
+	".hh":         "cpp",
+	".hxx":        "cpp",
+	".h++":        "cpp",
+	".cs":         "csharp",
+	".php":        "php",
+	".rb":         langRuby,
+	".rs":         "rust",
+	".sh":         "bash",
+	".bash":       "bash",
+	".zsh":        "bash",
+	".ps1":        "powershell",
+	".sql":        "sql",
+	".html":       "html",
+	".htm":        "html",
+	".css":        "css",
+	".scss":       "scss",
+	".sass":       "scss",
+	".xml":        "xml",
+	".json":       langJSON,
+	".yaml":       "yaml",
+	".yml":        "yaml",
+	".toml":       "toml",
+	".ini":        "ini",
+	".md":         "markdown",
+	".markdown":   "markdown",
+	".tex":        "latex",
+	".r":          "r",
+	".m":          "matlab",
+	".swift":      "swift",
+	".kt":         "kotlin",
+	".scala":      "scala",
+	".clj":        "clojure",
+	".cljs":       "clojure",
+	".hs":         "haskell",
+	".elm":        "elm",
+	".dart":       "dart",
+	".lua":        "lua",
+	".vim":        "vim",
+	".dockerfile": langDockerfile,
+}
+
 func detectLanguageByExtension(ext string) string {
-	switch ext {
-	case ".go":
-		return "go"
-	case ".js", ".jsx", ".mjs":
-		return "javascript"
-	case ".ts", ".tsx":
-		return "typescript"
-	case ".py", ".pyw":
-		return "python"
-	case ".java":
-		return "java"
-	case ".c":
-		return "c"
-	case ".cpp", ".cc", ".cxx", ".c++":
-		return "cpp"
-	case ".h", ".hpp", ".hh", ".hxx", ".h++":
-		return "cpp"
-	case ".cs":
-		return "csharp"
-	case ".php":
-		return "php"
-	case ".rb":
-		return langRuby
-	case ".rs":
-		return "rust"
-	case ".sh", ".bash", ".zsh":
-		return "bash"
-	case ".ps1":
-		return "powershell"
-	case ".sql":
-		return "sql"
-	case ".html", ".htm":
-		return "html"
-	case ".css":
-		return "css"
-	case ".scss", ".sass":
-		return "scss"
-	case ".xml":
-		return "xml"
-	case ".json":
-		return langJSON
-	case ".yaml", ".yml":
-		return "yaml"
-	case ".toml":
-		return "toml"
-	case ".ini":
-		return "ini"
-	case ".md", ".markdown":
-		return "markdown"
-	case ".tex":
-		return "latex"
-	case ".r":
-		return "r"
-	case ".m":
-		return "matlab"
-	case ".swift":
-		return "swift"
-	case ".kt":
-		return "kotlin"
-	case ".scala":
-		return "scala"
-	case ".clj", ".cljs":
-		return "clojure"
-	case ".hs":
-		return "haskell"
-	case ".elm":
-		return "elm"
-	case ".dart":
-		return "dart"
-	case ".lua":
-		return "lua"
-	case ".vim":
-		return "vim"
-	case ".dockerfile":
-		return langDockerfile
-	default:
-		return "text"
+	if lang, ok := extensionToLanguage[ext]; ok {
+		return lang
 	}
+	return "text"
 }
 
 func shouldSkipFile(node *scanner.FileNode, config GenerateConfig) bool {

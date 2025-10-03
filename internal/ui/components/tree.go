@@ -173,9 +173,27 @@ func (m *FileTreeModel) View() string {
 }
 
 func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
+	selectionState := m.selectionStateFor(item.path)
+
+	prefix := m.buildTreePrefix(item)
+	checkbox := m.renderCheckbox(item, selectionState)
+	dirIndicator := m.renderDirIndicator(item)
+	name := m.renderItemName(item, selectionState)
+	ignoreStatus := m.renderIgnoreStatus(item)
+	sizeInfo := m.renderSizeInfo(item)
+
+	line := prefix + checkbox + dirIndicator + name + ignoreStatus + sizeInfo
+
+	if isCursor {
+		line = styles.SelectedStyle.Render(line)
+	}
+
+	return line
+}
+
+func (m *FileTreeModel) buildTreePrefix(item treeItem) string {
 	var prefix strings.Builder
 
-	// Build tree structure prefix
 	for d := 0; d < item.depth; d++ {
 		if d < len(item.hasNext) && item.hasNext[d] {
 			prefix.WriteString("│  ")
@@ -184,7 +202,6 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 		}
 	}
 
-	// Add tree connector
 	if item.depth > 0 {
 		if item.isLast {
 			prefix.WriteString("└──")
@@ -193,61 +210,55 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 		}
 	}
 
-	// Determine selection state for styling
-	selectionState := m.selectionStateFor(item.path)
+	return prefix.String()
+}
 
-	// Selection checkbox (for files only)
-	var checkbox string
-	if !item.node.IsDir {
-		checkboxText := "[ ] "
-		if m.selections[item.path] {
-			checkboxText = "[✓] "
-		}
-		// Apply color based on selection state
-		checkbox = styles.RenderFileName(checkboxText, selectionState)
-	}
-
-	// Directory indicator
-	var dirIndicator string
+func (m *FileTreeModel) renderCheckbox(item treeItem, selectionState styles.SelectionState) string {
 	if item.node.IsDir {
-		if m.expanded[item.path] {
-			dirIndicator = "📂 "
-		} else {
-			dirIndicator = "📁 "
-		}
+		return ""
 	}
 
-	// File name
+	checkboxText := "[ ] "
+	if m.selections[item.path] {
+		checkboxText = "[✓] "
+	}
+	return styles.RenderFileName(checkboxText, selectionState)
+}
+
+func (m *FileTreeModel) renderDirIndicator(item treeItem) string {
+	if !item.node.IsDir {
+		return ""
+	}
+
+	if m.expanded[item.path] {
+		return "📂 "
+	}
+	return "📁 "
+}
+
+func (m *FileTreeModel) renderItemName(item treeItem, selectionState styles.SelectionState) string {
 	baseName := filepath.Base(item.path)
 	if item.node.IsDir {
 		baseName += "/"
 	}
-	// Apply color based on selection state
-	name := styles.RenderFileName(baseName, selectionState)
+	return styles.RenderFileName(baseName, selectionState)
+}
 
-	// Ignore status
-	var ignoreStatus string
+func (m *FileTreeModel) renderIgnoreStatus(item treeItem) string {
 	if item.node.IsGitignored {
-		ignoreStatus = " (g)"
-	} else if item.node.IsCustomIgnored {
-		ignoreStatus = " (c)"
+		return " (g)"
 	}
-
-	// File size (for files only)
-	var sizeInfo string
-	if !item.node.IsDir && item.node.Size > 0 {
-		sizeInfo = fmt.Sprintf(" (%s)", formatFileSize(item.node.Size))
+	if item.node.IsCustomIgnored {
+		return " (c)"
 	}
+	return ""
+}
 
-	// Combine all parts
-	line := prefix.String() + checkbox + dirIndicator + name + ignoreStatus + sizeInfo
-
-	// Apply cursor highlighting
-	if isCursor {
-		line = styles.SelectedStyle.Render(line)
+func (m *FileTreeModel) renderSizeInfo(item treeItem) string {
+	if item.node.IsDir || item.node.Size == 0 {
+		return ""
 	}
-
-	return line
+	return fmt.Sprintf(" (%s)", formatFileSize(item.node.Size))
 }
 
 func (m *FileTreeModel) rebuildVisibleItems() {

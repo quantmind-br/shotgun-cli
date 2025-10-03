@@ -171,7 +171,17 @@ func RenderTable(headers []string, rows [][]string) string {
 		return ""
 	}
 
-	// Calculate column widths
+	colWidths := calculateColumnWidths(headers, rows)
+
+	var content strings.Builder
+	renderTableHeader(&content, headers, colWidths)
+	renderTableSeparator(&content, colWidths)
+	renderTableRows(&content, rows, colWidths)
+
+	return content.String()
+}
+
+func calculateColumnWidths(headers []string, rows [][]string) []int {
 	colWidths := make([]int, len(headers))
 	for i, header := range headers {
 		colWidths[i] = len(header)
@@ -185,9 +195,10 @@ func RenderTable(headers []string, rows [][]string) string {
 		}
 	}
 
-	var content strings.Builder
+	return colWidths
+}
 
-	// Render header
+func renderTableHeader(content *strings.Builder, headers []string, colWidths []int) {
 	for i, header := range headers {
 		padding := colWidths[i] - len(header)
 		content.WriteString(TitleStyle.Render(header))
@@ -197,8 +208,9 @@ func RenderTable(headers []string, rows [][]string) string {
 		}
 	}
 	content.WriteString("\n")
+}
 
-	// Render separator
+func renderTableSeparator(content *strings.Builder, colWidths []int) {
 	for i, width := range colWidths {
 		content.WriteString(strings.Repeat("─", width))
 		if i < len(colWidths)-1 {
@@ -206,8 +218,9 @@ func RenderTable(headers []string, rows [][]string) string {
 		}
 	}
 	content.WriteString("\n")
+}
 
-	// Render rows
+func renderTableRows(content *strings.Builder, rows [][]string, colWidths []int) {
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < len(colWidths) {
@@ -221,8 +234,6 @@ func RenderTable(headers []string, rows [][]string) string {
 		}
 		content.WriteString("\n")
 	}
-
-	return content.String()
 }
 
 func RenderKeyValue(key, value string) string {

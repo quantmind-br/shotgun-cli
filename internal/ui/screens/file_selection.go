@@ -49,33 +49,34 @@ func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) 
 		return nil
 	}
 
-	var cmd tea.Cmd
-
-	// Handle filter mode
 	if m.filterMode {
-		switch msg.String() {
-		case "enter":
-			// Apply filter and exit filter mode
-			m.tree.SetFilter(m.filterBuffer)
-			m.filterMode = false
-		case keyEsc:
-			// Cancel filter mode without applying
-			m.filterMode = false
-			m.filterBuffer = ""
-		case "backspace":
-			if len(m.filterBuffer) > 0 {
-				m.filterBuffer = m.filterBuffer[:len(m.filterBuffer)-1]
-			}
-		default:
-			// Add character to filter buffer
-			if len(msg.String()) == 1 && msg.String() != " " {
-				m.filterBuffer += msg.String()
-			}
-		}
-		return cmd
+		return m.handleFilterMode(msg)
 	}
 
-	// Normal mode key handling
+	return m.handleNormalMode(msg, selections)
+}
+
+func (m *FileSelectionModel) handleFilterMode(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "enter":
+		m.tree.SetFilter(m.filterBuffer)
+		m.filterMode = false
+	case keyEsc:
+		m.filterMode = false
+		m.filterBuffer = ""
+	case "backspace":
+		if len(m.filterBuffer) > 0 {
+			m.filterBuffer = m.filterBuffer[:len(m.filterBuffer)-1]
+		}
+	default:
+		if len(msg.String()) == 1 && msg.String() != " " {
+			m.filterBuffer += msg.String()
+		}
+	}
+	return nil
+}
+
+func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[string]bool) tea.Cmd {
 	switch msg.String() {
 	case "up", "k":
 		m.tree.MoveUp()
@@ -94,22 +95,16 @@ func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) 
 	case "i":
 		m.tree.ToggleShowIgnored()
 	case "/":
-		// Enter filter mode
 		m.filterMode = true
 		m.filterBuffer = m.tree.GetFilter()
 	case "f5":
-		// Return a command to trigger rescan
 		return func() tea.Msg {
 			return RescanRequestMsg{}
 		}
 	case "ctrl+c":
-		// Clear filter
 		m.tree.ClearFilter()
-	default:
-		// Handle other keys if needed
 	}
-
-	return cmd
+	return nil
 }
 
 func (m *FileSelectionModel) updateSelections(selections map[string]bool) {
