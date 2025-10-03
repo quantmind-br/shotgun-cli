@@ -73,7 +73,7 @@ After installing completion, restart your shell or source the completion file.`,
 }
 
 // Custom completion functions for dynamic values
-func configKeyCompletion(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the first argument (config key)
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -94,7 +94,7 @@ func configKeyCompletion(_ *cobra.Command, args []string, toComplete string) ([]
 	return configKeys, cobra.ShellCompDirectiveNoFileComp
 }
 
-func boolValueCompletion(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func boolValueCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the second argument (config value) for boolean keys
 	if len(args) != 1 {
 		return nil, cobra.ShellCompDirectiveNoFileComp

@@ -47,8 +47,11 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 			},
 		},
 		{
-			name:  "custom totals respected",
-			input: GenerateConfig{MaxFileSize: 512, MaxTotalSize: 1024, MaxFiles: 5, TemplateVars: map[string]string{"TASK": "x"}},
+			name: "custom totals respected",
+			input: GenerateConfig{
+				MaxFileSize: 512, MaxTotalSize: 1024, MaxFiles: 5,
+				TemplateVars: map[string]string{"TASK": "x"},
+			},
 			expected: GenerateConfig{
 				MaxSize:      1024,
 				MaxFileSize:  512,
@@ -67,7 +70,9 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 			if err := gen.validateConfig(&cfg); err != nil {
 				t.Fatalf("validateConfig returned error: %v", err)
 			}
-			if cfg.MaxSize != tc.expected.MaxSize || cfg.MaxFileSize != tc.expected.MaxFileSize || cfg.MaxTotalSize != tc.expected.MaxTotalSize {
+			if cfg.MaxSize != tc.expected.MaxSize ||
+				cfg.MaxFileSize != tc.expected.MaxFileSize ||
+				cfg.MaxTotalSize != tc.expected.MaxTotalSize {
 				t.Fatalf("unexpected size config: %+v", cfg)
 			}
 			if cfg.MaxFiles != tc.expected.MaxFiles {
@@ -181,6 +186,7 @@ func ensureDirNode(tb testing.TB, nodes map[string]*scanner.FileNode, rootDir, p
 	return node
 }
 
+//nolint:gocyclo // table-driven test with comprehensive scenario coverage
 func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 	t.Parallel()
 
@@ -492,7 +498,10 @@ func BenchmarkDefaultContextGenerator(b *testing.B) {
 	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
-	cfg := GenerateConfig{MaxTotalSize: 10 << 20, MaxFileSize: 1 << 20, MaxFiles: 100, TemplateVars: map[string]string{"TASK": "benchmark"}}
+	cfg := GenerateConfig{
+		MaxTotalSize: 10 << 20, MaxFileSize: 1 << 20, MaxFiles: 100,
+		TemplateVars: map[string]string{"TASK": "benchmark"},
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

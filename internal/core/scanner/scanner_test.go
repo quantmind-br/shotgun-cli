@@ -317,6 +317,7 @@ func TestDefaultScanConfig(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo // comprehensive integration test with multiple scenarios
 func TestFileSystemScanner(t *testing.T) {
 	// Create a temporary directory structure for testing
 	tempDir, err := os.MkdirTemp("", "scanner_test")
@@ -573,6 +574,7 @@ func TestNewFileSystemScannerWithIgnore(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo // table-driven test with comprehensive scenario coverage
 func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 	// Create a temporary directory structure for testing
 	tempDir, err := os.MkdirTemp("", "hidden_test")
@@ -802,6 +804,7 @@ func TestScannerInterface(t *testing.T) {
 	var _ Scanner = (*FileSystemScanner)(nil)
 }
 
+//nolint:gocyclo // comprehensive sorting test with detailed verification
 func TestTreeSorting(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "sorting_test")
 	if err != nil {

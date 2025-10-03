@@ -99,6 +99,8 @@ func extractDescription(content, fileName string) string {
 }
 
 // extractRequiredVars extracts all variable placeholders from template content
+//
+//nolint:unparam // error return reserved for future validation logic
 func extractRequiredVars(content string) ([]string, error) {
 	matches := variablePattern.FindAllStringSubmatch(content, -1)
 

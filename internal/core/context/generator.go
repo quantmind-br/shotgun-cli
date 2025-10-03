@@ -142,6 +142,7 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 	return result, nil
 }
 
+//nolint:unparam // error return reserved for future validation logic
 func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 	// Handle backward compatibility with MaxSize
 	if config.MaxSize > 0 {

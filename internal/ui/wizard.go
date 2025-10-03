@@ -154,6 +154,7 @@ func (m *WizardModel) Init() tea.Cmd {
 	return scanDirectoryCmd(m.rootPath, m.config)
 }
 
+//nolint:gocyclo // type switch pattern required by Bubble Tea framework
 func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -266,6 +267,7 @@ func (m *WizardModel) View() string {
 	return mainView
 }
 
+//nolint:unparam // tea.Cmd return is part of consistent handler pattern
 func (m *WizardModel) handleWindowResize(msg tea.WindowSizeMsg) tea.Cmd {
 	m.width = msg.Width
 	m.height = msg.Height
@@ -559,6 +561,7 @@ func generateContextCmd(
 }
 
 func writeFile(path, content string) error {
+	// #nosec G306 - Generated context files are meant to be world-readable (contain code/docs, not secrets)
 	return os.WriteFile(path, []byte(content), 0644)
 }
 

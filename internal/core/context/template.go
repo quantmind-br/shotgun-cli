@@ -6,6 +6,9 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type TemplateRenderer struct {
@@ -58,8 +61,10 @@ func getTemplateFunctions() template.FuncMap {
 		"now": func() string {
 			return time.Now().Format("2006-01-02 15:04:05")
 		},
-		"join":  strings.Join,
-		"title": strings.Title,
+		"join": strings.Join,
+		"title": func(s string) string {
+			return cases.Title(language.English).String(s)
+		},
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 	}

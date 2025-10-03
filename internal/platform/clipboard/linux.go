@@ -122,6 +122,7 @@ func (lc *LinuxClipboard) CopyWithTimeout(content string, timeout time.Duration)
 }
 
 func (lc *LinuxClipboard) copyWithTool(content string) error {
+	// #nosec G204 - Command and args are from validated clipboard tool list, not user input
 	cmd := exec.Command(lc.selectedTool.Command, lc.selectedTool.Args...)
 	cmd.Stdin = strings.NewReader(content)
 
@@ -137,6 +138,7 @@ func (lc *LinuxClipboard) copyWithTool(content string) error {
 }
 
 func (lc *LinuxClipboard) copyWithContext(ctx context.Context, content string) error {
+	// #nosec G204 - Command and args are from validated clipboard tool list, not user input
 	cmd := exec.CommandContext(ctx, lc.selectedTool.Command, lc.selectedTool.Args...)
 	cmd.Stdin = strings.NewReader(content)
 

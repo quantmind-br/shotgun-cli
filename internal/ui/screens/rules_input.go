@@ -111,8 +111,8 @@ func (m *RulesInputModel) View() string {
 		"Specify any coding standards, architectural constraints, or specific requirements. " +
 			"This step is optional - you can leave it empty and proceed to the next step.")
 
-	optionalNote := styles.HelpStyle.Copy().Italic(true).Render(
-		"💡 This step is optional. Press F8 to skip or F10 to go back.")
+	optionalStyle := styles.HelpStyle.Italic(true)
+	optionalNote := optionalStyle.Render("💡 This step is optional. Press F8 to skip or F10 to go back.")
 
 	var content strings.Builder
 	content.WriteString(header)
