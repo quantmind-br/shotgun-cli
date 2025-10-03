@@ -71,7 +71,9 @@ func (s *FilesystemSource) GetSourceName() string {
 // basePath is the subdirectory within the filesystem to scan (usually ".")
 // isEmbedded indicates whether templates should be marked as embedded
 // sourceName is the display name for the source (e.g., "embedded", "user", "/tmp/templates")
-func loadTemplatesFromFS(fsys fs.FS, basePath string, isEmbedded bool, sourceName string) (map[string]*Template, error) {
+func loadTemplatesFromFS(
+	fsys fs.FS, basePath string, isEmbedded bool, sourceName string,
+) (map[string]*Template, error) {
 	templates := make(map[string]*Template)
 
 	entries, err := fs.ReadDir(fsys, basePath)

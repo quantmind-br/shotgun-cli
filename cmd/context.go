@@ -236,7 +236,7 @@ func parseSize(sizeStr string) (int64, error) {
 	}
 
 	// Parse with units
-	var multiplier int64 = 1
+	var multiplier int64
 	var numStr string
 
 	switch {

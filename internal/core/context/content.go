@@ -64,7 +64,10 @@ func collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileC
 		}
 
 		if totalSize+int64(len(content)) > config.MaxTotalSize {
-			return fmt.Errorf("cumulative content size exceeds total size limit: %d + %d > %d", totalSize, len(content), config.MaxTotalSize)
+			return fmt.Errorf(
+				"cumulative content size exceeds total size limit: %d + %d > %d",
+				totalSize, len(content), config.MaxTotalSize,
+			)
 		}
 
 		relPath, err := filepath.Rel(root.Path, node.Path)

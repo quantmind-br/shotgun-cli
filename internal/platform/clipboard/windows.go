@@ -115,7 +115,10 @@ func (wc *WindowsClipboard) copyWithPowerShell(content string) error {
 }
 
 func (wc *WindowsClipboard) copyWithPowerShellContext(ctx context.Context, content string) error {
-	cmd := exec.CommandContext(ctx, toolPowerShell, "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
+	cmd := exec.CommandContext(
+		ctx, toolPowerShell, "-NoProfile", "-Command",
+		"Set-Clipboard -Value ([Console]::In.ReadToEnd())",
+	)
 	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {

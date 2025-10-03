@@ -59,9 +59,7 @@ func extractTemplateName(fileName string) string {
 	name := strings.TrimSuffix(fileName, ".md")
 
 	// Remove "prompt_" prefix if present
-	if strings.HasPrefix(name, "prompt_") {
-		name = strings.TrimPrefix(name, "prompt_")
-	}
+	name = strings.TrimPrefix(name, "prompt_")
 
 	return name
 }

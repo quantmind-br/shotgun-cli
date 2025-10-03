@@ -130,7 +130,8 @@ func (m *ReviewModel) View() string {
 		} else {
 			content.WriteString(styles.HelpStyle.Render("📋 Clipboard copy failed (file saved successfully)"))
 			content.WriteString("\n")
-			content.WriteString(styles.HelpStyle.Render("   Tip: Copy manually from the file or use 'cat " + m.generatedPath + " | wl-copy'"))
+			tip := "   Tip: Copy manually from the file or use 'cat " + m.generatedPath + " | wl-copy'"
+			content.WriteString(styles.HelpStyle.Render(tip))
 		}
 		content.WriteString("\n\n")
 

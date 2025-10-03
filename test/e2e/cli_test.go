@@ -20,7 +20,10 @@ func TestCLIContextGenerateProducesFile(t *testing.T) {
 	fixture := filepath.Join(root, "test", "fixtures", "sample-project")
 	output := filepath.Join(t.TempDir(), "context-output.md")
 
-	cmd := exec.Command("go", "run", ".", "context", "generate", "--root", fixture, "--output", output, "--max-size", "5MB")
+	cmd := exec.Command(
+		"go", "run", ".", "context", "generate",
+		"--root", fixture, "--output", output, "--max-size", "5MB",
+	)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "SHOTGUN_VERBOSE=false")
 	if out, err := cmd.CombinedOutput(); err != nil {

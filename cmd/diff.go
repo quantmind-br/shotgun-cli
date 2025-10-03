@@ -214,10 +214,6 @@ func isGitDiffHeader(line string) bool {
 	return strings.HasPrefix(line, "diff --git")
 }
 
-func isIndexLine(line string) bool {
-	return strings.HasPrefix(line, "index ")
-}
-
 func canSplitHere(lines []string, index int, inFileSection bool) bool {
 	if index >= len(lines)-1 {
 		return false

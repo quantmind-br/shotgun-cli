@@ -109,7 +109,9 @@ func (fs *FileSystemScanner) Scan(rootPath string, config *ScanConfig) (*FileNod
 }
 
 // ScanWithProgress performs a file system scan with progress reporting
-func (fs *FileSystemScanner) ScanWithProgress(rootPath string, config *ScanConfig, progress chan<- Progress) (*FileNode, error) {
+func (fs *FileSystemScanner) ScanWithProgress(
+	rootPath string, config *ScanConfig, progress chan<- Progress,
+) (*FileNode, error) {
 	if config == nil {
 		config = DefaultScanConfig()
 	}
@@ -239,7 +241,9 @@ func (fs *FileSystemScanner) shouldSkipLargeFile(d os.DirEntry, config *ScanConf
 }
 
 // walkAndBuild builds the file tree with progress reporting
-func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, progress chan<- Progress, total int64) (*FileNode, int64, error) {
+func (fs *FileSystemScanner) walkAndBuild(
+	rootPath string, config *ScanConfig, progress chan<- Progress, total int64,
+) (*FileNode, int64, error) {
 	var current int64
 	var fileCount int64
 
@@ -321,7 +325,9 @@ func (fs *FileSystemScanner) getFileSize(d os.DirEntry, config *ScanConfig) (int
 	return 0, false
 }
 
-func (fs *FileSystemScanner) createFileNode(path, relPath string, d os.DirEntry, size int64, config *ScanConfig) *FileNode {
+func (fs *FileSystemScanner) createFileNode(
+	path, relPath string, d os.DirEntry, size int64, config *ScanConfig,
+) *FileNode {
 	isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, d.IsDir(), config)
 
 	return &FileNode{

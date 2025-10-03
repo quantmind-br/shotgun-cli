@@ -256,9 +256,7 @@ Examples:
 			// Extract name from filename
 			templateName = strings.TrimSuffix(fileName, filepath.Ext(fileName))
 			// Remove "prompt_" prefix if present
-			if strings.HasPrefix(templateName, "prompt_") {
-				templateName = strings.TrimPrefix(templateName, "prompt_")
-			}
+			templateName = strings.TrimPrefix(templateName, "prompt_")
 		}
 
 		// Use internal parseTemplate function to validate

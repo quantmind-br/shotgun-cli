@@ -109,7 +109,9 @@ func (m *ProgressModel) View() string {
 
 	// Stage
 	if m.stage != "" {
-		stageLine := "│ " + m.truncate(m.stage, modalWidth-4) + strings.Repeat(" ", modalWidth-4-len(m.truncate(m.stage, modalWidth-4))) + " │"
+		truncated := m.truncate(m.stage, modalWidth-4)
+		padding := strings.Repeat(" ", modalWidth-4-len(truncated))
+		stageLine := "│ " + truncated + padding + " │"
 		content.WriteString(m.centerLine(stageLine))
 		content.WriteString("\n")
 	}
@@ -129,7 +131,9 @@ func (m *ProgressModel) View() string {
 		content.WriteString("\n")
 	} else if m.message != "" {
 		// Show message if no progress totals
-		messageLine := "│ " + m.truncate(m.message, modalWidth-4) + strings.Repeat(" ", modalWidth-4-len(m.truncate(m.message, modalWidth-4))) + " │"
+		truncated := m.truncate(m.message, modalWidth-4)
+		padding := strings.Repeat(" ", modalWidth-4-len(truncated))
+		messageLine := "│ " + truncated + padding + " │"
 		content.WriteString(m.centerLine(messageLine))
 		content.WriteString("\n")
 

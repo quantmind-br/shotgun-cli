@@ -40,7 +40,9 @@ func (tr *TreeRenderer) RenderTree(root *scanner.FileNode) (string, error) {
 	return result.String(), nil
 }
 
-func (tr *TreeRenderer) renderNode(node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder) {
+func (tr *TreeRenderer) renderNode(
+	node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder,
+) {
 	if tr.shouldSkipNode(node, depth) {
 		return
 	}
@@ -94,7 +96,9 @@ func (tr *TreeRenderer) getSizeInfo(node *scanner.FileNode) string {
 	return fmt.Sprintf(" [%s]", formatFileSize(node.Size))
 }
 
-func (tr *TreeRenderer) renderChildren(node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder) {
+func (tr *TreeRenderer) renderChildren(
+	node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder,
+) {
 	childPrefix := prefix
 	if isLast {
 		childPrefix += "    "

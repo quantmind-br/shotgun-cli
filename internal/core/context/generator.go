@@ -26,7 +26,8 @@ type ContextGenerator interface {
 }
 
 type GenerateConfig struct {
-	MaxSize      int64             `json:"maxSize"`      // Deprecated: use MaxTotalSize for cumulative and MaxFileSize for per-file limits
+	// Deprecated: use MaxTotalSize for cumulative and MaxFileSize for per-file limits
+	MaxSize      int64             `json:"maxSize"`
 	MaxFileSize  int64             `json:"maxFileSize"`  // Maximum size for individual files
 	MaxTotalSize int64             `json:"maxTotalSize"` // Maximum total size of all content
 	MaxFiles     int               `json:"maxFiles"`
@@ -60,7 +61,9 @@ func (g *DefaultContextGenerator) Generate(root *scanner.FileNode, config Genera
 	return g.GenerateWithProgress(root, config, nil)
 }
 
-func (g *DefaultContextGenerator) GenerateWithProgress(root *scanner.FileNode, config GenerateConfig, progress func(string)) (string, error) {
+func (g *DefaultContextGenerator) GenerateWithProgress(
+	root *scanner.FileNode, config GenerateConfig, progress func(string),
+) (string, error) {
 	// Use the new structured progress internally, adapting to the old interface
 	var adaptedProgress func(GenProgress)
 	if progress != nil {
@@ -71,7 +74,9 @@ func (g *DefaultContextGenerator) GenerateWithProgress(root *scanner.FileNode, c
 	return g.GenerateWithProgressEx(root, config, adaptedProgress)
 }
 
-func (g *DefaultContextGenerator) GenerateWithProgressEx(root *scanner.FileNode, config GenerateConfig, progress func(GenProgress)) (string, error) {
+func (g *DefaultContextGenerator) GenerateWithProgressEx(
+	root *scanner.FileNode, config GenerateConfig, progress func(GenProgress),
+) (string, error) {
 	if err := g.validateConfig(&config); err != nil {
 		return "", fmt.Errorf("invalid config: %w", err)
 	}
@@ -124,7 +129,10 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(root *scanner.FileNode,
 	}
 
 	if int64(len(result)) > config.MaxTotalSize {
-		return "", fmt.Errorf("generated context exceeds total size limit: %d bytes > %d bytes", len(result), config.MaxTotalSize)
+		return "", fmt.Errorf(
+			"generated context exceeds total size limit: %d bytes > %d bytes",
+			len(result), config.MaxTotalSize,
+		)
 	}
 
 	if progress != nil {
@@ -165,7 +173,9 @@ func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 	return nil
 }
 
-func (g *DefaultContextGenerator) collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileContent, error) {
+func (g *DefaultContextGenerator) collectFileContents(
+	root *scanner.FileNode, config GenerateConfig,
+) ([]FileContent, error) {
 	return collectFileContents(root, config)
 }
 
