@@ -40,18 +40,6 @@ func (m *Manager) CopyLarge(content string) error {
 	return m.Copy(content)
 }
 
-func (m *Manager) copyLargeContent(content string) error {
-	if len(content) > MaxClipboardSize {
-		return &ClipboardError{
-			Platform: m.platform,
-			Command:  "size-check",
-			Err:      fmt.Errorf("content exceeds maximum clipboard size"),
-		}
-	}
-
-	return m.copyViaTempFile(content)
-}
-
 func (m *Manager) copyViaTempFile(content string) error {
 	if m.platform != "linux" {
 		return m.Copy(content)

@@ -252,10 +252,3 @@ func createFakeCommand(tb testing.TB, dir, name string) {
 		tb.Fatalf("failed to create fake command %s: %v", name, err)
 	}
 }
-
-func getEnv(key string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return ""
-}
