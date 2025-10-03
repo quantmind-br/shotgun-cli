@@ -232,60 +232,77 @@ func isValidConfigKey(key string) bool {
 func validateConfigValue(key, value string) error {
 	switch key {
 	case "scanner.max-files":
-		if _, err := parseSize(value); err == nil {
-			// It's a size format, which is wrong for max-files
-			return fmt.Errorf("expected a number, got size format")
-		}
-		// Try to parse as integer
-		var dummy int
-		if _, err := fmt.Sscanf(value, "%d", &dummy); err != nil {
-			return fmt.Errorf("expected a positive integer")
-		}
-		if dummy <= 0 {
-			return fmt.Errorf("must be positive, got %d", dummy)
-		}
-
+		return validateMaxFiles(value)
 	case "scanner.max-file-size", "context.max-size":
-		if _, err := parseSize(value); err != nil {
-			return fmt.Errorf("expected size format (e.g., 1MB, 500KB): %w", err)
-		}
-
+		return validateSizeFormat(value)
 	case "scanner.respect-gitignore", "context.include-tree", "context.include-summary", "output.clipboard":
-		lower := strings.ToLower(value)
-		if lower != "true" && lower != "false" {
-			return fmt.Errorf("expected 'true' or 'false', got '%s'", value)
-		}
-
+		return validateBooleanValue(value)
 	case "output.format":
-		if value != "markdown" && value != "text" {
-			return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
-		}
-
+		return validateOutputFormat(value)
 	case "template.custom-path":
-		// Any string value is acceptable, including empty
-		// Path doesn't need to exist - it will be created on first use
-		if value != "" {
-			// Expand home directory if needed
-			if strings.HasPrefix(value, "~/") {
-				home, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("failed to expand home directory: %w", err)
-				}
-				value = filepath.Join(home, value[2:])
-			}
+		return validateTemplatePath(value)
+	}
+	return nil
+}
 
-			// Validate that parent directory is accessible
-			parentDir := filepath.Dir(value)
-			if parentDir != "." && parentDir != "/" {
-				if info, err := os.Stat(parentDir); err == nil {
-					if !info.IsDir() {
-						return fmt.Errorf("parent path exists but is not a directory: %s", parentDir)
-					}
-				}
+func validateMaxFiles(value string) error {
+	if _, err := parseSize(value); err == nil {
+		return fmt.Errorf("expected a number, got size format")
+	}
+	var dummy int
+	if _, err := fmt.Sscanf(value, "%d", &dummy); err != nil {
+		return fmt.Errorf("expected a positive integer")
+	}
+	if dummy <= 0 {
+		return fmt.Errorf("must be positive, got %d", dummy)
+	}
+	return nil
+}
+
+func validateSizeFormat(value string) error {
+	if _, err := parseSize(value); err != nil {
+		return fmt.Errorf("expected size format (e.g., 1MB, 500KB): %w", err)
+	}
+	return nil
+}
+
+func validateBooleanValue(value string) error {
+	lower := strings.ToLower(value)
+	if lower != "true" && lower != "false" {
+		return fmt.Errorf("expected 'true' or 'false', got '%s'", value)
+	}
+	return nil
+}
+
+func validateOutputFormat(value string) error {
+	if value != "markdown" && value != "text" {
+		return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
+	}
+	return nil
+}
+
+func validateTemplatePath(value string) error {
+	if value == "" {
+		return nil
+	}
+
+	expandedValue := value
+	if strings.HasPrefix(value, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to expand home directory: %w", err)
+		}
+		expandedValue = filepath.Join(home, value[2:])
+	}
+
+	parentDir := filepath.Dir(expandedValue)
+	if parentDir != "." && parentDir != "/" {
+		if info, err := os.Stat(parentDir); err == nil {
+			if !info.IsDir() {
+				return fmt.Errorf("parent path exists but is not a directory: %s", parentDir)
 			}
 		}
 	}
-
 	return nil
 }
 

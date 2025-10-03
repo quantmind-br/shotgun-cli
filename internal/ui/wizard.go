@@ -711,87 +711,69 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 		case progress, ok := <-m.generateState.progressCh:
 			if !ok || progress.Stage == "complete" {
 				<-m.generateState.done
-
-				// Use the stored content
-				content := m.generateState.content
-				if content == "" {
-					return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
-				}
-
-				// Check size limit
-				maxSizeStr := viper.GetString("context.max-size")
-				if maxSizeStr != "" {
-					maxSize, err := parseSize(maxSizeStr)
-					if err != nil {
-						return GenerationErrorMsg{Err: fmt.Errorf("invalid max-size configuration: %v", err)}
-					}
-
-					contentSize := int64(len(content))
-					if contentSize > maxSize {
-						return GenerationErrorMsg{Err: fmt.Errorf(
-							"generated content size (%d bytes) exceeds maximum allowed size (%d bytes)",
-							contentSize, maxSize)}
-					}
-				}
-
-				timestamp := time.Now().Format("20060102-150405")
-				filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-				filePath := filepath.Join(m.generateState.rootPath, filename)
-
-				if err := writeFile(filePath, content); err != nil {
-					return GenerationErrorMsg{Err: err}
-				}
-
-				return GenerationCompleteMsg{
-					Content:  content,
-					FilePath: filePath,
-				}
+				return m.finalizeGeneration()
 			}
-			// Send progress and re-enqueue
 			return GenerationProgressMsg{
 				Stage:   progress.Stage,
 				Message: progress.Message,
 			}
 		case <-m.generateState.done:
-			// Completed - use stored content
-			content := m.generateState.content
-			if content == "" {
-				return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
-			}
-
-			// Check size limit
-			maxSizeStr := viper.GetString("context.max-size")
-			if maxSizeStr != "" {
-				maxSize, err := parseSize(maxSizeStr)
-				if err != nil {
-					return GenerationErrorMsg{Err: fmt.Errorf("invalid max-size configuration: %v", err)}
-				}
-
-				contentSize := int64(len(content))
-				if contentSize > maxSize {
-					return GenerationErrorMsg{Err: fmt.Errorf(
-						"generated content size (%d bytes) exceeds maximum allowed size (%d bytes)",
-						contentSize, maxSize)}
-				}
-			}
-
-			timestamp := time.Now().Format("20060102-150405")
-			filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-			filePath := filepath.Join(m.generateState.rootPath, filename)
-
-			if err := writeFile(filePath, content); err != nil {
-				return GenerationErrorMsg{Err: err}
-			}
-
-			return GenerationCompleteMsg{
-				Content:  content,
-				FilePath: filePath,
-			}
+			return m.finalizeGeneration()
 		default:
-			// No progress yet, re-enqueue
 			return m.iterativeGenerateCmd()()
 		}
 	}
+}
+
+func (m *WizardModel) finalizeGeneration() tea.Msg {
+	content := m.generateState.content
+	if content == "" {
+		return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
+	}
+
+	if err := m.validateContentSize(content); err != nil {
+		return GenerationErrorMsg{Err: err}
+	}
+
+	filePath, err := m.saveGeneratedContent(content)
+	if err != nil {
+		return GenerationErrorMsg{Err: err}
+	}
+
+	return GenerationCompleteMsg{
+		Content:  content,
+		FilePath: filePath,
+	}
+}
+
+func (m *WizardModel) validateContentSize(content string) error {
+	maxSizeStr := viper.GetString("context.max-size")
+	if maxSizeStr == "" {
+		return nil
+	}
+
+	maxSize, err := parseSize(maxSizeStr)
+	if err != nil {
+		return fmt.Errorf("invalid max-size configuration: %v", err)
+	}
+
+	contentSize := int64(len(content))
+	if contentSize > maxSize {
+		return fmt.Errorf("generated content size (%d bytes) exceeds maximum allowed size (%d bytes)",
+			contentSize, maxSize)
+	}
+	return nil
+}
+
+func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
+	filePath := filepath.Join(m.generateState.rootPath, filename)
+
+	if err := writeFile(filePath, content); err != nil {
+		return "", err
+	}
+	return filePath, nil
 }
 
 // markNodesAsSelected marks FileNode.Selected flag based on selectedFiles map
