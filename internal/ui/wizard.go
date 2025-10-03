@@ -477,7 +477,12 @@ func scanDirectoryCmd(rootPath string, config *scanner.ScanConfig) tea.Cmd {
 	}
 }
 
-func generateContextCmd(fileTree *scanner.FileNode, selectedFiles map[string]bool, template *template.Template, taskDesc, rules, rootPath string) tea.Cmd {
+func generateContextCmd(
+	fileTree *scanner.FileNode,
+	selectedFiles map[string]bool,
+	template *template.Template,
+	taskDesc, rules, rootPath string,
+) tea.Cmd {
 	return func() tea.Msg {
 		return startGenerationMsg{
 			fileTree:      fileTree,
@@ -660,7 +665,9 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 
 					contentSize := int64(len(content))
 					if contentSize > maxSize {
-						return GenerationErrorMsg{Err: fmt.Errorf("generated content size (%d bytes) exceeds maximum allowed size (%d bytes)", contentSize, maxSize)}
+						return GenerationErrorMsg{Err: fmt.Errorf(
+							"generated content size (%d bytes) exceeds maximum allowed size (%d bytes)",
+							contentSize, maxSize)}
 					}
 				}
 
@@ -699,7 +706,9 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 
 				contentSize := int64(len(content))
 				if contentSize > maxSize {
-					return GenerationErrorMsg{Err: fmt.Errorf("generated content size (%d bytes) exceeds maximum allowed size (%d bytes)", contentSize, maxSize)}
+					return GenerationErrorMsg{Err: fmt.Errorf(
+						"generated content size (%d bytes) exceeds maximum allowed size (%d bytes)",
+						contentSize, maxSize)}
 				}
 			}
 

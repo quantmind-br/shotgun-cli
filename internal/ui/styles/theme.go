@@ -87,7 +87,7 @@ func RenderHeader(step int, title string) string {
 }
 
 func RenderFooter(shortcuts []string) string {
-	var parts []string
+	parts := make([]string, 0, len(shortcuts))
 	for _, shortcut := range shortcuts {
 		parts = append(parts, HelpStyle.Render(shortcut))
 	}
@@ -135,7 +135,7 @@ func RenderBox(content string, title string) string {
 		Margin(1, 0)
 
 	if title != "" {
-		titleStyle := TitleStyle.Copy().
+		titleStyle := TitleStyle.
 			Padding(0, 1).
 			Background(lipgloss.Color("#FFFFFF")).
 			Foreground(PrimaryColor)
@@ -226,7 +226,7 @@ func RenderTable(headers []string, rows [][]string) string {
 }
 
 func RenderKeyValue(key, value string) string {
-	keyStyle := TitleStyle.Copy().Bold(true)
+	keyStyle := TitleStyle.Bold(true)
 	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ECEFF4"))
 
 	return keyStyle.Render(key+":") + " " + valueStyle.Render(value)

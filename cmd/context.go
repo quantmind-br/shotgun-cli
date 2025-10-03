@@ -190,7 +190,9 @@ func generateContextHeadless(config GenerateConfig) error {
 	contentSize := int64(len(content))
 	if contentSize > config.MaxSize {
 		if config.EnforceLimit {
-			return fmt.Errorf("generated context size (%s) exceeds limit (%s). Use --no-enforce-limit to allow truncation or generation without enforcement",
+			return fmt.Errorf(
+				"generated context size (%s) exceeds limit (%s). "+
+					"Use --no-enforce-limit to allow truncation or generation without enforcement",
 				formatBytes(contentSize), formatBytes(config.MaxSize))
 		} else {
 			log.Warn().
@@ -201,7 +203,7 @@ func generateContextHeadless(config GenerateConfig) error {
 	}
 
 	// Write output file
-	if err := os.WriteFile(config.Output, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(config.Output, []byte(content), 0600); err != nil {
 		return fmt.Errorf("failed to write output file '%s': %w", config.Output, err)
 	}
 

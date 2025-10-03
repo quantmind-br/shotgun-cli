@@ -57,12 +57,32 @@ func TestInitConfigSetsDefaults(t *testing.T) {
 
 func TestGetConfigDir(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/tmp/xdg-config")
-	if runtime.GOOS == "windows" {
-		t.Skip("skip on windows path semantics")
-	}
 
 	dir := getConfigDir()
-	if dir != "/tmp/xdg-config/shotgun-cli" {
-		t.Fatalf("unexpected config dir: %s", dir)
+
+	switch runtime.GOOS {
+	case "windows":
+		// Skip test on Windows - path semantics differ
+		t.Skip("skip on windows path semantics")
+	case "darwin":
+		// macOS uses Library/Application Support regardless of XDG_CONFIG_HOME
+		if dir == "" {
+			t.Fatal("expected non-empty config dir on macOS")
+		}
+		// Path should contain Application Support
+		if !contains(dir, "Application Support") {
+			t.Fatalf("unexpected config dir on macOS: %s", dir)
+		}
+	default:
+		// Linux and others should respect XDG_CONFIG_HOME
+		if dir != "/tmp/xdg-config/shotgun-cli" {
+			t.Fatalf("unexpected config dir: %s", dir)
+		}
 	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+		bytes.Contains([]byte(s), []byte(substr))))
 }

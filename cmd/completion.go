@@ -49,7 +49,7 @@ After installing completion, restart your shell or source the completion file.`,
 
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
-	Args:                  cobra.ExactValidArgs(1),
+	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		shell := args[0]
 
@@ -69,7 +69,7 @@ After installing completion, restart your shell or source the completion file.`,
 }
 
 // Custom completion functions for dynamic values
-func configKeyCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func configKeyCompletion(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the first argument (config key)
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -90,7 +90,7 @@ func configKeyCompletion(cmd *cobra.Command, args []string, toComplete string) (
 	return configKeys, cobra.ShellCompDirectiveNoFileComp
 }
 
-func boolValueCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func boolValueCompletion(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the second argument (config value) for boolean keys
 	if len(args) != 1 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -127,7 +127,11 @@ func boolValueCompletion(cmd *cobra.Command, args []string, toComplete string) (
 func init() {
 	// Register custom completion functions
 	if configSetCmd != nil {
-		configSetCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		configSetCmd.ValidArgsFunction = func(
+			cmd *cobra.Command,
+			args []string,
+			toComplete string,
+		) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
 				return configKeyCompletion(cmd, args, toComplete)
 			}

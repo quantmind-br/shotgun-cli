@@ -208,7 +208,7 @@ func renderTemplate(templateName string, variables map[string]string, output str
 	// Handle output
 	if output != "" {
 		// Write to file
-		if err := os.WriteFile(output, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(output, []byte(content), 0600); err != nil {
 			return fmt.Errorf("failed to write output file '%s': %w", output, err)
 		}
 	} else {
@@ -290,13 +290,13 @@ Examples:
 
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
-				fmt.Println("Import cancelled.")
+				fmt.Println("Import canceled.")
 				return nil
 			}
 		}
 
 		// Write template to user directory
-		if err := os.WriteFile(destPath, content, 0644); err != nil {
+		if err := os.WriteFile(destPath, content, 0600); err != nil {
 			return fmt.Errorf("failed to write template file: %w", err)
 		}
 
@@ -348,7 +348,7 @@ Examples:
 
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
-				fmt.Println("Export cancelled.")
+				fmt.Println("Export canceled.")
 				return nil
 			}
 		}
@@ -360,7 +360,7 @@ Examples:
 		}
 
 		// Write template content to file
-		if err := os.WriteFile(outputPath, []byte(tmpl.Content), 0644); err != nil {
+		if err := os.WriteFile(outputPath, []byte(tmpl.Content), 0600); err != nil {
 			return fmt.Errorf("failed to write template file: %w", err)
 		}
 

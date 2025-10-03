@@ -197,8 +197,8 @@ func CreateTempFile(content string, suffix string) (string, func(), error) {
 	}
 
 	cleanup := func() {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 	}
 
 	if _, err := tmpFile.WriteString(content); err != nil {

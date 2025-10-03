@@ -38,7 +38,7 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 	model, cmd = wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
 	wiz := model.(*WizardModel)
 	if wiz.scanState == nil {
-		t.Fatalf("expected scan state to be initialised")
+		t.Fatalf("expected scan state to be initialized")
 	}
 	if cmd == nil {
 		t.Fatalf("expected iterative scan command to be scheduled")
@@ -129,7 +129,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.template, wizard.taskDesc, "")
 	var model tea.Model
 
-	// Initialise generation state
+	// Initialize generation state
 	model, _ = wizard.Update(startGenerationMsg{
 		fileTree:      wizard.fileTree,
 		selectedFiles: wizard.selectedFiles,
@@ -141,7 +141,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	wizard = model.(*WizardModel)
 
 	if wizard.generateState == nil {
-		t.Fatalf("expected generation state to be initialised")
+		t.Fatalf("expected generation state to be initialized")
 	}
 
 	// Progress message

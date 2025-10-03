@@ -21,7 +21,13 @@ type RulesInputModel struct {
 
 func NewRulesInput(initialValue string) *RulesInputModel {
 	ta := textarea.New()
-	ta.Placeholder = "Add any rules, constraints, or guidelines (optional)...\n\nExamples:\n- Use TypeScript instead of JavaScript\n- Follow the existing error handling patterns\n- Ensure all functions have unit tests\n- Use the company's coding standards\n- Maintain backward compatibility"
+	ta.Placeholder = "Add any rules, constraints, or guidelines (optional)...\n\n" +
+		"Examples:\n" +
+		"- Use TypeScript instead of JavaScript\n" +
+		"- Follow the existing error handling patterns\n" +
+		"- Ensure all functions have unit tests\n" +
+		"- Use the company's coding standards\n" +
+		"- Maintain backward compatibility"
 	ta.Focus()
 	ta.CharLimit = maxRulesLength
 	ta.SetValue(initialValue)
@@ -96,14 +102,17 @@ func (m *RulesInputModel) View() string {
 	if currentLength > maxRulesLength*8/10 { // 80% of limit
 		charCountColor = styles.ErrorStyle
 	} else if currentLength > maxRulesLength*6/10 { // 60% of limit
-		charCountColor = charCountColor.Copy().Foreground(styles.WarningColor)
+		charCountColor = charCountColor.Foreground(styles.WarningColor)
 	}
 
 	charCount := charCountColor.Render(fmt.Sprintf("Characters: %d/%d", currentLength, maxRulesLength))
 
-	instructions := styles.HelpStyle.Render("Specify any coding standards, architectural constraints, or specific requirements. This step is optional - you can leave it empty and proceed to the next step.")
+	instructions := styles.HelpStyle.Render(
+		"Specify any coding standards, architectural constraints, or specific requirements. " +
+			"This step is optional - you can leave it empty and proceed to the next step.")
 
-	optionalNote := styles.HelpStyle.Copy().Italic(true).Render("💡 This step is optional. Press F8 to skip or F10 to go back.")
+	optionalNote := styles.HelpStyle.Copy().Italic(true).Render(
+		"💡 This step is optional. Press F8 to skip or F10 to go back.")
 
 	var content strings.Builder
 	content.WriteString(header)

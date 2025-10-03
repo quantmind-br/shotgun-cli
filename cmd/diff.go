@@ -51,7 +51,7 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("cannot read input file '%s': %w", input, err)
 		}
-		file.Close()
+		_ = file.Close()
 
 		// Validate approx-lines
 		approxLines, _ := cmd.Flags().GetInt("approx-lines")
@@ -148,7 +148,7 @@ func splitDiffFile(inputPath, outputDir string, approxLines int, noHeader bool) 
 func intelligentSplitDiff(lines []string, approxLines int) []DiffChunk {
 	var chunks []DiffChunk
 	var currentChunk DiffChunk
-	var currentFileLines []string
+	currentFileLines := make([]string, 0, approxLines)
 	fileCount := 0
 	inFileSection := false
 
@@ -287,7 +287,7 @@ func init() {
 	diffSplitCmd.Flags().Bool("no-header", false, "Omit metadata headers for better patch tool compatibility")
 
 	// Mark input as required
-	diffSplitCmd.MarkFlagRequired("input")
+	_ = diffSplitCmd.MarkFlagRequired("input")
 
 	diffCmd.AddCommand(diffSplitCmd)
 	rootCmd.AddCommand(diffCmd)

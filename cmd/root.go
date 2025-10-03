@@ -51,7 +51,7 @@ func runRootCommand(cmd *cobra.Command, args []string) {
 
 	// If args provided but no valid subcommand, show help
 	if len(args) == 0 {
-		cmd.Help()
+		_ = cmd.Help()
 	}
 }
 
@@ -84,7 +84,7 @@ func launchTUIWizard() {
 	)
 
 	// Handle terminal size detection
-	if err := program.Start(); err != nil {
+	if _, err := program.Run(); err != nil {
 		log.Error().Err(err).Msg("Failed to start TUI wizard")
 		fmt.Fprintf(os.Stderr, "Error starting wizard: %v\n", err)
 		os.Exit(1)
@@ -100,7 +100,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.config/shotgun-cli/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(
+		&cfgFile, "config", "", "config file (default is ~/.config/shotgun-cli/config.yaml)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "quiet output")
 
@@ -148,10 +149,10 @@ func initConfig() {
 
 	// Bind persistent flags to viper
 	if rootCmd.PersistentFlags().Lookup("verbose") != nil {
-		viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+		_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 	}
 	if rootCmd.PersistentFlags().Lookup("quiet") != nil {
-		viper.BindPFlag("quiet", rootCmd.PersistentFlags().Lookup("quiet"))
+		_ = viper.BindPFlag("quiet", rootCmd.PersistentFlags().Lookup("quiet"))
 	}
 
 	// Read config file

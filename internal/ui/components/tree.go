@@ -267,7 +267,7 @@ func (m *FileTreeModel) rebuildVisibleItems() {
 	m.recomputeSelectionStates()
 }
 
-func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, path string, depth int, isLast bool, hasNext []bool) {
+func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, _ string, depth int, isLast bool, hasNext []bool) {
 	// Skip if filtered out
 	if !m.shouldShowNode(node) {
 		return

@@ -21,7 +21,11 @@ type TaskInputModel struct {
 
 func NewTaskInput(initialValue string) *TaskInputModel {
 	ta := textarea.New()
-	ta.Placeholder = "Describe the task you want to accomplish...\n\nExample:\n- Add a new user authentication feature\n- Fix the memory leak in the data processor\n- Refactor the payment handling code to use new API"
+	ta.Placeholder = "Describe the task you want to accomplish...\n\n" +
+		"Example:\n" +
+		"- Add a new user authentication feature\n" +
+		"- Fix the memory leak in the data processor\n" +
+		"- Refactor the payment handling code to use new API"
 	ta.Focus()
 	ta.CharLimit = maxTaskLength
 	ta.SetValue(initialValue)
@@ -96,12 +100,14 @@ func (m *TaskInputModel) View() string {
 	if currentLength > maxTaskLength*8/10 { // 80% of limit
 		charCountColor = styles.ErrorStyle
 	} else if currentLength > maxTaskLength*6/10 { // 60% of limit
-		charCountColor = charCountColor.Copy().Foreground(styles.WarningColor)
+		charCountColor = charCountColor.Foreground(styles.WarningColor)
 	}
 
 	charCount := charCountColor.Render(fmt.Sprintf("Characters: %d/%d", currentLength, maxTaskLength))
 
-	instructions := styles.HelpStyle.Render("Enter a detailed description of what you want to accomplish. Be specific about requirements, constraints, and expected outcomes.")
+	instructions := styles.HelpStyle.Render(
+		"Enter a detailed description of what you want to accomplish. " +
+			"Be specific about requirements, constraints, and expected outcomes.")
 
 	var content strings.Builder
 	content.WriteString(header)
