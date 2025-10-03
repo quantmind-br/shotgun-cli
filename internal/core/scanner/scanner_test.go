@@ -713,7 +713,7 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 
 		// Add explicit include for the hidden file
 		if scanner.ignoreEngine != nil {
-			scanner.ignoreEngine.AddExplicitInclude(".hidden.txt")
+			_ = scanner.ignoreEngine.AddExplicitInclude(".hidden.txt")
 		}
 
 		config := DefaultScanConfig()

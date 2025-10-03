@@ -483,7 +483,7 @@ func BenchmarkLayeredIgnoreEngine_ShouldIgnore(b *testing.B) {
 	engine := NewIgnoreEngine()
 
 	// Add some custom rules
-	engine.AddCustomRules([]string{"*.test", "temp/", "build/"})
+	_ = engine.AddCustomRules([]string{"*.test", "temp/", "build/"})
 
 	paths := []string{
 		"src/main.go",

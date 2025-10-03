@@ -7,7 +7,15 @@ import (
 	"time"
 )
 
-const DefaultClipboardTimeout = 2 * time.Second // Reduced timeout to avoid hanging
+const (
+	DefaultClipboardTimeout = 2 * time.Second // Reduced timeout to avoid hanging
+
+	// Platform constants
+	platformLinux   = "linux"
+	platformDarwin  = "darwin"
+	platformWindows = "windows"
+	platformWSL     = "wsl"
+)
 
 type ClipboardManager interface {
 	Copy(content string) error
@@ -49,16 +57,16 @@ func NewManager() *Manager {
 	}
 
 	switch manager.platform {
-	case "linux":
+	case platformLinux:
 		if isWSL() {
-			manager.platform = "wsl"
+			manager.platform = platformWSL
 			manager.clipboard = NewWSLClipboard()
 		} else {
 			manager.clipboard = NewLinuxClipboard()
 		}
-	case "darwin":
+	case platformDarwin:
 		manager.clipboard = NewDarwinClipboard()
-	case "windows":
+	case platformWindows:
 		manager.clipboard = NewWindowsClipboard()
 	default:
 		manager.clipboard = NewLinuxClipboard()

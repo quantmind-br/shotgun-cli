@@ -8,6 +8,7 @@ A cross-platform CLI tool that generates LLM-optimized codebase contexts with bo
   - Vim-style navigation support (hjkl keys)
   - Live file filtering with `/` key
   - Directory tree expansion and selection
+  - Visual selection feedback with color states
   - F5 rescan for real-time updates
 - **Headless CLI Mode**: Command-line interface for automation and scripting
 - **Smart File Filtering**: Gitignore-style pattern matching with include/exclude support
@@ -15,8 +16,12 @@ A cross-platform CLI tool that generates LLM-optimized codebase contexts with bo
 - **Size Management**: Configurable size limits with enforcement options
 - **Multi-format Output**: Markdown output with optional clipboard integration
 - **Cross-platform**: Works on Linux, macOS, and Windows
-- **Template System**: Built-in prompt templates for different use cases
+- **Advanced Template System**: Multi-source template loading with custom overrides
+  - Built-in prompt templates for different use cases
+  - Custom template support with import/export functionality
+  - Template priority: custom path > user directory > embedded
 - **Diff Management**: Tools for splitting large diff files into manageable chunks
+- **Configuration Management**: Comprehensive settings management with shell completion
 
 ## Installation
 
@@ -155,10 +160,10 @@ shotgun-cli context generate --root ./backend --include "*.py,*.yaml"
 
 #### Template Management
 
-List and use built-in prompt templates:
+Advanced template system with multi-source loading and custom templates:
 
 ```bash
-# List available templates
+# List all available templates (shows source: embedded/user/custom)
 shotgun-cli template list
 
 # Render a template with variables
@@ -166,17 +171,37 @@ shotgun-cli template render prompt_makePlan --var PROJECT_NAME=myapp --var TASK=
 
 # Render to file
 shotgun-cli template render prompt_analyzeBug --var BUG_DESCRIPTION="login fails" --output bug-analysis.md
+
+# Import custom template
+shotgun-cli template import /path/to/my-template.md my-template
+
+# Export template for backup/sharing
+shotgun-cli template export prompt_makePlan ./backup/plan-template.md
+
+# Set custom template directory (highest priority)
+shotgun-cli config set template.custom-path /path/to/my/templates
 ```
 
 **Template Render Options:**
 - `--var`: Template variables as key=value pairs (can be used multiple times)
 - `--output, -o`: Output file (default: stdout)
 
+**Template Sources (in priority order):**
+1. **Custom Path**: Set via `template.custom-path` config (highest priority)
+2. **User Directory**: `~/.config/shotgun-cli/templates/` (XDG compliant)
+3. **Embedded Templates**: Shipped with the application (fallback)
+
 **Built-in Templates:**
 - `prompt_analyzeBug`: For analyzing and debugging issues
 - `prompt_makeDiffGitFormat`: For creating git-format diff files
 - `prompt_makePlan`: For project planning and task breakdown
 - `prompt_projectManager`: For project management tasks
+
+**Template Features:**
+- Template validation with required variable checking
+- Custom template override (custom templates replace embedded ones with same name)
+- Import/export functionality for template sharing
+- Auto-completion support for template names
 
 #### Diff Management
 
@@ -196,6 +221,11 @@ shotgun-cli diff split --input large.diff --output-dir chunks --approx-lines 300
 - `--approx-lines`: Approximate lines per chunk (default: 500)
 - `--no-header`: Don't add chunk headers to output files
 
+**Features:**
+- Intelligent splitting at diff boundaries
+- Preserves git diff format and structure
+- Automatic chunk numbering and organization
+
 #### Configuration Management
 
 View and modify configuration settings:
@@ -212,6 +242,12 @@ shotgun-cli config set output.clipboard true
 **Available Config Keys:**
 - `scanner.max-files`: Maximum number of files to process
 - `scanner.max-file-size`: Maximum size per file
+- `scanner.respect-gitignore`: Whether to respect .gitignore patterns
+- `context.max-size`: Default context generation size limit
+- `context.include-tree`: Include file tree in output
+- `context.include-summary`: Include summary in output
+- `template.custom-path`: Custom template directory path
+- `output.format`: Output format (markdown)
 - `output.clipboard`: Auto-copy to clipboard
 - Logging levels and other settings
 
@@ -268,13 +304,28 @@ The tool uses **gitignore syntax** via the `github.com/sabhiram/go-gitignore` li
 The tool supports a YAML configuration file located at `~/.config/shotgun-cli/config.yaml`:
 
 ```yaml
+# Scanner settings
 scanner:
   max-files: 10000
   max-file-size: "1MB"
+  respect-gitignore: true
 
+# Context generation settings
+context:
+  max-size: "10MB"
+  include-tree: true
+  include-summary: true
+
+# Template system
+template:
+  custom-path: ""  # Override with custom template directory
+
+# Output settings
 output:
+  format: "markdown"
   clipboard: true
 
+# Logging
 logging:
   level: "info"
 ```
@@ -393,12 +444,14 @@ make release
 - **Styling**: [Lip Gloss](https://github.com/charmbracelet/lipgloss) for TUI styling
 - **Logging**: [Zerolog](https://github.com/rs/zerolog) for structured logging
 - **Gitignore**: [go-gitignore](https://github.com/sabhiram/go-gitignore) for pattern matching
+- **XDG Compliance**: [adrg/xdg](https://github.com/adrg/xdg) for config directory management
 
 ### Platform Support
 
-- **Clipboard**: Cross-platform clipboard integration
-- **File System**: Native file system operations
+- **Clipboard**: Cross-platform clipboard integration via [atotto/clipboard](https://github.com/atotto/clipboard)
+- **File System**: Native file system operations with concurrent scanning
 - **Terminal**: Advanced terminal features and detection
+- **Template System**: Multi-source loading with embedded templates via Go embed
 
 ## Examples
 

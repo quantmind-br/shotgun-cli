@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+const (
+	toolXclip   = "xclip"
+	toolXsel    = "xsel"
+	toolWlCopy  = "wl-copy"
+)
+
 type LinuxClipboard struct {
 	tools        []ClipboardTool
 	selectedTool *ClipboardTool
@@ -17,9 +23,9 @@ type LinuxClipboard struct {
 func NewLinuxClipboard() *LinuxClipboard {
 	lc := &LinuxClipboard{
 		tools: []ClipboardTool{
-			{Name: "wl-copy", Command: "wl-copy", Args: []string{}, Priority: 1},
-			{Name: "xclip", Command: "xclip", Args: []string{"-selection", "clipboard"}, Priority: 2},
-			{Name: "xsel", Command: "xsel", Args: []string{"--clipboard", "--input"}, Priority: 3},
+			{Name: toolWlCopy, Command: toolWlCopy, Args: []string{}, Priority: 1},
+			{Name: toolXclip, Command: toolXclip, Args: []string{"-selection", "clipboard"}, Priority: 2},
+			{Name: toolXsel, Command: toolXsel, Args: []string{"--clipboard", "--input"}, Priority: 3},
 		},
 	}
 
@@ -35,7 +41,7 @@ func (lc *LinuxClipboard) detectAvailableTools() {
 		tool := &lc.tools[i]
 		tool.Available = lc.checkTool(tool.Command)
 
-		if waylandDisplay != "" && tool.Name == "wl-copy" && tool.Available {
+		if waylandDisplay != "" && tool.Name == toolWlCopy && tool.Available {
 			lc.selectedTool = tool
 			return
 		}
@@ -44,7 +50,7 @@ func (lc *LinuxClipboard) detectAvailableTools() {
 	if xDisplay != "" {
 		for i := range lc.tools {
 			tool := &lc.tools[i]
-			if (tool.Name == "xclip" || tool.Name == "xsel") && tool.Available {
+			if (tool.Name == toolXclip || tool.Name == toolXsel) && tool.Available {
 				if lc.selectedTool == nil || tool.Priority < lc.selectedTool.Priority {
 					lc.selectedTool = tool
 				}

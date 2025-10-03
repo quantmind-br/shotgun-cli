@@ -54,7 +54,7 @@ func TestBuildGenerateConfigDefaults(t *testing.T) {
 	cmd.Flags().Bool("enforce-limit", true, "")
 
 	temp := t.TempDir()
-	cmd.Flags().Set("root", temp)
+	_ = cmd.Flags().Set("root", temp)
 
 	cfg, err := buildGenerateConfig(cmd)
 	if err != nil {
@@ -90,12 +90,12 @@ func TestFormatBytes(t *testing.T) {
 func TestContextGeneratePreRunValidation(t *testing.T) {
 	cmd := contextGenerateCmd
 	t.Cleanup(func() {
-		cmd.Flags().Set("root", ".")
-		cmd.Flags().Set("max-size", "10MB")
-		cmd.Flags().Set("output", "")
+		_ = cmd.Flags().Set("root", ".")
+		_ = cmd.Flags().Set("max-size", "10MB")
+		_ = cmd.Flags().Set("output", "")
 	})
-	cmd.Flags().Set("max-size", "1MB")
-	cmd.Flags().Set("root", "/does/not/exist")
+	_ = cmd.Flags().Set("max-size", "1MB")
+	_ = cmd.Flags().Set("root", "/does/not/exist")
 
 	err := cmd.PreRunE(cmd, nil)
 	if err == nil {
