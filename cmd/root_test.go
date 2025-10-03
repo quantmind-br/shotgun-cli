@@ -33,7 +33,7 @@ func captureStdout(t *testing.T, fn func()) string {
 func TestRunRootCommandVersionFlag(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().Bool("version", false, "")
-	cmd.Flags().Set("version", "true")
+	_ = cmd.Flags().Set("version", "true")
 
 	output := captureStdout(t, func() {
 		runRootCommand(cmd, nil)

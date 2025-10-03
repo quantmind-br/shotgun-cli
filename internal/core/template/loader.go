@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+const (
+	sourceEmbedded = "embedded"
+)
+
 // TemplateSource defines the interface for loading templates from different sources
 type TemplateSource interface {
 	// LoadTemplates loads templates from this source and returns a map of template name -> Template
@@ -29,12 +33,12 @@ func NewEmbeddedSource(fsys fs.FS) *EmbeddedSource {
 
 // LoadTemplates loads all templates from the embedded filesystem
 func (s *EmbeddedSource) LoadTemplates() (map[string]*Template, error) {
-	return loadTemplatesFromFS(s.fsys, ".", true, "embedded")
+	return loadTemplatesFromFS(s.fsys, ".", true, sourceEmbedded)
 }
 
 // GetSourceName returns the source name
 func (s *EmbeddedSource) GetSourceName() string {
-	return "embedded"
+	return sourceEmbedded
 }
 
 // FilesystemSource loads templates from a filesystem directory

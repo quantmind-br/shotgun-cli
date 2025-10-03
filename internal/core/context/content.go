@@ -11,6 +11,12 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 )
 
+const (
+	langDockerfile = "dockerfile"
+	langJSON       = "json"
+	langRuby       = "ruby"
+)
+
 type FileContent struct {
 	Path     string `json:"path"`
 	RelPath  string `json:"relPath"`
@@ -162,17 +168,17 @@ func detectLanguage(filename string) string {
 
 	switch base {
 	case "dockerfile":
-		return "dockerfile"
+		return langDockerfile
 	case "makefile":
 		return "makefile"
 	case "rakefile":
-		return "ruby"
+		return langRuby
 	case "gemfile", "gemfile.lock":
-		return "ruby"
+		return langRuby
 	case "package.json", "package-lock.json":
-		return "json"
+		return langJSON
 	case "composer.json", "composer.lock":
-		return "json"
+		return langJSON
 	case "cargo.toml", "cargo.lock":
 		return "toml"
 	case "go.mod", "go.sum":
@@ -203,7 +209,7 @@ func detectLanguage(filename string) string {
 	case ".php":
 		return "php"
 	case ".rb":
-		return "ruby"
+		return langRuby
 	case ".rs":
 		return "rust"
 	case ".sh", ".bash", ".zsh":
@@ -221,7 +227,7 @@ func detectLanguage(filename string) string {
 	case ".xml":
 		return "xml"
 	case ".json":
-		return "json"
+		return langJSON
 	case ".yaml", ".yml":
 		return "yaml"
 	case ".toml":
@@ -255,7 +261,7 @@ func detectLanguage(filename string) string {
 	case ".vim":
 		return "vim"
 	case ".dockerfile":
-		return "dockerfile"
+		return langDockerfile
 	default:
 		return "text"
 	}

@@ -63,7 +63,7 @@ func (m *Manager) copyViaTempFile(content string) error {
 	}
 
 	toolName := linuxClipboard.selectedTool.Name
-	if toolName != "xclip" && toolName != "xsel" {
+	if toolName != toolXclip && toolName != toolXsel {
 		return m.Copy(content)
 	}
 
@@ -89,10 +89,10 @@ func (m *Manager) copyViaTempFile(content string) error {
 
 	var cmd *exec.Cmd
 	switch toolName {
-	case "xclip":
-		cmd = exec.Command("xclip", "-selection", "clipboard", "-i")
-	case "xsel":
-		cmd = exec.Command("xsel", "--clipboard", "--input")
+	case toolXclip:
+		cmd = exec.Command(toolXclip, "-selection", "clipboard", "-i")
+	case toolXsel:
+		cmd = exec.Command(toolXsel, "--clipboard", "--input")
 	default:
 		return m.Copy(content)
 	}

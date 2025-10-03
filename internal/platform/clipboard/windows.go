@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	toolClip       = "clip"
+	toolPowerShell = "powershell"
+)
+
 type WindowsClipboard struct {
 	preferredTool string
 }
@@ -15,10 +20,10 @@ type WindowsClipboard struct {
 func NewWindowsClipboard() *WindowsClipboard {
 	wc := &WindowsClipboard{}
 
-	if _, err := exec.LookPath("clip"); err == nil {
-		wc.preferredTool = "clip"
-	} else if _, err := exec.LookPath("powershell"); err == nil {
-		wc.preferredTool = "powershell"
+	if _, err := exec.LookPath(toolClip); err == nil {
+		wc.preferredTool = toolClip
+	} else if _, err := exec.LookPath(toolPowerShell); err == nil {
+		wc.preferredTool = toolPowerShell
 	}
 
 	return wc
@@ -26,13 +31,13 @@ func NewWindowsClipboard() *WindowsClipboard {
 
 func (wc *WindowsClipboard) Copy(content string) error {
 	switch wc.preferredTool {
-	case "clip":
+	case toolClip:
 		return wc.copyWithClip(content)
-	case "powershell":
+	case toolPowerShell:
 		return wc.copyWithPowerShell(content)
 	default:
 		return &ClipboardError{
-			Platform: "windows",
+			Platform: platformWindows,
 			Command:  "none",
 			Err:      fmt.Errorf("no clipboard tools available"),
 		}
@@ -44,13 +49,13 @@ func (wc *WindowsClipboard) CopyWithTimeout(content string, timeout time.Duratio
 	defer cancel()
 
 	switch wc.preferredTool {
-	case "clip":
+	case toolClip:
 		return wc.copyWithClipContext(ctx, content)
-	case "powershell":
+	case toolPowerShell:
 		return wc.copyWithPowerShellContext(ctx, content)
 	default:
 		return &ClipboardError{
-			Platform: "windows",
+			Platform: platformWindows,
 			Command:  "none",
 			Err:      fmt.Errorf("no clipboard tools available"),
 		}
@@ -58,13 +63,13 @@ func (wc *WindowsClipboard) CopyWithTimeout(content string, timeout time.Duratio
 }
 
 func (wc *WindowsClipboard) copyWithClip(content string) error {
-	cmd := exec.Command("clip")
+	cmd := exec.Command(toolClip)
 	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		return &ClipboardError{
-			Platform: "windows",
-			Command:  "clip",
+			Platform: platformWindows,
+			Command:  toolClip,
 			Err:      err,
 		}
 	}
@@ -73,20 +78,20 @@ func (wc *WindowsClipboard) copyWithClip(content string) error {
 }
 
 func (wc *WindowsClipboard) copyWithClipContext(ctx context.Context, content string) error {
-	cmd := exec.CommandContext(ctx, "clip")
+	cmd := exec.CommandContext(ctx, toolClip)
 	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return &ClipboardError{
-				Platform: "windows",
-				Command:  "clip",
+				Platform: platformWindows,
+				Command:  toolClip,
 				Err:      fmt.Errorf("clipboard operation timed out"),
 			}
 		}
 		return &ClipboardError{
-			Platform: "windows",
-			Command:  "clip",
+			Platform: platformWindows,
+			Command:  toolClip,
 			Err:      err,
 		}
 	}
@@ -95,13 +100,13 @@ func (wc *WindowsClipboard) copyWithClipContext(ctx context.Context, content str
 }
 
 func (wc *WindowsClipboard) copyWithPowerShell(content string) error {
-	cmd := exec.Command("powershell", "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
+	cmd := exec.Command(toolPowerShell, "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
 	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		return &ClipboardError{
-			Platform: "windows",
-			Command:  "powershell",
+			Platform: platformWindows,
+			Command:  toolPowerShell,
 			Err:      err,
 		}
 	}
@@ -110,20 +115,20 @@ func (wc *WindowsClipboard) copyWithPowerShell(content string) error {
 }
 
 func (wc *WindowsClipboard) copyWithPowerShellContext(ctx context.Context, content string) error {
-	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
+	cmd := exec.CommandContext(ctx, toolPowerShell, "-NoProfile", "-Command", "Set-Clipboard -Value ([Console]::In.ReadToEnd())")
 	cmd.Stdin = strings.NewReader(content)
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return &ClipboardError{
-				Platform: "windows",
-				Command:  "powershell",
+				Platform: platformWindows,
+				Command:  toolPowerShell,
 				Err:      fmt.Errorf("clipboard operation timed out"),
 			}
 		}
 		return &ClipboardError{
-			Platform: "windows",
-			Command:  "powershell",
+			Platform: platformWindows,
+			Command:  toolPowerShell,
 			Err:      err,
 		}
 	}
@@ -132,12 +137,12 @@ func (wc *WindowsClipboard) copyWithPowerShellContext(ctx context.Context, conte
 }
 
 func (wc *WindowsClipboard) IsAvailable() bool {
-	if wc.preferredTool == "clip" {
-		_, err := exec.LookPath("clip")
+	if wc.preferredTool == toolClip {
+		_, err := exec.LookPath(toolClip)
 		return err == nil
 	}
-	if wc.preferredTool == "powershell" {
-		_, err := exec.LookPath("powershell")
+	if wc.preferredTool == toolPowerShell {
+		_, err := exec.LookPath(toolPowerShell)
 		return err == nil
 	}
 	return false
@@ -145,35 +150,35 @@ func (wc *WindowsClipboard) IsAvailable() bool {
 
 func (wc *WindowsClipboard) GetCommand() (string, []string) {
 	switch wc.preferredTool {
-	case "clip":
-		return "clip", []string{}
-	case "powershell":
-		return "powershell", []string{"-Command", "Set-Clipboard"}
+	case toolClip:
+		return toolClip, []string{}
+	case toolPowerShell:
+		return toolPowerShell, []string{"-Command", "Set-Clipboard"}
 	default:
 		return "", nil
 	}
 }
 
 func (wc *WindowsClipboard) GetPlatform() string {
-	return "windows"
+	return platformWindows
 }
 
 func (wc *WindowsClipboard) SetSelectedTool(name string) error {
 	switch name {
-	case "clip":
-		if _, err := exec.LookPath("clip"); err != nil {
+	case toolClip:
+		if _, err := exec.LookPath(toolClip); err != nil {
 			return &ClipboardError{
-				Platform: "windows",
+				Platform: platformWindows,
 				Command:  name,
 				Err:      fmt.Errorf("tool %s is not available", name),
 			}
 		}
 		wc.preferredTool = name
 		return nil
-	case "powershell":
-		if _, err := exec.LookPath("powershell"); err != nil {
+	case toolPowerShell:
+		if _, err := exec.LookPath(toolPowerShell); err != nil {
 			return &ClipboardError{
-				Platform: "windows",
+				Platform: platformWindows,
 				Command:  name,
 				Err:      fmt.Errorf("tool %s is not available", name),
 			}
@@ -182,7 +187,7 @@ func (wc *WindowsClipboard) SetSelectedTool(name string) error {
 		return nil
 	default:
 		return &ClipboardError{
-			Platform: "windows",
+			Platform: platformWindows,
 			Command:  name,
 			Err:      fmt.Errorf("unknown tool %s, supported tools: clip, powershell", name),
 		}

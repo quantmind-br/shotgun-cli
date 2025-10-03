@@ -78,21 +78,21 @@ func NewManager() *Manager {
 
 func (m *Manager) initializeTools() {
 	switch m.platform {
-	case "linux":
+	case platformLinux:
 		m.tools = []ClipboardTool{
 			{Name: "wl-copy", Command: "wl-copy", Args: []string{}, Priority: 1},
 			{Name: "xclip", Command: "xclip", Args: []string{"-selection", "clipboard"}, Priority: 2},
 			{Name: "xsel", Command: "xsel", Args: []string{"--clipboard", "--input"}, Priority: 3},
 		}
-	case "wsl":
+	case platformWSL:
 		m.tools = []ClipboardTool{
 			{Name: "clip.exe", Command: "clip.exe", Args: nil, Priority: 1},
 		}
-	case "darwin":
+	case platformDarwin:
 		m.tools = []ClipboardTool{
 			{Name: "pbcopy", Command: "pbcopy", Args: []string{}, Priority: 1},
 		}
-	case "windows":
+	case platformWindows:
 		m.tools = []ClipboardTool{
 			{Name: "clip", Command: "clip", Args: []string{}, Priority: 1},
 			{Name: "powershell", Command: "powershell", Args: []string{"-Command", "Set-Clipboard"}, Priority: 2},

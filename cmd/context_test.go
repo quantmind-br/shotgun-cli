@@ -113,7 +113,7 @@ func TestBuildGenerateConfigHonorsOutput(t *testing.T) {
 	cmd.Flags().Bool("enforce-limit", true, "")
 
 	dir := t.TempDir()
-	cmd.Flags().Set("root", dir)
+	_ = cmd.Flags().Set("root", dir)
 
 	cfg, err := buildGenerateConfig(cmd)
 	if err != nil {
