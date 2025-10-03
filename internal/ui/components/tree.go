@@ -11,16 +11,17 @@ import (
 )
 
 type FileTreeModel struct {
-	tree        *scanner.FileNode
-	cursor      int
-	selections  map[string]bool
-	showIgnored bool
-	filter      string
-	expanded    map[string]bool
-	width       int
-	height      int
-	visibleItems []treeItem
-	topIndex    int
+	tree            *scanner.FileNode
+	cursor          int
+	selections      map[string]bool
+	selectionStates map[string]styles.SelectionState
+	showIgnored     bool
+	filter          string
+	expanded        map[string]bool
+	width           int
+	height          int
+	visibleItems    []treeItem
+	topIndex        int
 }
 
 type treeItem struct {
@@ -38,11 +39,12 @@ func NewFileTree(tree *scanner.FileNode, selections map[string]bool) *FileTreeMo
 	}
 
 	model := &FileTreeModel{
-		tree:        tree,
-		selections:  make(map[string]bool),
-		expanded:    expanded,
-		showIgnored: false,
-		filter:      "",
+		tree:            tree,
+		selections:      make(map[string]bool),
+		selectionStates: make(map[string]styles.SelectionState),
+		expanded:        expanded,
+		showIgnored:     false,
+		filter:          "",
 	}
 
 	// Copy selections
@@ -51,6 +53,7 @@ func NewFileTree(tree *scanner.FileNode, selections map[string]bool) *FileTreeMo
 	}
 
 	model.rebuildVisibleItems()
+	model.recomputeSelectionStates()
 	return model
 }
 
@@ -98,6 +101,7 @@ func (m *FileTreeModel) ToggleSelection() {
 		item := m.visibleItems[m.cursor]
 		if !item.node.IsDir {
 			m.selections[item.path] = !m.selections[item.path]
+			m.recomputeSelectionStates()
 		}
 	}
 }
@@ -109,6 +113,7 @@ func (m *FileTreeModel) ToggleDirectorySelection() {
 			// Toggle all files in directory
 			allSelected := m.areAllFilesInDirSelected(item.node)
 			m.setDirectorySelection(item.node, !allSelected)
+			m.recomputeSelectionStates()
 		}
 	}
 }
@@ -188,14 +193,18 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 		}
 	}
 
+	// Determine selection state for styling
+	selectionState := m.selectionStateFor(item.path)
+
 	// Selection checkbox (for files only)
 	var checkbox string
 	if !item.node.IsDir {
+		checkboxText := "[ ] "
 		if m.selections[item.path] {
-			checkbox = "[✓] "
-		} else {
-			checkbox = "[ ] "
+			checkboxText = "[✓] "
 		}
+		// Apply color based on selection state
+		checkbox = styles.RenderFileName(checkboxText, selectionState)
 	}
 
 	// Directory indicator
@@ -209,10 +218,12 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 	}
 
 	// File name
-	name := filepath.Base(item.path)
+	baseName := filepath.Base(item.path)
 	if item.node.IsDir {
-		name += "/"
+		baseName += "/"
 	}
+	// Apply color based on selection state
+	name := styles.RenderFileName(baseName, selectionState)
 
 	// Ignore status
 	var ignoreStatus string
@@ -252,6 +263,8 @@ func (m *FileTreeModel) rebuildVisibleItems() {
 	if m.cursor < 0 {
 		m.cursor = 0
 	}
+
+	m.recomputeSelectionStates()
 }
 
 func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, path string, depth int, isLast bool, hasNext []bool) {
@@ -361,6 +374,7 @@ func (m *FileTreeModel) setDirectorySelection(dir *scanner.FileNode, selected bo
 			}
 		}
 	})
+	m.recomputeSelectionStates()
 }
 
 func (m *FileTreeModel) walkNode(node *scanner.FileNode, fn func(*scanner.FileNode)) {
@@ -372,6 +386,73 @@ func (m *FileTreeModel) walkNode(node *scanner.FileNode, fn func(*scanner.FileNo
 	for _, child := range node.Children {
 		m.walkNode(child, fn)
 	}
+}
+
+// recomputeSelectionStates traverses the tree and computes selection state for each node
+func (m *FileTreeModel) recomputeSelectionStates() {
+	m.selectionStates = make(map[string]styles.SelectionState)
+	if m.tree == nil {
+		return
+	}
+
+	// Post-order traversal to compute states bottom-up
+	var visit func(node *scanner.FileNode) styles.SelectionState
+	visit = func(node *scanner.FileNode) styles.SelectionState {
+		// Skip nodes that shouldn't be shown
+		if !m.shouldShowNode(node) {
+			return styles.SelectionUnselected
+		}
+
+		// Base case: file nodes
+		if !node.IsDir {
+			state := styles.SelectionUnselected
+			if m.selections[node.Path] {
+				state = styles.SelectionSelected
+			}
+			m.selectionStates[node.Path] = state
+			return state
+		}
+
+		// Recursive case: directory nodes
+		hasSelected := false
+		hasUnselected := false
+
+		for _, child := range node.Children {
+			childState := visit(child)
+			switch childState {
+			case styles.SelectionSelected:
+				hasSelected = true
+			case styles.SelectionUnselected:
+				hasUnselected = true
+			case styles.SelectionPartial:
+				// Partial counts as both
+				hasSelected = true
+				hasUnselected = true
+			}
+		}
+
+		// Determine directory state
+		state := styles.SelectionUnselected
+		switch {
+		case hasSelected && !hasUnselected:
+			state = styles.SelectionSelected
+		case hasSelected && hasUnselected:
+			state = styles.SelectionPartial
+		}
+
+		m.selectionStates[node.Path] = state
+		return state
+	}
+
+	visit(m.tree)
+}
+
+// selectionStateFor returns the cached selection state for a path
+func (m *FileTreeModel) selectionStateFor(path string) styles.SelectionState {
+	if state, ok := m.selectionStates[path]; ok {
+		return state
+	}
+	return styles.SelectionUnselected
 }
 
 func formatFileSize(bytes int64) string {

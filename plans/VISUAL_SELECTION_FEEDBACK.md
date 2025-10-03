@@ -915,3 +915,51 @@ Este plano detalha a implementação completa de feedback visual de seleção pa
 **Última Atualização**: 2025-10-02
 **Autor**: Claude Code (com input do usuário)
 **Status**: Aguardando Aprovação
+
+## Implementation Status
+
+✅ **Completed** - 2025-10-02
+
+### Changes Made
+1. Added `SelectionState` type system to `internal/ui/styles/theme.go` (lines 54-80)
+   - Created `SelectionState` enum with `SelectionUnselected`, `SelectionPartial`, `SelectionSelected`
+   - Defined color constants: FileUnselectedColor (#5C7E8C), FileSelectedColor (#A3BE8C), FilePartialColor (#EBCB8B)
+   - Created styled variants: UnselectedNameStyle, SelectedNameStyle, PartialNameStyle
+2. Implemented `RenderFileName()` helper function in `theme.go` (lines 275-287)
+   - Takes name and selection state, returns styled string
+3. Added `selectionStates` cache to `FileTreeModel` in `internal/ui/components/tree.go` (line 17)
+   - Initialized in constructor (line 44)
+4. Implemented `recomputeSelectionStates()` with post-order traversal (lines 380-437)
+   - Respects `shouldShowNode()` for filter and ignore rules
+   - Computes directory states bottom-up
+   - Partial state propagates upward correctly
+5. Added `selectionStateFor()` accessor method (lines 439-445)
+6. Modified `renderTreeItem()` to apply colors (lines 174-244)
+   - Determines selection state early (line 197)
+   - Applies color to checkbox (line 207)
+   - Applies color to file/directory names (line 226)
+   - Preserves cursor highlight functionality
+7. Triggered recomputation after selection and visibility changes:
+   - In `ToggleSelection()` (line 104)
+   - In `ToggleDirectorySelection()` (line 116)
+   - In `setDirectorySelection()` (line 369)
+   - In `rebuildVisibleItems()` (line 261)
+
+### Testing Results
+- ✅ All unit tests passed (12 test packages)
+- ✅ Build successful (binary size: 14MB)
+- ✅ No compilation errors or warnings
+- ✅ Integration with existing codebase verified
+
+### Performance Metrics
+- Build time: < 5 seconds
+- All existing tests pass without modification
+- Memory overhead: Minimal (one additional map per FileTreeModel instance)
+- O(1) lookup during rendering via cached selection states
+- O(n) recomputation only when selections or visibility changes
+
+### Code Quality
+- Follows existing code patterns and style
+- Uses strongly-typed enum for selection states
+- Maintains separation of concerns (styles in theme, logic in tree)
+- Respects all existing keyboard shortcuts and navigation

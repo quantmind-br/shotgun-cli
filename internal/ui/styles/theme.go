@@ -51,6 +51,33 @@ var (
 	TreeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#ECEFF4"))
 )
+// SelectionState represents the selection state of a file or directory node
+type SelectionState int
+
+const (
+	SelectionUnselected SelectionState = iota
+	SelectionPartial
+	SelectionSelected
+)
+
+// Selection state colors for file tree
+var (
+	FileUnselectedColor = lipgloss.Color("#5C7E8C") // Muted blue-gray
+	FileSelectedColor   = lipgloss.Color("#A3BE8C") // Success green
+	FilePartialColor    = lipgloss.Color("#EBCB8B") // Warning yellow
+
+	// Styles for file/directory names based on selection state
+	UnselectedNameStyle = lipgloss.NewStyle().
+		Foreground(FileUnselectedColor)
+
+	SelectedNameStyle = lipgloss.NewStyle().
+		Foreground(FileSelectedColor).
+		Bold(true)
+
+	PartialNameStyle = lipgloss.NewStyle().
+		Foreground(FilePartialColor).
+		Bold(true)
+)
 
 // Helper functions for common styling operations
 
@@ -243,4 +270,18 @@ func RenderFileTree(isDirectory bool, isSelected bool, isExpanded bool, name str
 	}
 
 	return TreeStyle.Render(checkbox + icon + " " + name)
+}
+
+// RenderFileName applies color styling to file/directory names based on selection state
+func RenderFileName(name string, selectionState SelectionState) string {
+	switch selectionState {
+	case SelectionSelected:
+		return SelectedNameStyle.Render(name)
+	case SelectionPartial:
+		return PartialNameStyle.Render(name)
+	case SelectionUnselected:
+		return UnselectedNameStyle.Render(name)
+	default:
+		return TreeStyle.Render(name)
+	}
 }
