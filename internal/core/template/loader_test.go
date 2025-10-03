@@ -34,7 +34,7 @@ func TestEmbeddedSource_LoadTemplates(t *testing.T) {
 			t.Errorf("Template %s should be marked as embedded", name)
 		}
 
-		if tmpl.Source != "embedded" {
+		if tmpl.Source != sourceEmbedded {
 			t.Errorf("Template %s should have source 'embedded', got '%s'", name, tmpl.Source)
 		}
 

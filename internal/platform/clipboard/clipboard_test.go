@@ -55,8 +55,8 @@ func (f *fakeClipboard) SetSelectedTool(name string) error {
 func TestManager_CopyDelegatesToImplementation(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
-	mgr := &Manager{platform: "linux", clipboard: fake}
+	fake := &fakeClipboard{platform: platformLinux, command: toolXclip, available: true}
+	mgr := &Manager{platform: platformLinux, clipboard: fake}
 
 	if err := mgr.Copy("hello"); err != nil {
 		t.Fatalf("Copy failed: %v", err)
@@ -79,8 +79,8 @@ func TestManager_CopyDelegatesToImplementation(t *testing.T) {
 func TestManager_CopyLarge_SizeLimit(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
-	mgr := &Manager{platform: "linux", clipboard: fake}
+	fake := &fakeClipboard{platform: platformLinux, command: toolXclip, available: true}
+	mgr := &Manager{platform: platformLinux, clipboard: fake}
 
 	oversized := strings.Repeat("x", MaxClipboardSize+1)
 	if err := mgr.CopyLarge(oversized); err == nil {
@@ -99,20 +99,20 @@ func TestManager_CopyLarge_SizeLimit(t *testing.T) {
 func TestManager_ForceToolSelection(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	fake := &fakeClipboard{platform: platformLinux, command: toolXclip, available: true}
 	mgr := &Manager{
-		platform:  "linux",
+		platform:  platformLinux,
 		clipboard: fake,
-		tools:     []ClipboardTool{{Name: "xclip", Command: "xclip", Available: true}},
+		tools:     []ClipboardTool{{Name: toolXclip, Command: toolXclip, Available: true}},
 	}
 
-	if err := mgr.ForceToolSelection("xclip"); err != nil {
+	if err := mgr.ForceToolSelection(toolXclip); err != nil {
 		t.Fatalf("expected tool selection to succeed: %v", err)
 	}
-	if mgr.selectedTool == nil || mgr.selectedTool.Name != "xclip" {
+	if mgr.selectedTool == nil || mgr.selectedTool.Name != toolXclip {
 		t.Fatalf("expected selected tool to be xclip")
 	}
-	if len(fake.selectedTools) != 1 || fake.selectedTools[0] != "xclip" {
+	if len(fake.selectedTools) != 1 || fake.selectedTools[0] != toolXclip {
 		t.Fatalf("expected clipboard implementation to receive SetSelectedTool call")
 	}
 
@@ -124,11 +124,11 @@ func TestManager_ForceToolSelection(t *testing.T) {
 func TestManager_GetStatusReflectsTools(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
+	fake := &fakeClipboard{platform: platformLinux, command: toolXclip, available: true}
 	mgr := &Manager{
-		platform:  "linux",
+		platform:  platformLinux,
 		clipboard: fake,
-		tools:     []ClipboardTool{{Name: "xclip", Command: "xclip", Available: true}},
+		tools:     []ClipboardTool{{Name: toolXclip, Command: toolXclip, Available: true}},
 	}
 	mgr.selectedTool = &mgr.tools[0]
 
@@ -136,7 +136,7 @@ func TestManager_GetStatusReflectsTools(t *testing.T) {
 	if !status.Available {
 		t.Fatalf("expected status to be available")
 	}
-	if status.Platform != "linux" {
+	if status.Platform != platformLinux {
 		t.Fatalf("unexpected platform: %s", status.Platform)
 	}
 	if len(status.Tools) != 1 || !status.Tools[0].Selected {
@@ -154,7 +154,7 @@ func TestManager_InitializeTools_LinuxPriority(t *testing.T) {
 	t.Setenv("WAYLAND_DISPLAY", "wayland-1")
 	t.Setenv("DISPLAY", "")
 
-	mgr := &Manager{platform: "linux"}
+	mgr := &Manager{platform: platformLinux}
 	mgr.clipboard = NewLinuxClipboard()
 	mgr.initializeTools()
 
@@ -176,11 +176,11 @@ func TestManager_InitializeTools_LinuxFallback(t *testing.T) {
 	t.Setenv("WAYLAND_DISPLAY", "")
 	t.Setenv("DISPLAY", ":0")
 
-	mgr := &Manager{platform: "linux"}
+	mgr := &Manager{platform: platformLinux}
 	mgr.clipboard = NewLinuxClipboard()
 	mgr.initializeTools()
 
-	if mgr.selectedTool == nil || mgr.selectedTool.Name != "xclip" {
+	if mgr.selectedTool == nil || mgr.selectedTool.Name != toolXclip {
 		t.Fatalf("expected xclip fallback selection, got %+v", mgr.selectedTool)
 	}
 }
@@ -233,8 +233,8 @@ func TestCreateTempFileLifecycle(t *testing.T) {
 }
 
 func BenchmarkManager_Copy(b *testing.B) {
-	fake := &fakeClipboard{platform: "linux", command: "xclip", available: true}
-	mgr := &Manager{platform: "linux", clipboard: fake}
+	fake := &fakeClipboard{platform: platformLinux, command: toolXclip, available: true}
+	mgr := &Manager{platform: platformLinux, clipboard: fake}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -10,6 +10,10 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 )
 
+const (
+	testTaskDescription = "Implement feature"
+)
+
 func TestWizardInitStartsScanCommand(t *testing.T) {
 	t.Parallel()
 
@@ -73,7 +77,7 @@ func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "Implement feature"
+	wizard.taskDesc = testTaskDescription
 
 	if !wizard.canAdvanceStep() {
 		t.Fatalf("expected step 1 to advance when files selected")
@@ -102,7 +106,7 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "Implement feature"
+	wizard.taskDesc = testTaskDescription
 
 	cmd := wizard.generateContext()
 	if cmd == nil {
@@ -125,7 +129,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "Implement feature"
+	wizard.taskDesc = testTaskDescription
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.template, wizard.taskDesc, "")
 	var model tea.Model
 
@@ -219,7 +223,7 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 		fileTree:      wizard.fileTree,
 		selectedFiles: wizard.selectedFiles,
 		template:      wizard.template,
-		taskDesc:      "Implement feature",
+		taskDesc:      testTaskDescription,
 		rootPath:      "/workspace",
 	})
 	wizard = model.(*WizardModel)
@@ -239,7 +243,7 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "Implement feature"
+	wizard.taskDesc = testTaskDescription
 
 	wizard.step = StepFileSelection
 	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})

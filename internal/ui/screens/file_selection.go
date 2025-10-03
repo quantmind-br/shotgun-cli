@@ -10,6 +10,10 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
+const (
+	keyEsc = "esc"
+)
+
 type RescanRequestMsg struct{}
 
 type FileSelectionModel struct {
@@ -54,7 +58,7 @@ func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) 
 			// Apply filter and exit filter mode
 			m.tree.SetFilter(m.filterBuffer)
 			m.filterMode = false
-		case "esc":
+		case keyEsc:
 			// Cancel filter mode without applying
 			m.filterMode = false
 			m.filterBuffer = ""

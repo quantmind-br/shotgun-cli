@@ -78,7 +78,7 @@ func (lc *LinuxClipboard) checkTool(toolName string) bool {
 func (lc *LinuxClipboard) Copy(content string) error {
 	if lc.selectedTool == nil {
 		return &ClipboardError{
-			Platform: "linux",
+			Platform: platformLinux,
 			Command:  "none",
 			Err:      fmt.Errorf("no clipboard tools available"),
 		}
@@ -89,7 +89,7 @@ func (lc *LinuxClipboard) Copy(content string) error {
 func (lc *LinuxClipboard) CopyWithTimeout(content string, timeout time.Duration) error {
 	if lc.selectedTool == nil {
 		return &ClipboardError{
-			Platform: "linux",
+			Platform: platformLinux,
 			Command:  "none",
 			Err:      fmt.Errorf("no clipboard tools available"),
 		}
@@ -107,7 +107,7 @@ func (lc *LinuxClipboard) copyWithTool(content string) error {
 
 	if err := cmd.Run(); err != nil {
 		return &ClipboardError{
-			Platform: "linux",
+			Platform: platformLinux,
 			Command:  lc.selectedTool.Command,
 			Err:      err,
 		}
@@ -123,13 +123,13 @@ func (lc *LinuxClipboard) copyWithContext(ctx context.Context, content string) e
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return &ClipboardError{
-				Platform: "linux",
+				Platform: platformLinux,
 				Command:  lc.selectedTool.Command,
 				Err:      fmt.Errorf("clipboard operation timed out"),
 			}
 		}
 		return &ClipboardError{
-			Platform: "linux",
+			Platform: platformLinux,
 			Command:  lc.selectedTool.Command,
 			Err:      err,
 		}
@@ -150,7 +150,7 @@ func (lc *LinuxClipboard) GetCommand() (string, []string) {
 }
 
 func (lc *LinuxClipboard) GetPlatform() string {
-	return "linux"
+	return platformLinux
 }
 
 func (lc *LinuxClipboard) SetSelectedTool(name string) error {

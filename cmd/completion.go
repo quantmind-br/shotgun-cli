@@ -7,6 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	configKeyTemplateCustomPath = "template.custom-path"
+)
+
 var completionCmd = &cobra.Command{
 	Use:   "completion [bash|zsh|fish|powershell]",
 	Short: "Generate completion script",
@@ -82,7 +86,7 @@ func configKeyCompletion(_ *cobra.Command, args []string, toComplete string) ([]
 		"context.max-size\tMaximum context size (e.g., 10MB)",
 		"context.include-tree\tInclude directory tree (true/false)",
 		"context.include-summary\tInclude file summaries (true/false)",
-		"template.custom-path\tPath to custom templates",
+		configKeyTemplateCustomPath + "\tPath to custom templates",
 		"output.format\tOutput format (markdown/text)",
 		"output.clipboard\tCopy to clipboard (true/false)",
 	}
@@ -116,7 +120,7 @@ func boolValueCompletion(_ *cobra.Command, args []string, toComplete string) ([]
 	}
 
 	// For path-based configs, enable file completion
-	if key == "template.custom-path" {
+	if key == configKeyTemplateCustomPath {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 

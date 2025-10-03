@@ -76,7 +76,7 @@ func (m *TaskInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg.String() {
-	case "esc":
+	case keyEsc:
 		if m.textarea.Focused() {
 			m.textarea.Blur()
 			m.focused = false
