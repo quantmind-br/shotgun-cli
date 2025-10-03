@@ -37,34 +37,54 @@ func (lc *LinuxClipboard) detectAvailableTools() {
 	waylandDisplay := os.Getenv("WAYLAND_DISPLAY")
 	xDisplay := os.Getenv("DISPLAY")
 
+	// Check tool availability
 	for i := range lc.tools {
-		tool := &lc.tools[i]
-		tool.Available = lc.checkTool(tool.Command)
-
-		if waylandDisplay != "" && tool.Name == toolWlCopy && tool.Available {
-			lc.selectedTool = tool
-			return
-		}
+		lc.tools[i].Available = lc.checkTool(lc.tools[i].Command)
 	}
 
-	if xDisplay != "" {
-		for i := range lc.tools {
-			tool := &lc.tools[i]
-			if (tool.Name == toolXclip || tool.Name == toolXsel) && tool.Available {
-				if lc.selectedTool == nil || tool.Priority < lc.selectedTool.Priority {
-					lc.selectedTool = tool
-				}
+	// Try Wayland first if available
+	if waylandDisplay != "" && lc.selectWaylandTool() {
+		return
+	}
+
+	// Try X11 tools if display is set
+	if xDisplay != "" && lc.selectX11Tool() {
+		return
+	}
+
+	// Fallback to any available tool
+	lc.selectAnyAvailableTool()
+}
+
+func (lc *LinuxClipboard) selectWaylandTool() bool {
+	for i := range lc.tools {
+		tool := &lc.tools[i]
+		if tool.Name == toolWlCopy && tool.Available {
+			lc.selectedTool = tool
+			return true
+		}
+	}
+	return false
+}
+
+func (lc *LinuxClipboard) selectX11Tool() bool {
+	for i := range lc.tools {
+		tool := &lc.tools[i]
+		if (tool.Name == toolXclip || tool.Name == toolXsel) && tool.Available {
+			if lc.selectedTool == nil || tool.Priority < lc.selectedTool.Priority {
+				lc.selectedTool = tool
 			}
 		}
 	}
+	return lc.selectedTool != nil
+}
 
-	if lc.selectedTool == nil {
-		for i := range lc.tools {
-			tool := &lc.tools[i]
-			if tool.Available {
-				if lc.selectedTool == nil || tool.Priority < lc.selectedTool.Priority {
-					lc.selectedTool = tool
-				}
+func (lc *LinuxClipboard) selectAnyAvailableTool() {
+	for i := range lc.tools {
+		tool := &lc.tools[i]
+		if tool.Available {
+			if lc.selectedTool == nil || tool.Priority < lc.selectedTool.Priority {
+				lc.selectedTool = tool
 			}
 		}
 	}

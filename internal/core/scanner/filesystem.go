@@ -180,48 +180,27 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 
 	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			// Skip inaccessible directories/files
-			if d != nil && d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+			return fs.handleCountError(d)
 		}
 
-		// Check file limits (MaxFiles applies only to files, not directories)
-		if config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles {
+		if fs.shouldStopCounting(config, d, fileCount) {
 			return filepath.SkipDir
 		}
 
 		relPath, err := filepath.Rel(rootPath, path)
-		if err != nil {
-			return nil // Skip on error
-		}
-
-		// Skip root directory itself
-		if relPath == "." {
+		if err != nil || relPath == "." {
 			return nil
 		}
 
-		// Check if should be ignored
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+			return fs.skipIfDirectory(d)
 		}
 
-		// Apply MaxFileSize filter for files during counting pass
-		if !d.IsDir() && config.MaxFileSize > 0 {
-			if info, err := d.Info(); err == nil {
-				if info.Size() > config.MaxFileSize {
-					return nil // Skip large files, don't count them
-				}
-			}
-			// If we can't get file info, ignore the error gracefully and continue counting
+		if fs.shouldSkipLargeFile(d, config) {
+			return nil
 		}
 
 		count++
-		// Only count files towards MaxFiles limit
 		if !d.IsDir() {
 			fileCount++
 		}
@@ -229,6 +208,34 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 	})
 
 	return count, err
+}
+
+func (fs *FileSystemScanner) handleCountError(d os.DirEntry) error {
+	if d != nil && d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func (fs *FileSystemScanner) shouldStopCounting(config *ScanConfig, d os.DirEntry, fileCount int64) bool {
+	return config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles
+}
+
+func (fs *FileSystemScanner) skipIfDirectory(d os.DirEntry) error {
+	if d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func (fs *FileSystemScanner) shouldSkipLargeFile(d os.DirEntry, config *ScanConfig) bool {
+	if d.IsDir() || config.MaxFileSize <= 0 {
+		return false
+	}
+	if info, err := d.Info(); err == nil {
+		return info.Size() > config.MaxFileSize
+	}
+	return false
 }
 
 // walkAndBuild builds the file tree with progress reporting
@@ -253,100 +260,106 @@ func (fs *FileSystemScanner) walkAndBuild(rootPath string, config *ScanConfig, p
 
 	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			// Skip inaccessible directories/files but continue scanning
-			if d != nil && d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+			return fs.handleWalkError(d)
 		}
 
-		// Check file limits (MaxFiles applies only to files, not directories)
-		if config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles {
+		if fs.shouldStopWalking(config, d, fileCount) {
 			return filepath.SkipDir
 		}
 
 		relPath, err := filepath.Rel(rootPath, path)
-		if err != nil {
-			return nil // Skip on error
-		}
-
-		// Skip root directory itself
-		if relPath == "." {
+		if err != nil || relPath == "." {
 			return nil
 		}
 
-		// Check if should be ignored using shouldIgnore method (mirrors countItems)
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
+			return fs.skipIfDirectory(d)
+		}
+
+		size, skipFile := fs.getFileSize(d, config)
+		if skipFile {
 			return nil
 		}
 
-
-		// Get file size for files
-		var size int64
-		if !d.IsDir() {
-			if info, err := d.Info(); err == nil {
-				size = info.Size()
-
-				// Check file size limits
-				if config.MaxFileSize > 0 && size > config.MaxFileSize {
-					return nil // Skip large files
-				}
-			}
-		}
-
-		// Get ignore status flags for UI purposes (after inclusion decision is made)
-		isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, d.IsDir(), config)
-
-		// Create file node
-		node := &FileNode{
-			Name:            d.Name(),
-			Path:            path,
-			RelPath:         relPath,
-			IsDir:           d.IsDir(),
-			Children:        make([]*FileNode, 0),
-			Selected:        false,
-			IsGitignored:    isGitignored,
-			IsCustomIgnored: isCustomIgnored,
-			Size:            size,
-			Expanded:        false,
-		}
-
-		// Find parent node and add this node to it
-		parentNode := fs.findParentNode(relPath, dirNodes)
-		if parentNode != nil {
-			node.Parent = parentNode
-			parentNode.Children = append(parentNode.Children, node)
-		}
-
-		// If this is a directory, add it to the directory map with normalized path
-		if d.IsDir() {
-			dirNodes[normRel(relPath)] = node
-		}
+		node := fs.createFileNode(path, relPath, d, size, config)
+		fs.addNodeToTree(node, relPath, dirNodes)
 
 		current++
-		// Only count files towards MaxFiles limit
 		if !d.IsDir() {
 			fileCount++
 		}
 
-		// Report progress every 100 items to avoid UI blocking
-		if progress != nil && current%100 == 0 {
-			progress <- Progress{
-				Current:   current,
-				Total:     total,
-				Stage:     "scanning",
-				Message:   fmt.Sprintf("Processing: %s", relPath),
-				Timestamp: time.Now(),
-			}
-		}
-
+		fs.reportProgress(progress, current, total, relPath)
 		return nil
 	})
 
 	return root, current, err
+}
+
+func (fs *FileSystemScanner) handleWalkError(d os.DirEntry) error {
+	if d != nil && d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func (fs *FileSystemScanner) shouldStopWalking(config *ScanConfig, d os.DirEntry, fileCount int64) bool {
+	return config.MaxFiles > 0 && !d.IsDir() && fileCount >= config.MaxFiles
+}
+
+func (fs *FileSystemScanner) getFileSize(d os.DirEntry, config *ScanConfig) (int64, bool) {
+	if d.IsDir() {
+		return 0, false
+	}
+	if info, err := d.Info(); err == nil {
+		size := info.Size()
+		if config.MaxFileSize > 0 && size > config.MaxFileSize {
+			return 0, true
+		}
+		return size, false
+	}
+	return 0, false
+}
+
+func (fs *FileSystemScanner) createFileNode(path, relPath string, d os.DirEntry, size int64, config *ScanConfig) *FileNode {
+	isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, d.IsDir(), config)
+
+	return &FileNode{
+		Name:            d.Name(),
+		Path:            path,
+		RelPath:         relPath,
+		IsDir:           d.IsDir(),
+		Children:        make([]*FileNode, 0),
+		Selected:        false,
+		IsGitignored:    isGitignored,
+		IsCustomIgnored: isCustomIgnored,
+		Size:            size,
+		Expanded:        false,
+	}
+}
+
+func (fs *FileSystemScanner) addNodeToTree(node *FileNode, relPath string, dirNodes map[string]*FileNode) {
+	parentNode := fs.findParentNode(relPath, dirNodes)
+	if parentNode != nil {
+		node.Parent = parentNode
+		parentNode.Children = append(parentNode.Children, node)
+	}
+
+	if node.IsDir {
+		dirNodes[normRel(relPath)] = node
+	}
+}
+
+func (fs *FileSystemScanner) reportProgress(progress chan<- Progress, current, total int64, relPath string) {
+	if progress != nil && current%100 == 0 {
+		progress <- Progress{
+			Current:   current,
+			Total:     total,
+			Stage:     "scanning",
+			Message:   fmt.Sprintf("Processing: %s", relPath),
+			Timestamp: time.Now(),
+		}
+	}
 }
 
 // findParentNode finds the parent directory node for a given relative path
@@ -459,65 +472,75 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 
 // getIgnoreStatus returns the ignore status for both gitignore and custom rules
 func (fs *FileSystemScanner) getIgnoreStatus(relPath string, isDir bool, config *ScanConfig) (bool, bool) {
-	// Use the new ignore engine if available
 	if fs.ignoreEngine != nil {
-		// Check if path should be ignored by the layered ignore engine
-		ignored, reason := fs.ignoreEngine.ShouldIgnore(relPath)
+		return fs.getIgnoreStatusWithEngine(relPath, config)
+	}
+	return fs.getIgnoreStatusLegacy(relPath, isDir, config)
+}
 
-		if ignored {
-			// Determine the ignore type based on the reason
-			switch reason {
-			case ignore.IgnoreReasonGitignore:
-				return true, false // Gitignored but not custom ignored
-			case ignore.IgnoreReasonBuiltIn, ignore.IgnoreReasonCustom, ignore.IgnoreReasonExplicit:
-				return false, true // Custom ignored but not gitignored
-			}
-		}
+func (fs *FileSystemScanner) getIgnoreStatusWithEngine(relPath string, config *ScanConfig) (bool, bool) {
+	ignored, reason := fs.ignoreEngine.ShouldIgnore(relPath)
 
-		// Check hidden files/directories if not included and not already ignored
-		if !config.IncludeHidden && !ignored {
-			baseName := filepath.Base(relPath)
-			if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
-				return false, true // Hidden files are treated as custom ignored
-			}
-		}
-
-		// Use the engine's specific methods for precise classification
-		isGitignored := fs.ignoreEngine.IsGitignored(relPath)
-		isCustomIgnored := fs.ignoreEngine.IsCustomIgnored(relPath) || ignored && reason != ignore.IgnoreReasonGitignore
-
-		return isGitignored, isCustomIgnored
+	if ignored {
+		return fs.classifyIgnoreReason(reason)
 	}
 
-	// Fallback to old logic if ignore engine is not available
+	if fs.isHiddenFile(relPath, config) {
+		return false, true
+	}
+
+	isGitignored := fs.ignoreEngine.IsGitignored(relPath)
+	isCustomIgnored := fs.ignoreEngine.IsCustomIgnored(relPath) || (ignored && reason != ignore.IgnoreReasonGitignore)
+
+	return isGitignored, isCustomIgnored
+}
+
+func (fs *FileSystemScanner) classifyIgnoreReason(reason ignore.IgnoreReason) (bool, bool) {
+	switch reason {
+	case ignore.IgnoreReasonGitignore:
+		return true, false
+	case ignore.IgnoreReasonBuiltIn, ignore.IgnoreReasonCustom, ignore.IgnoreReasonExplicit:
+		return false, true
+	}
+	return false, false
+}
+
+func (fs *FileSystemScanner) isHiddenFile(relPath string, config *ScanConfig) bool {
+	if config.IncludeHidden {
+		return false
+	}
+	baseName := filepath.Base(relPath)
+	return strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".."
+}
+
+func (fs *FileSystemScanner) getIgnoreStatusLegacy(relPath string, isDir bool, config *ScanConfig) (bool, bool) {
 	var isGitignored, isCustomIgnored bool
 
-	// Check .gitignore rules
 	if fs.pathMatcher != nil {
 		isGitignored = fs.pathMatcher.Matches(relPath, isDir)
 	}
 
-	// Check hidden files/directories
-	if !config.IncludeHidden {
-		baseName := filepath.Base(relPath)
-		if strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".." {
-			isCustomIgnored = true
-		}
+	if fs.isHiddenFile(relPath, config) {
+		isCustomIgnored = true
 	}
 
-	// Check custom ignore patterns
-	for _, pattern := range config.IgnorePatterns {
-		if matched, _ := filepath.Match(pattern, relPath); matched {
-			isCustomIgnored = true
-			break
-		}
-		if matched, _ := filepath.Match(pattern, filepath.Base(relPath)); matched {
-			isCustomIgnored = true
-			break
-		}
+	if fs.matchesCustomPatterns(relPath, config.IgnorePatterns) {
+		isCustomIgnored = true
 	}
 
 	return isGitignored, isCustomIgnored
+}
+
+func (fs *FileSystemScanner) matchesCustomPatterns(relPath string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, relPath); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, filepath.Base(relPath)); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldIncludeIgnored determines if ignored files should be included based on config

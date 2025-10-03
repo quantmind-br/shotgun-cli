@@ -166,6 +166,16 @@ func detectLanguage(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 	base := strings.ToLower(filepath.Base(filename))
 
+	// Try detecting by basename first
+	if lang := detectLanguageByBasename(base); lang != "" {
+		return lang
+	}
+
+	// Then try by extension
+	return detectLanguageByExtension(ext)
+}
+
+func detectLanguageByBasename(base string) string {
 	switch base {
 	case "dockerfile":
 		return langDockerfile
@@ -186,7 +196,10 @@ func detectLanguage(filename string) string {
 	case "requirements.txt", "setup.py", "setup.cfg":
 		return "python"
 	}
+	return ""
+}
 
+func detectLanguageByExtension(ext string) string {
 	switch ext {
 	case ".go":
 		return "go"

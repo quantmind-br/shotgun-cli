@@ -41,14 +41,26 @@ func (tr *TreeRenderer) RenderTree(root *scanner.FileNode) (string, error) {
 }
 
 func (tr *TreeRenderer) renderNode(node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder) {
+	if tr.shouldSkipNode(node, depth) {
+		return
+	}
+
+	line := tr.formatNodeLine(node, prefix, isLast)
+	result.WriteString(line)
+
+	if node.IsDir && len(node.Children) > 0 {
+		tr.renderChildren(node, prefix, isLast, depth, result)
+	}
+}
+
+func (tr *TreeRenderer) shouldSkipNode(node *scanner.FileNode, depth int) bool {
 	if tr.maxDepth >= 0 && depth > tr.maxDepth {
-		return
+		return true
 	}
+	return !tr.showIgnored && node.IsIgnored()
+}
 
-	if !tr.showIgnored && node.IsIgnored() {
-		return
-	}
-
+func (tr *TreeRenderer) formatNodeLine(node *scanner.FileNode, prefix string, isLast bool) string {
 	connector := "├── "
 	if isLast {
 		connector = "└── "
@@ -59,49 +71,63 @@ func (tr *TreeRenderer) renderNode(node *scanner.FileNode, prefix string, isLast
 		name += "/"
 	}
 
-	ignoreIndicator := ""
-	if node.IsIgnored() {
-		if node.IsGitignored {
-			ignoreIndicator = " (g)"
-		} else {
-			ignoreIndicator = " (c)"
-		}
+	ignoreIndicator := tr.getIgnoreIndicator(node)
+	sizeInfo := tr.getSizeInfo(node)
+
+	return fmt.Sprintf("%s%s%s%s%s\n", prefix, connector, name, ignoreIndicator, sizeInfo)
+}
+
+func (tr *TreeRenderer) getIgnoreIndicator(node *scanner.FileNode) string {
+	if !node.IsIgnored() {
+		return ""
+	}
+	if node.IsGitignored {
+		return " (g)"
+	}
+	return " (c)"
+}
+
+func (tr *TreeRenderer) getSizeInfo(node *scanner.FileNode) string {
+	if node.IsDir || node.Size == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" [%s]", formatFileSize(node.Size))
+}
+
+func (tr *TreeRenderer) renderChildren(node *scanner.FileNode, prefix string, isLast bool, depth int, result *strings.Builder) {
+	childPrefix := prefix
+	if isLast {
+		childPrefix += "    "
+	} else {
+		childPrefix += "│   "
 	}
 
-	sizeInfo := ""
-	if !node.IsDir && node.Size > 0 {
-		sizeInfo = fmt.Sprintf(" [%s]", formatFileSize(node.Size))
+	children := tr.getVisibleChildren(node)
+	tr.sortChildren(children)
+
+	for i, child := range children {
+		isChildLast := i == len(children)-1
+		tr.renderNode(child, childPrefix, isChildLast, depth+1, result)
 	}
+}
 
-	result.WriteString(fmt.Sprintf("%s%s%s%s%s\n", prefix, connector, name, ignoreIndicator, sizeInfo))
-
-	if node.IsDir && len(node.Children) > 0 {
-		childPrefix := prefix
-		if isLast {
-			childPrefix += "    "
-		} else {
-			childPrefix += "│   "
-		}
-
-		children := make([]*scanner.FileNode, 0, len(node.Children))
-		for _, child := range node.Children {
-			if tr.showIgnored || !child.IsIgnored() {
-				children = append(children, child)
-			}
-		}
-
-		sort.Slice(children, func(i, j int) bool {
-			if children[i].IsDir != children[j].IsDir {
-				return children[i].IsDir
-			}
-			return children[i].Name < children[j].Name
-		})
-
-		for i, child := range children {
-			isChildLast := i == len(children)-1
-			tr.renderNode(child, childPrefix, isChildLast, depth+1, result)
+func (tr *TreeRenderer) getVisibleChildren(node *scanner.FileNode) []*scanner.FileNode {
+	children := make([]*scanner.FileNode, 0, len(node.Children))
+	for _, child := range node.Children {
+		if tr.showIgnored || !child.IsIgnored() {
+			children = append(children, child)
 		}
 	}
+	return children
+}
+
+func (tr *TreeRenderer) sortChildren(children []*scanner.FileNode) {
+	sort.Slice(children, func(i, j int) bool {
+		if children[i].IsDir != children[j].IsDir {
+			return children[i].IsDir
+		}
+		return children[i].Name < children[j].Name
+	})
 }
 
 func formatFileSize(bytes int64) string {
