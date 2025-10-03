@@ -22,7 +22,7 @@ type FileSelectionModel struct {
 	height     int
 	fileTree   *scanner.FileNode
 	selections map[string]bool
-	
+
 	// Filter mode state
 	filterMode   bool
 	filterBuffer string
@@ -146,7 +146,7 @@ func (m *FileSelectionModel) View() string {
 
 	shortcuts := []string{
 		"↑/↓: Navigate",
-		"←/→: Expand/Collapse", 
+		"←/→: Expand/Collapse",
 		"Space: Select File",
 		"d: Select Directory",
 		"i: Toggle Ignored",
@@ -174,13 +174,13 @@ func (m *FileSelectionModel) View() string {
 	content.WriteString("\n")
 	content.WriteString(stats)
 	content.WriteString("\n")
-	
+
 	// Show filter input if in filter mode
 	if m.filterMode {
 		content.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
 		content.WriteString("\n")
 	}
-	
+
 	content.WriteString("\n")
 	content.WriteString(treeView)
 	content.WriteString("\n")

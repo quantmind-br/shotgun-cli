@@ -14,7 +14,7 @@ type Template struct {
 	RequiredVars []string `json:"required_vars"`
 	FilePath     string   `json:"file_path"`
 	IsEmbedded   bool     `json:"is_embedded"` // true if from embedded filesystem
-	Source       string   `json:"source"`       // "embedded", "user", or custom path
+	Source       string   `json:"source"`      // "embedded", "user", or custom path
 }
 
 // Common template variable constants
@@ -128,16 +128,16 @@ func validateTemplateContent(content string) error {
 	// Check for malformed variable syntax
 	lines := strings.Split(content, "\n")
 	inCodeBlock := false
-	
+
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Track if we're inside a code block (handles both ``` and ```language)
 		if strings.HasPrefix(trimmed, "```") {
 			inCodeBlock = !inCodeBlock
 			continue
 		}
-		
+
 		// Skip validation for lines inside code blocks
 		if inCodeBlock {
 			continue
@@ -155,7 +155,7 @@ func validateTemplateContent(content string) error {
 		if strings.Contains(line, "{") {
 			// Find all potential variable patterns
 			matches := variablePattern.FindAllString(line, -1)
-			
+
 			// Validate that each match is well-formed (this is redundant but explicit)
 			for _, match := range matches {
 				if !variablePattern.MatchString(match) {

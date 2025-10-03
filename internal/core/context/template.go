@@ -9,13 +9,13 @@ import (
 )
 
 type TemplateRenderer struct {
-	funcs template.FuncMap
+	funcs        template.FuncMap
 	requiredVars []string
 }
 
 func NewTemplateRenderer() *TemplateRenderer {
 	return &TemplateRenderer{
-		funcs: getTemplateFunctions(),
+		funcs:        getTemplateFunctions(),
 		requiredVars: []string{"TASK"}, // Default template requires TASK variable
 	}
 }
@@ -58,7 +58,7 @@ func getTemplateFunctions() template.FuncMap {
 		"now": func() string {
 			return time.Now().Format("2006-01-02 15:04:05")
 		},
-		"join": strings.Join,
+		"join":  strings.Join,
 		"title": strings.Title,
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,

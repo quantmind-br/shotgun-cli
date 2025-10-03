@@ -177,7 +177,7 @@ func (r *Renderer) PreviewTemplate(template *Template) (string, error) {
 // ValidateVariableNames checks if variable names follow the expected format
 func (r *Renderer) ValidateVariableNames(vars map[string]string) error {
 	for varName := range vars {
-		if !variablePattern.MatchString("{"+varName+"}") {
+		if !variablePattern.MatchString("{" + varName + "}") {
 			return fmt.Errorf("invalid variable name format: %s", varName)
 		}
 	}

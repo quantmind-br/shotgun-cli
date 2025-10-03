@@ -66,11 +66,11 @@ func launchTUIWizard() {
 
 	// Create scanner configuration from Viper settings
 	config := &scanner.ScanConfig{
-		MaxFiles:     viper.GetInt64("scanner.max-files"),
-		MaxFileSize:  parseConfigSize(viper.GetString("scanner.max-file-size")),
-		SkipBinary:   false,
+		MaxFiles:      viper.GetInt64("scanner.max-files"),
+		MaxFileSize:   parseConfigSize(viper.GetString("scanner.max-file-size")),
+		SkipBinary:    false,
 		IncludeHidden: false,
-		Workers:      1,
+		Workers:       1,
 	}
 
 	// Create wizard model

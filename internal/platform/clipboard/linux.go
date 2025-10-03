@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	toolXclip   = "xclip"
-	toolXsel    = "xsel"
-	toolWlCopy  = "wl-copy"
+	toolXclip  = "xclip"
+	toolXsel   = "xsel"
+	toolWlCopy = "wl-copy"
 )
 
 type LinuxClipboard struct {

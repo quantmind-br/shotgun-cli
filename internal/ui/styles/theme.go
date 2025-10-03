@@ -51,6 +51,7 @@ var (
 	TreeStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#ECEFF4"))
 )
+
 // SelectionState represents the selection state of a file or directory node
 type SelectionState int
 
@@ -68,15 +69,15 @@ var (
 
 	// Styles for file/directory names based on selection state
 	UnselectedNameStyle = lipgloss.NewStyle().
-		Foreground(FileUnselectedColor)
+				Foreground(FileUnselectedColor)
 
 	SelectedNameStyle = lipgloss.NewStyle().
-		Foreground(FileSelectedColor).
-		Bold(true)
+				Foreground(FileSelectedColor).
+				Bold(true)
 
 	PartialNameStyle = lipgloss.NewStyle().
-		Foreground(FilePartialColor).
-		Bold(true)
+				Foreground(FilePartialColor).
+				Bold(true)
 )
 
 // Helper functions for common styling operations

@@ -30,7 +30,6 @@ type Manager struct {
 	renderer  *Renderer
 }
 
-
 var templatesFS fs.FS
 
 // NewManager creates a new template manager instance

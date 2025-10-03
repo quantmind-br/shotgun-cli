@@ -36,11 +36,11 @@ type GenerateConfig struct {
 }
 
 type ContextData struct {
-	Task          string        `json:"task"`
-	Rules         string        `json:"rules"`
-	FileStructure string        `json:"fileStructure"`
-	Files         []FileContent `json:"files"`
-	CurrentDate   string        `json:"currentDate"`
+	Task          string         `json:"task"`
+	Rules         string         `json:"rules"`
+	FileStructure string         `json:"fileStructure"`
+	Files         []FileContent  `json:"files"`
+	CurrentDate   string         `json:"currentDate"`
 	Config        GenerateConfig `json:"config"`
 }
 

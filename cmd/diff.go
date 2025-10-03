@@ -168,7 +168,7 @@ func intelligentSplitDiff(lines []string, approxLines int) []DiffChunk {
 
 		// Check if we should create a new chunk
 		shouldSplit := len(currentChunk.Lines) >= approxLines &&
-					  canSplitHere(lines, i, inFileSection)
+			canSplitHere(lines, i, inFileSection)
 
 		if shouldSplit {
 			currentChunk.FileCount = fileCount

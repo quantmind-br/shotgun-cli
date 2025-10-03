@@ -296,14 +296,14 @@ func TestManager_MultiSource_PriorityOverride(t *testing.T) {
 	// Create mock sources
 	source1 := &mockTemplateSource{
 		templates: map[string]*Template{
-			"test": {Name: "test", Content: "Source 1", Source: "source1", IsEmbedded: false},
+			"test":  {Name: "test", Content: "Source 1", Source: "source1", IsEmbedded: false},
 			"only1": {Name: "only1", Content: "Only in 1", Source: "source1", IsEmbedded: false},
 		},
 	}
 
 	source2 := &mockTemplateSource{
 		templates: map[string]*Template{
-			"test": {Name: "test", Content: "Source 2", Source: "source2", IsEmbedded: false},
+			"test":  {Name: "test", Content: "Source 2", Source: "source2", IsEmbedded: false},
 			"only2": {Name: "only2", Content: "Only in 2", Source: "source2", IsEmbedded: false},
 		},
 	}

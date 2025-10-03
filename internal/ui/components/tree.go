@@ -25,11 +25,11 @@ type FileTreeModel struct {
 }
 
 type treeItem struct {
-	node     *scanner.FileNode
-	path     string
-	depth    int
-	isLast   bool
-	hasNext  []bool
+	node    *scanner.FileNode
+	path    string
+	depth   int
+	isLast  bool
+	hasNext []bool
 }
 
 func NewFileTree(tree *scanner.FileNode, selections map[string]bool) *FileTreeModel {
@@ -289,11 +289,11 @@ func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, _ string, dept
 	copy(currentHasNext, hasNext)
 
 	item := treeItem{
-		node:     node,
-		path:     node.Path,
-		depth:    depth,
-		isLast:   isLast,
-		hasNext:  currentHasNext,
+		node:    node,
+		path:    node.Path,
+		depth:   depth,
+		isLast:  isLast,
+		hasNext: currentHasNext,
 	}
 	m.visibleItems = append(m.visibleItems, item)
 

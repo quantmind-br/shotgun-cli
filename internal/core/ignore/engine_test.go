@@ -402,7 +402,7 @@ func TestLayeredIgnoreEngine_IsGitignored(t *testing.T) {
 	}
 
 	tests := []struct {
-		path      string
+		path       string
 		gitignored bool
 		testName   string
 	}{

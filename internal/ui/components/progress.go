@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 

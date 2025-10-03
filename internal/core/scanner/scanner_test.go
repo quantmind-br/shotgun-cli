@@ -761,18 +761,18 @@ func TestNewFileSystemScannerWithMatcher(t *testing.T) {
 	fakeMatcher := &fakeMatcher{
 		shouldMatch: make(map[string]bool),
 	}
-	
+
 	// Configure the fake matcher to ignore specific paths
 	fakeMatcher.shouldMatch["test.tmp"] = true
 	fakeMatcher.shouldMatch["important.txt"] = false
-	
+
 	// Create scanner with the fake matcher
 	scanner := NewFileSystemScannerWithMatcher(fakeMatcher)
-	
+
 	if scanner == nil {
 		t.Fatal("Expected non-nil scanner")
 	}
-	
+
 	// Verify the scanner uses the injected matcher
 	// We can't easily test the full scan without creating files,
 	// but we can verify the constructor worked

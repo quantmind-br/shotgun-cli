@@ -464,7 +464,7 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 		}
 		return false
 	}
-	
+
 	// Fallback to old logic for backward compatibility when using pathMatcher
 	isGitignored, isCustomIgnored := fs.getIgnoreStatus(relPath, isDir, config)
 	return (isGitignored || isCustomIgnored) && !fs.shouldIncludeIgnored(config)

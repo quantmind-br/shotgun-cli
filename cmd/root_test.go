@@ -84,5 +84,5 @@ func TestGetConfigDir(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
 		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-		bytes.Contains([]byte(s), []byte(substr))))
+			bytes.Contains([]byte(s), []byte(substr))))
 }

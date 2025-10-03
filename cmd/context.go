@@ -173,8 +173,8 @@ func generateContextHeadless(config GenerateConfig) error {
 	contextConfig := context.GenerateConfig{
 		MaxTotalSize: config.MaxSize,
 		TemplateVars: map[string]string{
-			"TASK":          "Context generation",
-			"RULES":         "",
+			"TASK":           "Context generation",
+			"RULES":          "",
 			"FILE_STRUCTURE": "",
 			"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 		},

@@ -8,7 +8,7 @@ import (
 
 const (
 	MaxClipboardSize = 10 * 1024 * 1024 // 10MB
-	LargeContentSize = 5 * 1024 * 1024   // 5MB
+	LargeContentSize = 5 * 1024 * 1024  // 5MB
 )
 
 type ClipboardStatus struct {
@@ -97,7 +97,6 @@ func (m *Manager) copyViaTempFile(content string) error {
 
 	return nil
 }
-
 
 func (m *Manager) GetStatus() ClipboardStatus {
 	platform := m.platform
