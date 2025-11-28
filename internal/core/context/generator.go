@@ -210,7 +210,7 @@ func convertTemplateVariables(template string) string {
 
 	result := template
 	for old, new := range conversions {
-		result = strings.Replace(result, old, new, -1)
+		result = strings.ReplaceAll(result, old, new)
 	}
 
 	return result

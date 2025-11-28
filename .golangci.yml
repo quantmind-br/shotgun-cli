@@ -12,26 +12,44 @@ linters:
     - goconst
     - misspell
     - gocyclo
+    - gosec
     - lll
-    - ineffassign
+    - prealloc
     - unconvert
     - unparam
     - unused
-    - gosec
-    - prealloc
 
 formatters:
   enable:
     - gofmt
     - goimports
 
-linters-settings:
+settings:
   gocyclo:
     min-complexity: 15
   lll:
     line-length: 120
   misspell:
     locale: US
+
+exclusions:
+  generated: lax
+  presets:
+    - comments
+    - common-false-positives
+    - legacy
+    - std-error-handling
+  rules:
+    - linters:
+        - gosec
+      path: _test\.go
+    - linters:
+        - '*'
+      path: vendor/
+  paths:
+    - third_party$
+    - builtin$
+    - examples$
 
 issues:
   exclude-rules:

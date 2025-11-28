@@ -202,7 +202,7 @@ func (m *TemplateSelectionModel) renderTemplateDetails(content *strings.Builder)
 		content.WriteString(styles.TitleStyle.Render("Required Variables:"))
 		content.WriteString("\n")
 		for _, variable := range selectedTemplate.RequiredVars {
-			content.WriteString(fmt.Sprintf("  • %s", variable))
+			fmt.Fprintf(content, "  • %s", variable)
 			content.WriteString("\n")
 		}
 	}
