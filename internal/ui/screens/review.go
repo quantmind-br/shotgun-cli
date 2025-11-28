@@ -5,12 +5,15 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 type ReviewModel struct {
 	selectedFiles   map[string]bool
+	fileTree        *scanner.FileNode
 	template        *template.Template
 	taskDesc        string
 	rules           string
@@ -19,16 +22,30 @@ type ReviewModel struct {
 	generated       bool
 	generatedPath   string
 	clipboardCopied bool
-	estimatedSize   string
+
+	// Cached stats calculated on initialization
+	totalBytes  int64
+	totalTokens int
 }
 
-func NewReview(selectedFiles map[string]bool, template *template.Template, taskDesc, rules string) *ReviewModel {
-	return &ReviewModel{
+// NewReview creates a new ReviewModel with precomputed statistics.
+// The fileTree is required for accurate size calculations.
+func NewReview(
+	selectedFiles map[string]bool,
+	fileTree *scanner.FileNode,
+	tmpl *template.Template,
+	taskDesc, rules string,
+) *ReviewModel {
+	m := &ReviewModel{
 		selectedFiles: selectedFiles,
-		template:      template,
+		fileTree:      fileTree,
+		template:      tmpl,
 		taskDesc:      taskDesc,
 		rules:         rules,
 	}
+	// Calculate stats on initialization (once)
+	m.totalBytes, m.totalTokens = m.calculateStats()
+	return m
 }
 
 func (m *ReviewModel) SetSize(width, height int) {
@@ -51,11 +68,13 @@ func (m *ReviewModel) View() string {
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Files summary
+	// Files summary with token estimate
 	fileCount := len(m.selectedFiles)
-	totalSize := m.calculateTotalSize()
 	content.WriteString(styles.TitleStyle.Render("📁 Selected Files:"))
-	content.WriteString(fmt.Sprintf(" %d files (%s)", fileCount, formatSizeHelper(totalSize)))
+	content.WriteString(fmt.Sprintf(" %d files (%s / ~%s tokens)",
+		fileCount,
+		formatSizeHelper(m.totalBytes),
+		tokens.FormatTokens(m.totalTokens)))
 	content.WriteString("\n\n")
 
 	// Show some selected files (up to 5)
@@ -111,11 +130,12 @@ func (m *ReviewModel) View() string {
 		content.WriteString("\n\n")
 	}
 
-	// Estimated output size
-	if m.estimatedSize != "" {
-		content.WriteString(styles.HelpStyle.Render(fmt.Sprintf("Estimated output size: %s", m.estimatedSize)))
-		content.WriteString("\n\n")
-	}
+	// Estimated output size summary
+	content.WriteString(styles.HelpStyle.Render(
+		fmt.Sprintf("Estimated context: %s / ~%s tokens",
+			formatSizeHelper(m.totalBytes),
+			tokens.FormatTokens(m.totalTokens))))
+	content.WriteString("\n\n")
 
 	// Generation status
 	if m.generated {
@@ -171,10 +191,41 @@ func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {
 	m.clipboardCopied = clipboardSuccess
 }
 
-func (m *ReviewModel) calculateTotalSize() int64 {
-	// This would be calculated based on actual file sizes
-	// For now, return a placeholder
-	return int64(len(m.selectedFiles) * 1024) // Rough estimate
+// calculateStats computes accurate byte and token counts from selected files.
+// It traverses the fileTree and sums sizes only for files in selectedFiles.
+// It also includes overhead from task description, rules, and template.
+func (m *ReviewModel) calculateStats() (int64, int) {
+	var fileBytes int64
+
+	// Sum sizes of selected files by traversing the tree
+	if m.fileTree != nil {
+		m.walkTree(m.fileTree, func(node *scanner.FileNode, path string) {
+			if !node.IsDir && m.selectedFiles[path] {
+				fileBytes += node.Size
+			}
+		})
+	}
+
+	// Add overhead from task and rules
+	overhead := int64(len(m.taskDesc) + len(m.rules))
+
+	// Add template content overhead (approximate)
+	if m.template != nil {
+		overhead += int64(len(m.template.Content))
+	}
+
+	totalBytes := fileBytes + overhead
+	totalTokens := tokens.EstimateFromBytes(totalBytes)
+
+	return totalBytes, totalTokens
+}
+
+// walkTree recursively visits all nodes in the file tree
+func (m *ReviewModel) walkTree(node *scanner.FileNode, fn func(*scanner.FileNode, string)) {
+	fn(node, node.Path)
+	for _, child := range node.Children {
+		m.walkTree(child, fn)
+	}
 }
 
 func formatSizeHelper(bytes int64) string {

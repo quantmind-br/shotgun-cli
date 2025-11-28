@@ -130,7 +130,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = testTaskDescription
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.template, wizard.taskDesc, "")
+	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "")
 	var model tea.Model
 
 	// Initialize generation state
@@ -198,7 +198,7 @@ func TestWizardClipboardFailureStored(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.review = screens.NewReview(map[string]bool{}, nil, "", "")
+	wizard.review = screens.NewReview(map[string]bool{}, nil, nil, "", "")
 	wizard.generatedFilePath = "/tmp/test.md"
 
 	model, _ := wizard.Update(ClipboardCompleteMsg{Success: false, Err: fmt.Errorf("copy failed")})

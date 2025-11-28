@@ -125,6 +125,24 @@ func NewIgnoreEngine() *LayeredIgnoreEngine {
 		".cache/",
 		".tmp/",
 		"tmp/",
+		".pytest_cache/",
+		".mypy_cache/",
+
+		// Images and Media
+		"*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.svg", "*.webp",
+		"*.mp3", "*.mp4", "*.wav", "*.avi", "*.mov", "*.mkv",
+
+		// Fonts
+		"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+
+		// Documents
+		"*.pdf", "*.doc", "*.docx", "*.xls", "*.xlsx", "*.ppt", "*.pptx",
+
+		// Binary executables and libs
+		"*.exe", "*.dll", "*.so", "*.dylib",
+
+		// Databases
+		"*.sqlite", "*.sqlite3", "*.db",
 
 		// Log files
 		"*.log",
@@ -138,6 +156,7 @@ func NewIgnoreEngine() *LayeredIgnoreEngine {
 		"*.zip",
 		"*.tar.gz",
 		"*.rar",
+		"*.7z",
 
 		// OS generated files
 		".DS_Store?",

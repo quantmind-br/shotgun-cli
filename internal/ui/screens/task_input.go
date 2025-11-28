@@ -10,8 +10,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
-const maxTaskLength = 2000
-
 type TaskInputModel struct {
 	textarea textarea.Model
 	width    int
@@ -27,7 +25,6 @@ func NewTaskInput(initialValue string) *TaskInputModel {
 		"- Fix the memory leak in the data processor\n" +
 		"- Refactor the payment handling code to use new API"
 	ta.Focus()
-	ta.CharLimit = maxTaskLength
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display
 
@@ -94,16 +91,9 @@ func (m *TaskInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 func (m *TaskInputModel) View() string {
 	header := styles.RenderHeader(3, "Describe Your Task")
 
-	// Character count with color coding
+	// Character count
 	currentLength := len(m.textarea.Value())
-	charCountColor := styles.HelpStyle
-	if currentLength > maxTaskLength*8/10 { // 80% of limit
-		charCountColor = styles.ErrorStyle
-	} else if currentLength > maxTaskLength*6/10 { // 60% of limit
-		charCountColor = charCountColor.Foreground(styles.WarningColor)
-	}
-
-	charCount := charCountColor.Render(fmt.Sprintf("Characters: %d/%d", currentLength, maxTaskLength))
+	charCount := styles.HelpStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
 
 	instructions := styles.HelpStyle.Render(
 		"Enter a detailed description of what you want to accomplish. " +

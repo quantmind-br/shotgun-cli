@@ -68,7 +68,7 @@ func launchTUIWizard() {
 	config := &scanner.ScanConfig{
 		MaxFiles:      viper.GetInt64("scanner.max-files"),
 		MaxFileSize:   parseConfigSize(viper.GetString("scanner.max-file-size")),
-		SkipBinary:    false,
+		SkipBinary:    viper.GetBool("scanner.skip-binary"),
 		IncludeHidden: false,
 		Workers:       1,
 	}
@@ -197,6 +197,7 @@ func setConfigDefaults() {
 	viper.SetDefault("scanner.max-files", 10000)
 	viper.SetDefault("scanner.max-file-size", "1MB")
 	viper.SetDefault("scanner.respect-gitignore", true)
+	viper.SetDefault("scanner.skip-binary", true)
 
 	// Context generation defaults
 	viper.SetDefault("context.max-size", "10MB")

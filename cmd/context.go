@@ -14,6 +14,7 @@ import (
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 )
 
@@ -144,7 +145,7 @@ func generateContextHeadless(config GenerateConfig) error {
 	scannerConfig := scanner.ScanConfig{
 		MaxFiles:        viper.GetInt64("scanner.max-files"),
 		MaxFileSize:     parseConfigSize(viper.GetString("scanner.max-file-size")),
-		SkipBinary:      false,
+		SkipBinary:      viper.GetBool("scanner.skip-binary"),
 		IncludeHidden:   false,
 		Workers:         1,
 		IgnorePatterns:  config.Exclude,
@@ -178,6 +179,7 @@ func generateContextHeadless(config GenerateConfig) error {
 			"FILE_STRUCTURE": "",
 			"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 		},
+		SkipBinary: viper.GetBool("scanner.skip-binary"),
 	}
 
 	// Generate context
@@ -216,12 +218,14 @@ func generateContextHeadless(config GenerateConfig) error {
 		}
 	}
 
-	// Print summary
+	// Print summary with token estimate
+	contentBytes := int64(len(content))
+	estimatedTokens := tokens.EstimateFromBytes(contentBytes)
 	fmt.Printf("✅ Context generated successfully!\n")
 	fmt.Printf("📁 Root path: %s\n", config.RootPath)
 	fmt.Printf("📄 Output file: %s\n", config.Output)
 	fmt.Printf("📊 Files processed: %d\n", fileCount)
-	fmt.Printf("📏 Total size: %s\n", formatBytes(int64(len(content))))
+	fmt.Printf("📏 Total size: %s (~%s tokens)\n", formatBytes(contentBytes), tokens.FormatTokens(estimatedTokens))
 	fmt.Printf("🎯 Size limit: %s\n", formatBytes(config.MaxSize))
 
 	return nil

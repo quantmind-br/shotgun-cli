@@ -47,6 +47,7 @@ Supported configuration keys:
   scanner.max-files           - Maximum number of files to scan (default: 10000)
   scanner.max-file-size       - Maximum size per file (default: "1MB")
   scanner.respect-gitignore   - Respect .gitignore files (default: true)
+  scanner.skip-binary         - Skip binary files (default: true)
   context.max-size           - Maximum context size (default: "10MB")
   context.include-tree       - Include directory tree (default: true)
   context.include-summary    - Include file summaries (default: true)
@@ -213,6 +214,7 @@ func isValidConfigKey(key string) bool {
 		"scanner.max-files",
 		"scanner.max-file-size",
 		"scanner.respect-gitignore",
+		"scanner.skip-binary",
 		"context.max-size",
 		"context.include-tree",
 		"context.include-summary",
@@ -235,7 +237,8 @@ func validateConfigValue(key, value string) error {
 		return validateMaxFiles(value)
 	case "scanner.max-file-size", "context.max-size":
 		return validateSizeFormat(value)
-	case "scanner.respect-gitignore", "context.include-tree", "context.include-summary", "output.clipboard":
+	case "scanner.respect-gitignore", "scanner.skip-binary",
+		"context.include-tree", "context.include-summary", "output.clipboard":
 		return validateBooleanValue(value)
 	case "output.format":
 		return validateOutputFormat(value)
@@ -315,7 +318,8 @@ func convertConfigValue(key, value string) (interface{}, error) {
 		}
 		return intVal, nil
 
-	case "scanner.respect-gitignore", "context.include-tree", "context.include-summary", "output.clipboard":
+	case "scanner.respect-gitignore", "scanner.skip-binary",
+		"context.include-tree", "context.include-summary", "output.clipboard":
 		return strings.ToLower(value) == "true", nil
 
 	default:

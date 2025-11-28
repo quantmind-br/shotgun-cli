@@ -480,7 +480,7 @@ func (m *WizardModel) initStep() tea.Cmd {
 		m.rulesInput = screens.NewRulesInput(m.rules)
 		m.rulesInput.SetSize(m.width, m.height)
 	case StepReview:
-		m.review = screens.NewReview(m.selectedFiles, m.template, m.taskDesc, m.rules)
+		m.review = screens.NewReview(m.selectedFiles, m.fileTree, m.template, m.taskDesc, m.rules)
 		m.review.SetSize(m.width, m.height)
 	}
 	return nil

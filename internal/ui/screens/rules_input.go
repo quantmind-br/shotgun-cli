@@ -10,8 +10,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
-const maxRulesLength = 1500
-
 type RulesInputModel struct {
 	textarea textarea.Model
 	width    int
@@ -29,7 +27,6 @@ func NewRulesInput(initialValue string) *RulesInputModel {
 		"- Use the company's coding standards\n" +
 		"- Maintain backward compatibility"
 	ta.Focus()
-	ta.CharLimit = maxRulesLength
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display
 
@@ -96,16 +93,9 @@ func (m *RulesInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 func (m *RulesInputModel) View() string {
 	header := styles.RenderHeader(4, "Add Rules & Constraints (Optional)")
 
-	// Character count with color coding
+	// Character count
 	currentLength := len(m.textarea.Value())
-	charCountColor := styles.HelpStyle
-	if currentLength > maxRulesLength*8/10 { // 80% of limit
-		charCountColor = styles.ErrorStyle
-	} else if currentLength > maxRulesLength*6/10 { // 60% of limit
-		charCountColor = charCountColor.Foreground(styles.WarningColor)
-	}
-
-	charCount := charCountColor.Render(fmt.Sprintf("Characters: %d/%d", currentLength, maxRulesLength))
+	charCount := styles.HelpStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
 
 	instructions := styles.HelpStyle.Render(
 		"Specify any coding standards, architectural constraints, or specific requirements. " +

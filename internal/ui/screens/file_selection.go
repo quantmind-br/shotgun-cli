@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
@@ -127,9 +128,11 @@ func (m *FileSelectionModel) View() string {
 	if m.selections != nil {
 		selectedCount := len(m.selections)
 		totalSize := m.calculateSelectedSize()
-		stats = fmt.Sprintf("Selected: %d files (%s)", selectedCount, formatSize(totalSize))
+		estimatedTokens := tokens.EstimateFromBytes(totalSize)
+		stats = fmt.Sprintf("Selected: %d files (%s / ~%s tokens)",
+			selectedCount, formatSize(totalSize), tokens.FormatTokens(estimatedTokens))
 	} else {
-		stats = "Selected: 0 files (0 B)"
+		stats = "Selected: 0 files (0 B / ~0 tokens)"
 	}
 
 	// Add filter status

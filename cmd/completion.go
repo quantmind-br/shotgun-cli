@@ -83,6 +83,7 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 		"scanner.max-files\tMaximum number of files to scan",
 		"scanner.max-file-size\tMaximum size per file (e.g., 1MB)",
 		"scanner.respect-gitignore\tRespect .gitignore files (true/false)",
+		"scanner.skip-binary\tSkip binary files (true/false)",
 		"context.max-size\tMaximum context size (e.g., 10MB)",
 		"context.include-tree\tInclude directory tree (true/false)",
 		"context.include-summary\tInclude file summaries (true/false)",
@@ -103,6 +104,7 @@ func boolValueCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 	key := args[0]
 	boolKeys := []string{
 		"scanner.respect-gitignore",
+		"scanner.skip-binary",
 		"context.include-tree",
 		"context.include-summary",
 		"output.clipboard",
