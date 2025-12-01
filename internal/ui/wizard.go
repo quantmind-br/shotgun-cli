@@ -252,6 +252,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *WizardModel) View() string {
+	// Show help overlay if enabled
+	if m.showHelp {
+		return m.renderHelp()
+	}
+
 	var mainView string
 
 	if m.error != nil {
@@ -301,6 +306,63 @@ func (m *WizardModel) View() string {
 	return mainView
 }
 
+func (m *WizardModel) renderHelp() string {
+	var content strings.Builder
+
+	header := styles.RenderHeader(0, "Help - Keyboard Shortcuts")
+	content.WriteString(header)
+	content.WriteString("\n\n")
+
+	// Global shortcuts
+	content.WriteString(styles.TitleStyle.Render("Global Shortcuts"))
+	content.WriteString("\n")
+	content.WriteString("  F1          Toggle this help screen\n")
+	content.WriteString("  F7          Previous step\n")
+	content.WriteString("  F8          Next step\n")
+	content.WriteString("  Ctrl+Q      Quit application\n")
+	content.WriteString("\n")
+
+	// File selection shortcuts
+	content.WriteString(styles.TitleStyle.Render("File Selection (Step 1)"))
+	content.WriteString("\n")
+	content.WriteString("  ↑/↓ or k/j  Navigate up/down\n")
+	content.WriteString("  ←/→ or h/l  Collapse/Expand directory\n")
+	content.WriteString("  Space       Toggle selection (file or directory)\n")
+	content.WriteString("  i           Toggle showing ignored files\n")
+	content.WriteString("  /           Enter filter mode (fuzzy search)\n")
+	content.WriteString("  Ctrl+C      Clear filter\n")
+	content.WriteString("  F5          Rescan directory\n")
+	content.WriteString("\n")
+
+	// Template selection shortcuts
+	content.WriteString(styles.TitleStyle.Render("Template Selection (Step 2)"))
+	content.WriteString("\n")
+	content.WriteString("  ↑/↓ or k/j  Navigate templates\n")
+	content.WriteString("  Enter       Select template\n")
+	content.WriteString("\n")
+
+	// Text input shortcuts
+	content.WriteString(styles.TitleStyle.Render("Text Input (Steps 3-4)"))
+	content.WriteString("\n")
+	content.WriteString("  Type        Enter text\n")
+	content.WriteString("  Enter       New line\n")
+	content.WriteString("  Backspace   Delete character\n")
+	content.WriteString("\n")
+
+	// Review shortcuts
+	content.WriteString(styles.TitleStyle.Render("Review (Step 5)"))
+	content.WriteString("\n")
+	content.WriteString("  F8          Generate context\n")
+	content.WriteString("  c           Copy to clipboard\n")
+	content.WriteString("  F9          Send to Gemini (if configured)\n")
+	content.WriteString("\n")
+
+	footer := styles.RenderFooter([]string{"F1: Close Help", "Ctrl+Q: Quit"})
+	content.WriteString(footer)
+
+	return content.String()
+}
+
 //nolint:unparam // tea.Cmd return is part of consistent handler pattern
 func (m *WizardModel) handleWindowResize(msg tea.WindowSizeMsg) tea.Cmd {
 	m.width = msg.Width
@@ -337,6 +399,9 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "f8", "ctrl+pgdn":
 		cmd = m.handleNextStep()
+		cmds = append(cmds, cmd)
+	case "f7":
+		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
 	case "f9":
 		// Send to Gemini (only on review screen after generation)

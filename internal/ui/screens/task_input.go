@@ -148,14 +148,17 @@ func (m *TaskInputModel) View() string {
 		content.WriteString(styles.RenderWarning("Task description is required to continue"))
 	}
 
-	shortcuts := []string{
-		"Esc: Focus/Unfocus",
+	line1 := []string{
+		"Type: Enter text",
+		"Esc: Edit/Done",
+	}
+	line2 := []string{
+		"F7: Back",
 		"F8: Next",
-		"F10: Back",
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
-	footer := styles.RenderFooter(shortcuts)
+	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	content.WriteString("\n\n")
 	content.WriteString(footer)
 

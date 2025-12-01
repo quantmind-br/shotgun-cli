@@ -148,10 +148,10 @@ func TestReviewModel_View_BeforeGeneration(t *testing.T) {
 		"/path/to/file2.go": true,
 	}
 	fileTree := &scanner.FileNode{
-		Name:     "root",
-		Path:     "/path",
-		IsDir:    true,
-		Size:     1024,
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Size:  1024,
 		Children: []*scanner.FileNode{
 			{
 				Name:  "file1.go",
@@ -202,10 +202,10 @@ func TestReviewModel_View_AfterGeneration(t *testing.T) {
 		"/path/to/file1.go": true,
 	}
 	fileTree := &scanner.FileNode{
-		Name:     "root",
-		Path:     "/path",
-		IsDir:    true,
-		Size:     512,
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Size:  512,
 		Children: []*scanner.FileNode{
 			{
 				Name:  "file1.go",
@@ -216,7 +216,7 @@ func TestReviewModel_View_AfterGeneration(t *testing.T) {
 		},
 	}
 	tmpl := &template.Template{
-		Name: "Test Template",
+		Name:    "Test Template",
 		Content: "Test content",
 	}
 
@@ -398,10 +398,10 @@ func TestReviewModel_calculateStats(t *testing.T) {
 		"/path/to/file3.go": false, // Not selected
 	}
 	fileTree := &scanner.FileNode{
-		Name:     "root",
-		Path:     "/path",
-		IsDir:    true,
-		Size:     1536,
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Size:  1536,
 		Children: []*scanner.FileNode{
 			{
 				Name:  "file1.go",
@@ -490,9 +490,9 @@ func TestReviewModel_walkTree(t *testing.T) {
 	t.Parallel()
 
 	fileTree := &scanner.FileNode{
-		Name:     "root",
-		Path:     "/path",
-		IsDir:    true,
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
 		Children: []*scanner.FileNode{
 			{
 				Name:  "child1",

@@ -90,9 +90,6 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[str
 	case " ":
 		m.tree.ToggleSelection()
 		m.updateSelections(selections)
-	case "d":
-		m.tree.ToggleDirectorySelection()
-		m.updateSelections(selections)
 	case "i":
 		m.tree.ToggleShowIgnored()
 	case "/":
@@ -148,30 +145,34 @@ func (m *FileSelectionModel) View() string {
 		treeView = "Loading file tree..."
 	}
 
-	shortcuts := []string{
-		"↑/↓: Navigate",
-		"←/→: Expand/Collapse",
-		"Space: Select File",
-		"d: Select Directory",
-		"i: Toggle Ignored",
-		"/: Filter",
-		"F5: Rescan",
-		"F8: Next",
-		"F1: Help",
-		"Ctrl+Q: Quit",
-	}
-
-	// Update shortcuts if in filter mode
+	var footer string
 	if m.filterMode {
-		shortcuts = []string{
+		shortcuts := []string{
 			"Type to filter",
-			"Enter: Apply filter",
+			"Enter: Apply",
 			"Esc: Cancel",
-			"Backspace: Delete char",
+			"Backspace: Delete",
 		}
+		footer = styles.RenderFooter(shortcuts)
+	} else {
+		// Line 1: Navigation and selection
+		line1 := []string{
+			"↑/↓: Navigate",
+			"←/→: Expand/Collapse",
+			"Space: Select",
+			"i: Ignored",
+			"/: Filter",
+		}
+		// Line 2: Actions and commands
+		line2 := []string{
+			"F5: Rescan",
+			"F7: Back",
+			"F8: Next",
+			"F1: Help",
+			"Ctrl+Q: Quit",
+		}
+		footer = styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	}
-
-	footer := styles.RenderFooter(shortcuts)
 
 	var content strings.Builder
 	content.WriteString(header)

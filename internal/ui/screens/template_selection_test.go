@@ -49,7 +49,7 @@ func TestTemplateSelectionUpdateLoading(t *testing.T) {
 
 func TestTemplateSelectionUpdateNoTemplates(t *testing.T) {
 	model := &TemplateSelectionModel{
-		loading:  false,
+		loading:   false,
 		templates: []*template.Template{}, // Empty list
 	}
 
@@ -264,7 +264,7 @@ func TestTemplateSelectionViewError(t *testing.T) {
 
 func TestTemplateSelectionViewNoTemplates(t *testing.T) {
 	model := &TemplateSelectionModel{
-		loading:  false,
+		loading:   false,
 		templates: []*template.Template{},
 	}
 
@@ -300,8 +300,8 @@ func TestTemplateSelectionViewWithRequiredVars(t *testing.T) {
 		loading: false,
 		templates: []*template.Template{
 			{
-				Name:        "test",
-				Description: "desc",
+				Name:         "test",
+				Description:  "desc",
 				RequiredVars: []string{"VAR1", "VAR2"},
 			},
 		},
@@ -324,10 +324,10 @@ func TestTemplateSelectionViewWithSelectedTemplate(t *testing.T) {
 			{Name: "t1", Description: "desc1"},
 			{Name: "t2", Description: "desc2"},
 		},
-		cursor:        1,
+		cursor:           1,
 		selectedTemplate: &template.Template{Name: "t1", Description: "desc1"},
-		width:         100,
-		height:        50,
+		width:            100,
+		height:           50,
 	}
 
 	view := model.View()

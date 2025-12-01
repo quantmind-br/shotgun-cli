@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -256,5 +257,37 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 	wizard = model.(*WizardModel)
 	if wizard.step != StepFileSelection {
 		t.Fatalf("expected to move back to file selection")
+	}
+}
+
+func TestWizardHelpToggle(t *testing.T) {
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+
+	// Initially help should be hidden
+	if wizard.showHelp {
+		t.Fatal("expected showHelp to be false initially")
+	}
+
+	// Press F1 to show help
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF1})
+	wizard = model.(*WizardModel)
+	if !wizard.showHelp {
+		t.Fatal("expected showHelp to be true after pressing F1")
+	}
+
+	// View should contain help content
+	view := wizard.View()
+	if !strings.Contains(view, "Help") {
+		t.Fatal("expected view to contain 'Help' when showHelp is true")
+	}
+	if !strings.Contains(view, "Global Shortcuts") {
+		t.Fatal("expected view to contain 'Global Shortcuts'")
+	}
+
+	// Press F1 again to hide help
+	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF1})
+	wizard = model.(*WizardModel)
+	if wizard.showHelp {
+		t.Fatal("expected showHelp to be false after pressing F1 again")
 	}
 }

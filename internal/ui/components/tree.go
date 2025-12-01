@@ -17,6 +17,7 @@ type FileTreeModel struct {
 	selectionStates map[string]styles.SelectionState
 	showIgnored     bool
 	filter          string
+	filterMatches   map[string]bool // paths that match the filter (including ancestors)
 	expanded        map[string]bool
 	width           int
 	height          int
@@ -99,20 +100,13 @@ func (m *FileTreeModel) CollapseNode() {
 func (m *FileTreeModel) ToggleSelection() {
 	if m.cursor < len(m.visibleItems) {
 		item := m.visibleItems[m.cursor]
-		if !item.node.IsDir {
-			m.selections[item.path] = !m.selections[item.path]
-			m.recomputeSelectionStates()
-		}
-	}
-}
-
-func (m *FileTreeModel) ToggleDirectorySelection() {
-	if m.cursor < len(m.visibleItems) {
-		item := m.visibleItems[m.cursor]
 		if item.node.IsDir {
 			// Toggle all files in directory
 			allSelected := m.areAllFilesInDirSelected(item.node)
 			m.setDirectorySelection(item.node, !allSelected)
+			m.recomputeSelectionStates()
+		} else {
+			m.selections[item.path] = !m.selections[item.path]
 			m.recomputeSelectionStates()
 		}
 	}
@@ -125,6 +119,7 @@ func (m *FileTreeModel) ToggleShowIgnored() {
 
 func (m *FileTreeModel) SetFilter(filter string) {
 	m.filter = filter
+	m.computeFilterMatches()
 	m.rebuildVisibleItems()
 }
 
@@ -134,7 +129,47 @@ func (m *FileTreeModel) GetFilter() string {
 
 func (m *FileTreeModel) ClearFilter() {
 	m.filter = ""
+	m.filterMatches = nil
 	m.rebuildVisibleItems()
+}
+
+// computeFilterMatches pre-computes which nodes match the filter using fuzzy matching
+// It also marks ancestor directories of matching nodes so they remain visible
+func (m *FileTreeModel) computeFilterMatches() {
+	m.filterMatches = make(map[string]bool)
+
+	if m.filter == "" || m.tree == nil {
+		return
+	}
+
+	// First pass: find all nodes that directly match the filter
+	var findMatches func(node *scanner.FileNode)
+	findMatches = func(node *scanner.FileNode) {
+		// Check if this node matches (using path for better fuzzy matching)
+		if fuzzyMatch(node.RelPath, m.filter) || fuzzyMatch(node.Name, m.filter) {
+			m.filterMatches[node.Path] = true
+			// Mark all ancestors as visible
+			m.markAncestorsVisible(node)
+		}
+
+		// Recurse into children
+		for _, child := range node.Children {
+			findMatches(child)
+		}
+	}
+
+	findMatches(m.tree)
+}
+
+// markAncestorsVisible marks all ancestor directories of a node as visible
+func (m *FileTreeModel) markAncestorsVisible(node *scanner.FileNode) {
+	parent := node.Parent
+	for parent != nil {
+		m.filterMatches[parent.Path] = true
+		// Auto-expand ancestors when filtering
+		m.expanded[parent.Path] = true
+		parent = parent.Parent
+	}
 }
 
 func (m *FileTreeModel) GetSelections() map[string]bool {
@@ -317,8 +352,9 @@ func (m *FileTreeModel) shouldShowNode(node *scanner.FileNode) bool {
 		return false
 	}
 
-	// Check filter
-	if m.filter != "" && !strings.Contains(strings.ToLower(node.Name), strings.ToLower(m.filter)) {
+	// Check filter using pre-computed matches
+	// If filter is set, only show nodes that are in the filterMatches map
+	if m.filter != "" && !m.filterMatches[node.Path] {
 		return false
 	}
 
@@ -471,4 +507,24 @@ func formatFileSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// fuzzyMatch implements fuzzy matching - characters must appear in order but not consecutively
+// For example, "abc" matches "aXbYc", "abc", "aaaabc", etc.
+func fuzzyMatch(text, pattern string) bool {
+	if pattern == "" {
+		return true
+	}
+
+	text = strings.ToLower(text)
+	pattern = strings.ToLower(pattern)
+
+	patternIdx := 0
+	for i := 0; i < len(text) && patternIdx < len(pattern); i++ {
+		if text[i] == pattern[patternIdx] {
+			patternIdx++
+		}
+	}
+
+	return patternIdx == len(pattern)
 }

@@ -318,7 +318,7 @@ func TestFileSelectionViewInFilterMode(t *testing.T) {
 	// Should show filter input UI
 	assert.Contains(t, view, "Filter: test_")
 	assert.Contains(t, view, "Type to filter")
-	assert.Contains(t, view, "Apply filter")
+	assert.Contains(t, view, "Enter: Apply")
 }
 
 func TestFileSelectionCalculateSelectedSize(t *testing.T) {

@@ -95,6 +95,10 @@ type ScanConfig struct {
 	// If specified, only files matching these patterns will be included
 	// Uses glob-style patterns like "*.go", "*.js", etc.
 	IncludePatterns []string `json:"include_patterns,omitempty"`
+
+	// IncludeIgnored indicates whether to include ignored files in the tree
+	// When true, ignored files are included but marked with IsGitignored/IsCustomIgnored flags
+	IncludeIgnored bool `json:"include_ignored"`
 }
 
 // DefaultScanConfig returns a default scanning configuration

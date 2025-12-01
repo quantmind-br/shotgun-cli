@@ -113,7 +113,7 @@ func (m *RulesInputModel) View() string {
 		Bold(true).
 		Render("OPTIONAL")
 
-	optionalNote := styles.HelpStyle.Render("💡 This step is optional. Press F8 to skip or F10 to go back.")
+	optionalNote := styles.HelpStyle.Render("💡 This step is optional. Press F8 to skip or F7 to go back.")
 
 	// Wrap textarea in a border that changes based on focus state
 	var textareaView string
@@ -154,14 +154,17 @@ func (m *RulesInputModel) View() string {
 	content.WriteString("\n\n")
 	content.WriteString(charCount)
 
-	shortcuts := []string{
-		"Esc: Focus/Unfocus",
+	line1 := []string{
+		"Type: Enter text",
+		"Esc: Edit/Done",
+	}
+	line2 := []string{
+		"F7: Back",
 		"F8: Next (Skip)",
-		"F10: Back",
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
-	footer := styles.RenderFooter(shortcuts)
+	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	content.WriteString("\n\n")
 	content.WriteString(footer)
 

@@ -294,7 +294,7 @@ func TestRendererValidateVariableNames(t *testing.T) {
 		{
 			name: "valid uppercase",
 			vars: map[string]string{
-				"TASK": "value",
+				"TASK":  "value",
 				"RULES": "value",
 			},
 			expectError: false,
@@ -358,33 +358,33 @@ func TestRendererSubstituteVariables(t *testing.T) {
 		expected string
 	}{
 		{
-			name:    "single substitution",
-			content: "Hello {NAME}!",
-			vars:    map[string]string{"NAME": "World"},
+			name:     "single substitution",
+			content:  "Hello {NAME}!",
+			vars:     map[string]string{"NAME": "World"},
 			expected: "Hello World!",
 		},
 		{
-			name:    "multiple same variable",
-			content: "{VAR} and {VAR} again",
-			vars:    map[string]string{"VAR": "test"},
+			name:     "multiple same variable",
+			content:  "{VAR} and {VAR} again",
+			vars:     map[string]string{"VAR": "test"},
 			expected: "test and test again",
 		},
 		{
-			name:    "no variables",
-			content: "Static content",
-			vars:    map[string]string{},
+			name:     "no variables",
+			content:  "Static content",
+			vars:     map[string]string{},
 			expected: "Static content",
 		},
 		{
-			name:    "unmatched variable left as is",
-			content: "Hello {UNKNOWN}!",
-			vars:    map[string]string{"NAME": "World"},
+			name:     "unmatched variable left as is",
+			content:  "Hello {UNKNOWN}!",
+			vars:     map[string]string{"NAME": "World"},
 			expected: "Hello {UNKNOWN}!",
 		},
 		{
-			name:    "multiline content",
-			content: "Line1 {VAR}\nLine2 {VAR}",
-			vars:    map[string]string{"VAR": "replaced"},
+			name:     "multiline content",
+			content:  "Line1 {VAR}\nLine2 {VAR}",
+			vars:     map[string]string{"VAR": "replaced"},
 			expected: "Line1 replaced\nLine2 replaced",
 		},
 	}

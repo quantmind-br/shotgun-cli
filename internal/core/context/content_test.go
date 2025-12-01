@@ -260,4 +260,3 @@ func TestPeekFileHeader(t *testing.T) {
 		assert.Len(t, header, 0)
 	})
 }
-

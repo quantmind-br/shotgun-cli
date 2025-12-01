@@ -434,9 +434,7 @@ func (fs *FileSystemScanner) isHiddenFile(relPath string, config *ScanConfig) bo
 
 // shouldIncludeIgnored determines if ignored files should be included based on config
 func (fs *FileSystemScanner) shouldIncludeIgnored(config *ScanConfig) bool {
-	// For now, we always exclude ignored files during scanning
-	// This can be extended based on configuration needs
-	return false
+	return config.IncludeIgnored
 }
 
 // normRel normalizes a relative path for consistent map lookups

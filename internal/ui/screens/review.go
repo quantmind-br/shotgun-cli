@@ -278,14 +278,17 @@ func (m *ReviewModel) renderPostGenerationView() string {
 	view.WriteString("\n")
 
 	// Footer
-	shortcuts := []string{
-		"Ctrl+Q: Exit",
+	line1 := []string{
+		"c: Copy to Clipboard",
 	}
 	if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
-		shortcuts = append([]string{"F9: Send to Gemini"}, shortcuts...)
+		line1 = append(line1, "F9: Send to Gemini")
 	}
-	shortcuts = append(shortcuts, "F1: Help")
-	footer := styles.RenderFooter(shortcuts)
+	line2 := []string{
+		"F1: Help",
+		"Ctrl+Q: Exit",
+	}
+	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	view.WriteString(footer)
 
 	return view.String()
@@ -358,13 +361,15 @@ func (m *ReviewModel) renderPreGenerationView() string {
 	view.WriteString("\n")
 
 	// Footer
-	shortcuts := []string{
+	line1 := []string{
+		"F7: Back",
 		"F8: Generate",
-		"F10: Back to Edit",
+	}
+	line2 := []string{
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
-	footer := styles.RenderFooter(shortcuts)
+	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	view.WriteString(footer)
 
 	return view.String()

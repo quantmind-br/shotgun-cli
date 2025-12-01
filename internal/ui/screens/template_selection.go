@@ -324,13 +324,15 @@ func (m *TemplateSelectionModel) renderTemplateDetails() string {
 }
 
 func (m *TemplateSelectionModel) renderFooter() string {
-	shortcuts := []string{
+	line1 := []string{
 		"↑/↓: Navigate",
 		"Enter/Space: Select",
+	}
+	line2 := []string{
+		"F7: Back",
 		"F8: Next",
-		"F10: Back",
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
-	return styles.RenderFooter(shortcuts)
+	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 }

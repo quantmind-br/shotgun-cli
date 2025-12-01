@@ -12,6 +12,7 @@ func createTestNode(name, path string, isDir bool, children ...*scanner.FileNode
 	node := &scanner.FileNode{
 		Name:     name,
 		Path:     path,
+		RelPath:  name, // Use name as relative path for tests
 		IsDir:    isDir,
 		Children: children,
 	}
@@ -198,7 +199,7 @@ func TestFileTreeToggleSelection(t *testing.T) {
 	})
 }
 
-func TestFileTreeToggleDirectorySelection(t *testing.T) {
+func TestFileTreeToggleSelectionOnDirectory(t *testing.T) {
 	file1 := createTestNode("a.go", "/project/dir/a.go", false)
 	file2 := createTestNode("b.go", "/project/dir/b.go", false)
 	dir := createTestNode("dir", "/project/dir", true, file1, file2)
@@ -217,7 +218,7 @@ func TestFileTreeToggleDirectorySelection(t *testing.T) {
 
 	t.Run("select all files in directory", func(t *testing.T) {
 		model.cursor = dirIdx
-		model.ToggleDirectorySelection()
+		model.ToggleSelection()
 
 		assert.True(t, model.selections[file1.Path])
 		assert.True(t, model.selections[file2.Path])
@@ -228,7 +229,7 @@ func TestFileTreeToggleDirectorySelection(t *testing.T) {
 		model.selections[file2.Path] = true
 
 		model.cursor = dirIdx
-		model.ToggleDirectorySelection()
+		model.ToggleSelection()
 
 		assert.False(t, model.selections[file1.Path])
 		assert.False(t, model.selections[file2.Path])
@@ -429,15 +430,21 @@ func TestFileTreeShouldShowNode(t *testing.T) {
 	})
 
 	t.Run("filter excludes non-matching", func(t *testing.T) {
-		model := NewFileTree(nil, nil)
-		model.filter = "test"
+		root := createTestNode("project", "/project", true, node)
+		node.Parent = root
+		model := NewFileTree(root, nil)
+		model.SetFilter("test")
 		assert.False(t, model.shouldShowNode(node)) // "file.go" doesn't match "test"
+		node.Parent = nil
 	})
 
 	t.Run("filter includes matching", func(t *testing.T) {
-		model := NewFileTree(nil, nil)
-		model.filter = "file"
+		root := createTestNode("project", "/project", true, node)
+		node.Parent = root
+		model := NewFileTree(root, nil)
+		model.SetFilter("file")
 		assert.True(t, model.shouldShowNode(node))
+		node.Parent = nil
 	})
 }
 
@@ -502,4 +509,57 @@ func TestTreeItemStruct(t *testing.T) {
 	assert.Equal(t, 2, item.depth)
 	assert.True(t, item.isLast)
 	assert.Len(t, item.hasNext, 2)
+}
+
+func TestFuzzyMatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		pattern  string
+		expected bool
+	}{
+		{"exact match", "file.go", "file.go", true},
+		{"prefix match", "file.go", "file", true},
+		{"suffix match", "file.go", "go", true},
+		{"fuzzy match", "file_selection.go", "fsg", true},
+		{"fuzzy match with path", "internal/ui/components/tree.go", "iuct", true},
+		{"case insensitive", "FileSelection.go", "filesel", true},
+		{"no match", "file.go", "xyz", false},
+		{"empty pattern", "file.go", "", true},
+		{"pattern longer than text", "a.go", "alongpattern", false},
+		{"out of order", "abc", "bac", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := fuzzyMatch(tt.text, tt.pattern)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFuzzyFilterShowsAncestors(t *testing.T) {
+	// Create a nested structure
+	file := createTestNode("target.go", "/project/src/pkg/target.go", false)
+	file.RelPath = "src/pkg/target.go"
+
+	pkg := createTestNode("pkg", "/project/src/pkg", true, file)
+	pkg.RelPath = "src/pkg"
+
+	src := createTestNode("src", "/project/src", true, pkg)
+	src.RelPath = "src"
+
+	root := createTestNode("project", "/project", true, src)
+	root.RelPath = "."
+
+	model := NewFileTree(root, nil)
+
+	// Apply filter that matches the deepest file
+	model.SetFilter("target")
+
+	// All ancestors should be visible
+	assert.True(t, model.filterMatches[root.Path], "root should be visible")
+	assert.True(t, model.filterMatches[src.Path], "src should be visible")
+	assert.True(t, model.filterMatches[pkg.Path], "pkg should be visible")
+	assert.True(t, model.filterMatches[file.Path], "target.go should be visible")
 }
