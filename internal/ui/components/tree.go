@@ -245,13 +245,7 @@ func (m *FileTreeModel) renderItemName(item treeItem, selectionState styles.Sele
 }
 
 func (m *FileTreeModel) renderIgnoreStatus(item treeItem) string {
-	if item.node.IsGitignored {
-		return " (g)"
-	}
-	if item.node.IsCustomIgnored {
-		return " (c)"
-	}
-	return ""
+	return styles.RenderIgnoreIndicator(item.node.IsGitignored, item.node.IsCustomIgnored)
 }
 
 func (m *FileTreeModel) renderSizeInfo(item treeItem) string {

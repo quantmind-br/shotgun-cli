@@ -291,7 +291,7 @@ func TestTemplateSelectionViewWithTemplates(t *testing.T) {
 	assert.Contains(t, view, "Choose Template")
 	assert.Contains(t, view, "t1")
 	assert.Contains(t, view, "t2")
-	assert.Contains(t, view, "Description:")
+	assert.Contains(t, view, "Description")
 	assert.Contains(t, view, "desc1")
 }
 
@@ -312,7 +312,7 @@ func TestTemplateSelectionViewWithRequiredVars(t *testing.T) {
 
 	view := model.View()
 
-	assert.Contains(t, view, "Required Variables:")
+	assert.Contains(t, view, "Required Variables")
 	assert.Contains(t, view, "VAR1")
 	assert.Contains(t, view, "VAR2")
 }

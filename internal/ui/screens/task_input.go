@@ -28,10 +28,10 @@ func NewTaskInput(initialValue string) *TaskInputModel {
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display
 
-	// Configure textarea styles for better visibility on dark backgrounds
-	textColor := lipgloss.Color("#ECEFF4")        // Light gray/white for text
-	cursorColor := lipgloss.Color("#A3BE8C")      // Green for cursor
-	placeholderColor := lipgloss.Color("#5C7E8C") // Muted color for placeholder
+	// Configure textarea styles with Nord colors for better visibility
+	textColor := styles.TextColor
+	cursorColor := styles.AccentColor
+	placeholderColor := styles.DimText
 
 	// Modify existing styles instead of replacing them
 	ta.FocusedStyle.Text = ta.FocusedStyle.Text.Foreground(textColor).UnsetBackground()
@@ -55,8 +55,8 @@ func (m *TaskInputModel) SetSize(width, height int) {
 	m.height = height
 
 	// Calculate available space for textarea
-	availableHeight := height - 8 // Reserve space for header, character count, footer
-	availableWidth := width - 4   // Reserve space for margins
+	availableHeight := height - 10 // Reserve space for header, instructions, character count, footer, border
+	availableWidth := width - 6    // Reserve space for margins and border
 
 	if availableHeight < 5 {
 		availableHeight = 5
@@ -91,27 +91,61 @@ func (m *TaskInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 func (m *TaskInputModel) View() string {
 	header := styles.RenderHeader(3, "Describe Your Task")
 
-	// Character count
+	// Character count with color based on length
 	currentLength := len(m.textarea.Value())
-	charCount := styles.HelpStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
+	var charCountStyle lipgloss.Style
+	if currentLength == 0 {
+		charCountStyle = lipgloss.NewStyle().Foreground(styles.WarningColor)
+	} else if currentLength < 50 {
+		charCountStyle = lipgloss.NewStyle().Foreground(styles.TextColor)
+	} else {
+		charCountStyle = lipgloss.NewStyle().Foreground(styles.SuccessColor)
+	}
+	charCount := charCountStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
 
 	instructions := styles.HelpStyle.Render(
 		"Enter a detailed description of what you want to accomplish. " +
 			"Be specific about requirements, constraints, and expected outcomes.")
+
+	// Wrap textarea in a border that changes based on focus state
+	var textareaView string
+	if m.textarea.Focused() {
+		borderStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.PrimaryColor).
+			Padding(0, 1)
+		textareaView = borderStyle.Render(m.textarea.View())
+	} else {
+		borderStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.MutedColor).
+			Padding(0, 1)
+		textareaView = borderStyle.Render(m.textarea.View())
+	}
+
+	// Focus indicator
+	var focusIndicator string
+	if m.textarea.Focused() {
+		focusIndicator = styles.StatusActiveStyle.Render("● Editing")
+	} else {
+		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Esc to edit")
+	}
 
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
 	content.WriteString(instructions)
 	content.WriteString("\n\n")
-	content.WriteString(m.textarea.View())
+	content.WriteString(focusIndicator)
+	content.WriteString("\n\n")
+	content.WriteString(textareaView)
 	content.WriteString("\n\n")
 	content.WriteString(charCount)
 
 	// Validation message
 	if currentLength == 0 {
 		content.WriteString("\n")
-		content.WriteString(styles.ErrorStyle.Render("⚠ Task description is required to continue"))
+		content.WriteString(styles.RenderWarning("Task description is required to continue"))
 	}
 
 	shortcuts := []string{

@@ -225,7 +225,7 @@ func TestReviewModel_View_AfterGeneration(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "✅ Context generated successfully!") {
+	if !strings.Contains(view, "Context generated successfully") {
 		t.Fatalf("expected success message in view")
 	}
 	if !strings.Contains(view, "/tmp/test.md") {

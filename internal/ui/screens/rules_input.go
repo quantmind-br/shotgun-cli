@@ -30,10 +30,10 @@ func NewRulesInput(initialValue string) *RulesInputModel {
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display
 
-	// Configure textarea styles for better visibility on dark backgrounds
-	textColor := lipgloss.Color("#ECEFF4")        // Light gray/white for text
-	cursorColor := lipgloss.Color("#A3BE8C")      // Green for cursor
-	placeholderColor := lipgloss.Color("#5C7E8C") // Muted color for placeholder
+	// Configure textarea styles with Nord colors for better visibility
+	textColor := styles.TextColor
+	cursorColor := styles.AccentColor
+	placeholderColor := styles.DimText
 
 	// Modify existing styles instead of replacing them
 	ta.FocusedStyle.Text = ta.FocusedStyle.Text.Foreground(textColor).UnsetBackground()
@@ -57,8 +57,8 @@ func (m *RulesInputModel) SetSize(width, height int) {
 	m.height = height
 
 	// Calculate available space for textarea
-	availableHeight := height - 9 // Reserve space for header, instructions, character count, footer
-	availableWidth := width - 4   // Reserve space for margins
+	availableHeight := height - 12 // Reserve space for header, instructions, character count, footer, border
+	availableWidth := width - 6    // Reserve space for margins and border
 
 	if availableHeight < 5 {
 		availableHeight = 5
@@ -91,27 +91,66 @@ func (m *RulesInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 }
 
 func (m *RulesInputModel) View() string {
-	header := styles.RenderHeader(4, "Add Rules & Constraints (Optional)")
+	header := styles.RenderHeader(4, "Add Rules & Constraints")
 
-	// Character count
+	// Character count with styling
 	currentLength := len(m.textarea.Value())
-	charCount := styles.HelpStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
+	var charCountStyle lipgloss.Style
+	if currentLength == 0 {
+		charCountStyle = lipgloss.NewStyle().Foreground(styles.MutedColor)
+	} else {
+		charCountStyle = lipgloss.NewStyle().Foreground(styles.TextColor)
+	}
+	charCount := charCountStyle.Render(fmt.Sprintf("Characters: %d", currentLength))
 
 	instructions := styles.HelpStyle.Render(
 		"Specify any coding standards, architectural constraints, or specific requirements. " +
 			"This step is optional - you can leave it empty and proceed to the next step.")
 
-	optionalStyle := styles.HelpStyle.Italic(true)
-	optionalNote := optionalStyle.Render("💡 This step is optional. Press F8 to skip or F10 to go back.")
+	// Optional badge
+	optionalBadge := lipgloss.NewStyle().
+		Foreground(styles.Nord15).
+		Bold(true).
+		Render("OPTIONAL")
+
+	optionalNote := styles.HelpStyle.Render("💡 This step is optional. Press F8 to skip or F10 to go back.")
+
+	// Wrap textarea in a border that changes based on focus state
+	var textareaView string
+	if m.textarea.Focused() {
+		borderStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.PrimaryColor).
+			Padding(0, 1)
+		textareaView = borderStyle.Render(m.textarea.View())
+	} else {
+		borderStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.MutedColor).
+			Padding(0, 1)
+		textareaView = borderStyle.Render(m.textarea.View())
+	}
+
+	// Focus indicator
+	var focusIndicator string
+	if m.textarea.Focused() {
+		focusIndicator = styles.StatusActiveStyle.Render("● Editing")
+	} else {
+		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Esc to edit")
+	}
 
 	var content strings.Builder
 	content.WriteString(header)
+	content.WriteString("  ")
+	content.WriteString(optionalBadge)
 	content.WriteString("\n\n")
 	content.WriteString(instructions)
 	content.WriteString("\n")
 	content.WriteString(optionalNote)
 	content.WriteString("\n\n")
-	content.WriteString(m.textarea.View())
+	content.WriteString(focusIndicator)
+	content.WriteString("\n\n")
+	content.WriteString(textareaView)
 	content.WriteString("\n\n")
 	content.WriteString(charCount)
 

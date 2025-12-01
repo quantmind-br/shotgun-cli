@@ -6,11 +6,13 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/spf13/viper"
 )
 
 type ReviewModel struct {
@@ -28,6 +30,10 @@ type ReviewModel struct {
 	// Cached stats calculated on initialization
 	totalBytes  int64
 	totalTokens int
+
+	// Max size from config
+	maxSizeBytes int64
+	maxSizeStr   string
 
 	// Gemini integration state
 	geminiAvailable  bool
@@ -56,6 +62,13 @@ func NewReview(
 	}
 	// Calculate stats on initialization (once)
 	m.totalBytes, m.totalTokens = m.calculateStats()
+
+	// Get max size from config
+	m.maxSizeStr = viper.GetString("context.max-size")
+	if m.maxSizeStr != "" {
+		m.maxSizeBytes, _ = parseSize(m.maxSizeStr)
+	}
+
 	return m
 }
 
@@ -79,25 +92,29 @@ func (m *ReviewModel) View() string {
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Files summary with token estimate
+	// Files summary with styled token estimate
 	fileCount := len(m.selectedFiles)
-	content.WriteString(styles.TitleStyle.Render("📁 Selected Files:"))
-	content.WriteString(fmt.Sprintf(" %d files (%s / ~%s tokens)",
-		fileCount,
-		formatSizeHelper(m.totalBytes),
-		tokens.FormatTokens(m.totalTokens)))
+	filesIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📁")
+	filesLabel := styles.TitleStyle.Render("Selected Files:")
+	filesStats := styles.RenderTokenStats(fileCount, formatSizeHelper(m.totalBytes), tokens.FormatTokens(m.totalTokens))
+
+	content.WriteString(filesIcon + " " + filesLabel + " " + filesStats)
 	content.WriteString("\n\n")
 
-	// Show some selected files (up to 5)
+	// Show some selected files (up to 5) with styling
 	count := 0
 	for filePath := range m.selectedFiles {
 		if count >= 5 {
 			remaining := fileCount - 5
-			content.WriteString(fmt.Sprintf("  ... and %d more files", remaining))
+			moreText := lipgloss.NewStyle().Foreground(styles.MutedColor).Italic(true).
+				Render(fmt.Sprintf("  ... and %d more files", remaining))
+			content.WriteString(moreText)
 			content.WriteString("\n")
 			break
 		}
-		content.WriteString(fmt.Sprintf("  • %s", filePath))
+		bullet := lipgloss.NewStyle().Foreground(styles.MutedColor).Render("  • ")
+		pathStyled := styles.PathStyle.Render(filePath)
+		content.WriteString(bullet + pathStyled)
 		content.WriteString("\n")
 		count++
 	}
@@ -105,115 +122,252 @@ func (m *ReviewModel) View() string {
 	content.WriteString("\n")
 
 	// Template summary
-	content.WriteString(styles.TitleStyle.Render("📋 Template:"))
+	tmplIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📋")
+	tmplLabel := styles.TitleStyle.Render("Template:")
+	content.WriteString(tmplIcon + " " + tmplLabel)
 	if m.template != nil {
-		content.WriteString(fmt.Sprintf(" %s", m.template.Name))
+		tmplName := styles.StatsValueStyle.Render(m.template.Name)
+		content.WriteString(" " + tmplName)
 		content.WriteString("\n")
 		if m.template.Description != "" {
-			content.WriteString(fmt.Sprintf("  %s", m.template.Description))
+			descStyled := styles.HelpStyle.Render("  " + m.template.Description)
+			content.WriteString(descStyled)
 			content.WriteString("\n")
 		}
 	} else {
-		content.WriteString(" None selected")
+		noTemplate := styles.WarningStyle.Render(" None selected")
+		content.WriteString(noTemplate)
 		content.WriteString("\n")
 	}
 	content.WriteString("\n")
 
 	// Task summary
-	content.WriteString(styles.TitleStyle.Render("🎯 Task:"))
+	taskIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("🎯")
+	taskLabel := styles.TitleStyle.Render("Task:")
+	content.WriteString(taskIcon + " " + taskLabel)
 	content.WriteString("\n")
 	taskPreview := m.taskDesc
 	if len(taskPreview) > 150 {
 		taskPreview = taskPreview[:147] + "..."
 	}
-	content.WriteString(fmt.Sprintf("  %s", taskPreview))
+	taskStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render("  " + taskPreview)
+	content.WriteString(taskStyled)
 	content.WriteString("\n\n")
 
 	// Rules summary (if provided)
 	if strings.TrimSpace(m.rules) != "" {
-		content.WriteString(styles.TitleStyle.Render("📝 Rules & Constraints:"))
+		rulesIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📝")
+		rulesLabel := styles.TitleStyle.Render("Rules & Constraints:")
+		content.WriteString(rulesIcon + " " + rulesLabel)
 		content.WriteString("\n")
 		rulesPreview := m.rules
 		if len(rulesPreview) > 100 {
 			rulesPreview = rulesPreview[:97] + "..."
 		}
-		content.WriteString(fmt.Sprintf("  %s", rulesPreview))
+		rulesStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render("  " + rulesPreview)
+		content.WriteString(rulesStyled)
 		content.WriteString("\n\n")
 	}
 
-	// Estimated output size summary
-	content.WriteString(styles.HelpStyle.Render(
-		fmt.Sprintf("Estimated context: %s / ~%s tokens",
-			formatSizeHelper(m.totalBytes),
-			tokens.FormatTokens(m.totalTokens))))
-	content.WriteString("\n\n")
+	// Token/Size limits section with visual indicator
+	content.WriteString(m.renderSizeLimitSection())
+	content.WriteString("\n")
 
 	// Generation status
 	if m.generated {
-		content.WriteString(styles.SuccessStyle.Render("✅ Context generated successfully!"))
-		content.WriteString("\n")
-		if m.generatedPath != "" {
-			content.WriteString(fmt.Sprintf("📄 Saved to: %s", m.generatedPath))
-			content.WriteString("\n")
-		}
-		if m.clipboardCopied {
-			content.WriteString(styles.SuccessStyle.Render("📋 Copied to clipboard"))
-		} else {
-			content.WriteString(styles.HelpStyle.Render("📋 Clipboard copy failed (file saved successfully)"))
-			content.WriteString("\n")
-			tip := "   Tip: Copy manually from the file or use 'cat " + m.generatedPath + " | wl-copy'"
-			content.WriteString(styles.HelpStyle.Render(tip))
-		}
-		content.WriteString("\n")
-
-		// Gemini status
-		content.WriteString("\n")
-		if m.geminiSending {
-			content.WriteString(styles.HelpStyle.Render("🤖 Sending to Gemini..."))
-		} else if m.geminiComplete {
-			content.WriteString(styles.SuccessStyle.Render(fmt.Sprintf("🤖 Gemini response saved to: %s", m.geminiOutputFile)))
-			content.WriteString("\n")
-			content.WriteString(styles.HelpStyle.Render(fmt.Sprintf("   Response time: %s", m.formatDuration(m.geminiDuration))))
-		} else if m.geminiError != nil {
-			content.WriteString(styles.ErrorStyle.Render(fmt.Sprintf("🤖 Gemini error: %v", m.geminiError)))
-		} else if m.geminiAvailable {
-			content.WriteString(styles.HelpStyle.Render("🤖 Gemini: Ready (press F9 to send)"))
-		} else {
-			content.WriteString(styles.HelpStyle.Render("🤖 Gemini: Not configured"))
-		}
-		content.WriteString("\n\n")
-
-		shortcuts := []string{
-			"Ctrl+Q: Exit",
-		}
-		if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
-			shortcuts = append([]string{"F9: Send to Gemini"}, shortcuts...)
-		}
-		shortcuts = append(shortcuts, "F1: Help")
-		footer := styles.RenderFooter(shortcuts)
-		content.WriteString(footer)
+		content.WriteString(m.renderPostGenerationView())
 	} else {
-		// Pre-generation view
-		content.WriteString(styles.HelpStyle.Render("Ready to generate context. This will:"))
-		content.WriteString("\n")
-		content.WriteString("  • Create a comprehensive context file")
-		content.WriteString("\n")
-		content.WriteString("  • Save it as shotgun-prompt-YYYYMMDD-HHMMSS.md")
-		content.WriteString("\n")
-		content.WriteString("  • Copy the content to your clipboard")
-		content.WriteString("\n\n")
-
-		shortcuts := []string{
-			"F8: Generate",
-			"F10: Back to Edit",
-			"F1: Help",
-			"Ctrl+Q: Quit",
-		}
-		footer := styles.RenderFooter(shortcuts)
-		content.WriteString(footer)
+		content.WriteString(m.renderPreGenerationView())
 	}
 
 	return content.String()
+}
+
+func (m *ReviewModel) renderSizeLimitSection() string {
+	var section strings.Builder
+
+	limitIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📊")
+	limitLabel := styles.TitleStyle.Render("Context Size:")
+	section.WriteString(limitIcon + " " + limitLabel)
+	section.WriteString("\n")
+
+	// Current size
+	currentSize := formatSizeHelper(m.totalBytes)
+	currentTokens := tokens.FormatTokens(m.totalTokens)
+
+	if m.maxSizeBytes > 0 {
+		// Calculate percentage
+		percentage := float64(m.totalBytes) / float64(m.maxSizeBytes) * 100
+
+		// Determine status color
+		var statusStyle lipgloss.Style
+		var statusIcon string
+		if percentage > 100 {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.ErrorColor)
+			statusIcon = "⛔"
+		} else if percentage > 80 {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.WarningColor)
+			statusIcon = "⚠️"
+		} else {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.SuccessColor)
+			statusIcon = "✅"
+		}
+
+		// Size bar visualization
+		barWidth := 30
+		filledWidth := int(float64(barWidth) * percentage / 100)
+		if filledWidth > barWidth {
+			filledWidth = barWidth
+		}
+
+		filledStyle := statusStyle
+		emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+
+		bar := filledStyle.Render(strings.Repeat("█", filledWidth)) +
+			emptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
+
+		sizeInfo := fmt.Sprintf("  %s %s / %s (%.1f%%) ~%s tokens",
+			statusIcon, currentSize, m.maxSizeStr, percentage, currentTokens)
+		section.WriteString(statusStyle.Render(sizeInfo))
+		section.WriteString("\n")
+		section.WriteString("  " + bar)
+	} else {
+		// No limit configured
+		sizeInfo := fmt.Sprintf("  %s / ~%s tokens", currentSize, currentTokens)
+		section.WriteString(styles.StatsValueStyle.Render(sizeInfo))
+		section.WriteString("\n")
+		noLimit := styles.HelpStyle.Render("  (no size limit configured)")
+		section.WriteString(noLimit)
+	}
+
+	return section.String()
+}
+
+func (m *ReviewModel) renderPostGenerationView() string {
+	var view strings.Builder
+
+	// Success message
+	view.WriteString(styles.RenderSuccess("Context generated successfully!"))
+	view.WriteString("\n\n")
+
+	// File saved info
+	if m.generatedPath != "" {
+		fileIcon := lipgloss.NewStyle().Foreground(styles.AccentColor).Render("📄")
+		pathStyled := styles.PathStyle.Render(m.generatedPath)
+		view.WriteString(fileIcon + " Saved to: " + pathStyled)
+		view.WriteString("\n")
+	}
+
+	// Clipboard status with better visual
+	if m.clipboardCopied {
+		clipIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("📋")
+		clipText := styles.SuccessStyle.Render("Copied to clipboard")
+		view.WriteString(clipIcon + " " + clipText)
+	} else {
+		clipIcon := lipgloss.NewStyle().Foreground(styles.WarningColor).Render("📋")
+		clipText := styles.WarningStyle.Render("Clipboard copy failed")
+		view.WriteString(clipIcon + " " + clipText)
+		view.WriteString("\n")
+		tip := styles.HelpStyle.Render("   Tip: Copy manually with 'cat " + m.generatedPath + " | wl-copy'")
+		view.WriteString(tip)
+	}
+	view.WriteString("\n\n")
+
+	// Gemini status section
+	view.WriteString(m.renderGeminiStatus())
+	view.WriteString("\n")
+
+	// Footer
+	shortcuts := []string{
+		"Ctrl+Q: Exit",
+	}
+	if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
+		shortcuts = append([]string{"F9: Send to Gemini"}, shortcuts...)
+	}
+	shortcuts = append(shortcuts, "F1: Help")
+	footer := styles.RenderFooter(shortcuts)
+	view.WriteString(footer)
+
+	return view.String()
+}
+
+func (m *ReviewModel) renderGeminiStatus() string {
+	var status strings.Builder
+
+	geminiIcon := lipgloss.NewStyle().Foreground(styles.Nord15).Render("🤖")
+	geminiLabel := styles.TitleStyle.Render("Gemini Integration:")
+	status.WriteString(geminiIcon + " " + geminiLabel)
+	status.WriteString("\n")
+
+	if m.geminiSending {
+		// Sending state with spinner-like indicator
+		sendingStyle := lipgloss.NewStyle().Foreground(styles.PrimaryColor)
+		status.WriteString("  " + sendingStyle.Render("⏳ Sending to Gemini..."))
+	} else if m.geminiComplete {
+		// Complete state
+		successIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("✔")
+		pathStyled := styles.PathStyle.Render(m.geminiOutputFile)
+		status.WriteString("  " + successIcon + " Response saved to: " + pathStyled)
+		status.WriteString("\n")
+
+		durationStyled := styles.StatsValueStyle.Render(m.formatDuration(m.geminiDuration))
+		status.WriteString("  ⏱ Response time: " + durationStyled)
+	} else if m.geminiError != nil {
+		// Error state
+		errorIcon := lipgloss.NewStyle().Foreground(styles.ErrorColor).Render("✖")
+		errorText := styles.ErrorStyle.Render(m.geminiError.Error())
+		status.WriteString("  " + errorIcon + " Error: " + errorText)
+	} else if m.geminiAvailable {
+		// Ready state
+		readyStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+		status.WriteString("  " + readyStyle.Render("● Ready"))
+		status.WriteString(" ")
+		hint := styles.HelpStyle.Render("(press F9 to send)")
+		status.WriteString(hint)
+	} else {
+		// Not configured
+		notConfigured := styles.MutedColor
+		status.WriteString("  " + lipgloss.NewStyle().Foreground(notConfigured).Render("○ Not configured"))
+	}
+
+	return status.String()
+}
+
+func (m *ReviewModel) renderPreGenerationView() string {
+	var view strings.Builder
+
+	// Info section
+	infoIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("ℹ")
+	infoLabel := styles.HelpStyle.Render("Ready to generate context. This will:")
+	view.WriteString(infoIcon + " " + infoLabel)
+	view.WriteString("\n")
+
+	bulletStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+	itemStyle := lipgloss.NewStyle().Foreground(styles.TextColor)
+
+	items := []string{
+		"Create a comprehensive context file",
+		"Save it as shotgun-prompt-YYYYMMDD-HHMMSS.md",
+		"Copy the content to your clipboard",
+	}
+
+	for _, item := range items {
+		view.WriteString(bulletStyle.Render("  • ") + itemStyle.Render(item))
+		view.WriteString("\n")
+	}
+	view.WriteString("\n")
+
+	// Footer
+	shortcuts := []string{
+		"F8: Generate",
+		"F10: Back to Edit",
+		"F1: Help",
+		"Ctrl+Q: Quit",
+	}
+	footer := styles.RenderFooter(shortcuts)
+	view.WriteString(footer)
+
+	return view.String()
 }
 
 func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {
@@ -303,4 +457,31 @@ func formatSizeHelper(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// parseSize converts size strings like "10MB" to bytes
+func parseSize(sizeStr string) (int64, error) {
+	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+
+	var multiplier int64 = 1
+	if strings.HasSuffix(sizeStr, "KB") {
+		multiplier = 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "KB")
+	} else if strings.HasSuffix(sizeStr, "MB") {
+		multiplier = 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "MB")
+	} else if strings.HasSuffix(sizeStr, "GB") {
+		multiplier = 1024 * 1024 * 1024
+		sizeStr = strings.TrimSuffix(sizeStr, "GB")
+	} else if strings.HasSuffix(sizeStr, "B") {
+		sizeStr = strings.TrimSuffix(sizeStr, "B")
+	}
+
+	var size int64
+	_, err := fmt.Sscanf(sizeStr, "%d", &size)
+	if err != nil {
+		return 0, err
+	}
+
+	return size * multiplier, nil
 }

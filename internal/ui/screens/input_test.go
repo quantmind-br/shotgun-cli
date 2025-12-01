@@ -3,8 +3,8 @@ package screens
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textarea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -199,8 +199,8 @@ func TestRulesInputUpdateRegularKey(t *testing.T) {
 
 	// Type a character
 	_, _ = model.Update(tea.KeyMsg{
-		Type:   tea.KeyRunes,
-		Runes:  []rune{'r'},
+		Type:  tea.KeyRunes,
+		Runes: []rune{'r'},
 	})
 
 	// cmd may be non-nil for textarea update
@@ -227,7 +227,7 @@ func TestRulesInputViewEmpty(t *testing.T) {
 
 	// Empty rules input should be valid (it's optional)
 	assert.Contains(t, view, "Rules")
-	assert.Contains(t, view, "Optional")
+	assert.Contains(t, view, "OPTIONAL")
 }
 
 func TestRulesInputGetValue(t *testing.T) {

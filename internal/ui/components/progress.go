@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
@@ -17,12 +20,30 @@ type ProgressModel struct {
 	visible bool
 	width   int
 	height  int
+	spinner spinner.Model
 }
 
 func NewProgress() *ProgressModel {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(styles.PrimaryColor)
+
 	return &ProgressModel{
 		visible: false,
+		spinner: s,
 	}
+}
+
+// Init returns the initial command for the spinner
+func (m *ProgressModel) Init() tea.Cmd {
+	return m.spinner.Tick
+}
+
+// Update handles spinner updates
+func (m *ProgressModel) UpdateSpinner(msg tea.Msg) (*ProgressModel, tea.Cmd) {
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return m, cmd
 }
 
 func (m *ProgressModel) Update(current, total int64, stage, message string) {
@@ -91,27 +112,38 @@ func (m *ProgressModel) View() string {
 		}
 	}
 
+	borderColor := styles.BorderColor
+	titleColor := styles.PrimaryColor
+
 	// Top border
-	topBorder := "┌" + strings.Repeat("─", modalWidth-2) + "┐"
+	topBorder := lipgloss.NewStyle().Foreground(borderColor).Render(
+		"╭" + strings.Repeat("─", modalWidth-2) + "╮")
 	content.WriteString(m.centerLine(topBorder))
 	content.WriteString("\n")
 
-	// Title
-	title := "Processing..."
-	titleLine := "│" + m.padCenter(title, modalWidth-2) + "│"
+	// Title with spinner
+	title := lipgloss.NewStyle().Foreground(titleColor).Bold(true).Render("Processing")
+	titleLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+		m.padCenter(m.spinner.View()+" "+title, modalWidth-2) +
+		lipgloss.NewStyle().Foreground(borderColor).Render("│")
 	content.WriteString(m.centerLine(titleLine))
 	content.WriteString("\n")
 
 	// Empty line
-	emptyLine := "│" + strings.Repeat(" ", modalWidth-2) + "│"
+	emptyLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+		strings.Repeat(" ", modalWidth-2) +
+		lipgloss.NewStyle().Foreground(borderColor).Render("│")
 	content.WriteString(m.centerLine(emptyLine))
 	content.WriteString("\n")
 
 	// Stage
 	if m.stage != "" {
 		truncated := m.truncate(m.stage, modalWidth-4)
+		stageStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
 		padding := strings.Repeat(" ", modalWidth-4-len(truncated))
-		stageLine := "│ " + truncated + padding + " │"
+		stageLine := lipgloss.NewStyle().Foreground(borderColor).Render("│ ") +
+			stageStyled + padding +
+			lipgloss.NewStyle().Foreground(borderColor).Render(" │")
 		content.WriteString(m.centerLine(stageLine))
 		content.WriteString("\n")
 	}
@@ -119,41 +151,51 @@ func (m *ProgressModel) View() string {
 	// Progress bar (if we have totals)
 	if m.total > 0 {
 		progressBar := m.renderProgressBar(modalWidth - 4)
-		progressLine := "│ " + progressBar + " │"
+		progressLine := lipgloss.NewStyle().Foreground(borderColor).Render("│ ") +
+			progressBar +
+			lipgloss.NewStyle().Foreground(borderColor).Render(" │")
 		content.WriteString(m.centerLine(progressLine))
 		content.WriteString("\n")
 
 		// Percentage and counts
 		percentage := float64(m.current) / float64(m.total) * 100
 		stats := fmt.Sprintf("%.1f%% (%d/%d)", percentage, m.current, m.total)
-		statsLine := "│ " + m.padCenter(stats, modalWidth-4) + " │"
+		statsStyled := lipgloss.NewStyle().Foreground(styles.AccentColor).Render(stats)
+		statsLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+			m.padCenter(statsStyled, modalWidth-2) +
+			lipgloss.NewStyle().Foreground(borderColor).Render("│")
 		content.WriteString(m.centerLine(statsLine))
 		content.WriteString("\n")
 	} else if m.message != "" {
 		// Show message if no progress totals
 		truncated := m.truncate(m.message, modalWidth-4)
+		messageStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
 		padding := strings.Repeat(" ", modalWidth-4-len(truncated))
-		messageLine := "│ " + truncated + padding + " │"
+		messageLine := lipgloss.NewStyle().Foreground(borderColor).Render("│ ") +
+			messageStyled + padding +
+			lipgloss.NewStyle().Foreground(borderColor).Render(" │")
 		content.WriteString(m.centerLine(messageLine))
 		content.WriteString("\n")
 
-		// Spinner or activity indicator
-		spinner := m.getSpinner()
-		spinnerLine := "│" + m.padCenter(spinner, modalWidth-2) + "│"
-		content.WriteString(m.centerLine(spinnerLine))
+		// Activity indicator using spinner
+		activityLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+			m.padCenter(m.spinner.View(), modalWidth-2) +
+			lipgloss.NewStyle().Foreground(borderColor).Render("│")
+		content.WriteString(m.centerLine(activityLine))
 		content.WriteString("\n")
 	}
 
 	// Bottom border
-	bottomBorder := "└" + strings.Repeat("─", modalWidth-2) + "┘"
+	bottomBorder := lipgloss.NewStyle().Foreground(borderColor).Render(
+		"╰" + strings.Repeat("─", modalWidth-2) + "╯")
 	content.WriteString(m.centerLine(bottomBorder))
 
-	return styles.BorderStyle.Render(content.String())
+	return content.String()
 }
 
 func (m *ProgressModel) renderProgressBar(width int) string {
 	if m.total <= 0 {
-		return strings.Repeat("░", width)
+		return lipgloss.NewStyle().Foreground(styles.MutedColor).Render(strings.Repeat("░", width))
 	}
 
 	filled := int(float64(width) * float64(m.current) / float64(m.total))
@@ -161,16 +203,13 @@ func (m *ProgressModel) renderProgressBar(width int) string {
 		filled = width
 	}
 
-	// Use Unicode block characters for better visual
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	return bar
-}
+	// Use Unicode block characters with colors
+	filledStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
+	emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
 
-func (m *ProgressModel) getSpinner() string {
-	// Simple spinner animation (would need to be updated with a timer in real implementation)
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	// For now, just return a static spinner
-	return spinners[0]
+	bar := filledStyle.Render(strings.Repeat("█", filled)) +
+		emptyStyle.Render(strings.Repeat("░", width-filled))
+	return bar
 }
 
 func (m *ProgressModel) centerLine(line string) string {
@@ -188,7 +227,7 @@ func (m *ProgressModel) centerLine(line string) string {
 }
 
 func (m *ProgressModel) padCenter(text string, width int) string {
-	textLen := len(text)
+	textLen := m.visualWidth(text)
 	if textLen >= width {
 		return m.truncate(text, width)
 	}
@@ -211,9 +250,15 @@ func (m *ProgressModel) truncate(text string, maxLen int) string {
 func (m *ProgressModel) visualWidth(text string) int {
 	// Simple implementation - in a real scenario, you'd want to handle
 	// Unicode characters and ANSI escape sequences properly
-	return len(text)
+	// For now, approximate by stripping ANSI codes
+	return lipgloss.Width(text)
 }
 
 func (m *ProgressModel) GetProgress() (int64, int64, string, string) {
 	return m.current, m.total, m.stage, m.message
+}
+
+// GetSpinnerTickCmd returns the tick command for the spinner
+func (m *ProgressModel) GetSpinnerTickCmd() tea.Cmd {
+	return m.spinner.Tick
 }

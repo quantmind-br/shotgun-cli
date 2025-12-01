@@ -129,15 +129,16 @@ func (m *FileSelectionModel) View() string {
 		selectedCount := len(m.selections)
 		totalSize := m.calculateSelectedSize()
 		estimatedTokens := tokens.EstimateFromBytes(totalSize)
-		stats = fmt.Sprintf("Selected: %d files (%s / ~%s tokens)",
-			selectedCount, formatSize(totalSize), tokens.FormatTokens(estimatedTokens))
+		stats = styles.RenderTokenStats(selectedCount, formatSize(totalSize), tokens.FormatTokens(estimatedTokens))
 	} else {
-		stats = "Selected: 0 files (0 B / ~0 tokens)"
+		stats = styles.RenderTokenStats(0, "0 B", "0")
 	}
 
-	// Add filter status
+	// Add filter status with styling
 	if m.tree != nil && m.tree.GetFilter() != "" {
-		stats += fmt.Sprintf(" | Filter: %s", m.tree.GetFilter())
+		filterLabel := styles.StatsLabelStyle.Render("Filter:")
+		filterValue := styles.StatsValueStyle.Render(m.tree.GetFilter())
+		stats += " │ " + filterLabel + " " + filterValue
 	}
 
 	var treeView string

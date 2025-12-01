@@ -186,14 +186,13 @@ func TestProgressRenderProgressBarOverflow(t *testing.T) {
 	}
 }
 
-func TestProgressGetSpinner(t *testing.T) {
+func TestProgressSpinnerTickCmd(t *testing.T) {
 	p := NewProgress()
 
-	spinner := p.getSpinner()
+	cmd := p.GetSpinnerTickCmd()
 
-	assert.NotEmpty(t, spinner)
-	// Should return a valid spinner character
-	assert.Contains(t, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", spinner)
+	// Should return a tick command for the spinner
+	assert.NotNil(t, cmd)
 }
 
 func TestProgressCenterLine(t *testing.T) {

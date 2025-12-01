@@ -44,8 +44,8 @@ func TestRenderFooter(t *testing.T) {
 	if !strings.Contains(result, "Enter: Confirm") {
 		t.Fatalf("expected second shortcut")
 	}
-	// Should be separated by •
-	if !strings.Contains(result, "•") {
+	// Should be separated by │
+	if !strings.Contains(result, "│") {
 		t.Fatalf("expected separator")
 	}
 }
@@ -79,7 +79,7 @@ func TestRenderError(t *testing.T) {
 	if !strings.Contains(result, "Error message") {
 		t.Fatalf("expected error message")
 	}
-	if !strings.Contains(result, "❌") {
+	if !strings.Contains(result, "✖") {
 		t.Fatalf("expected error icon")
 	}
 }
@@ -92,7 +92,7 @@ func TestRenderSuccess(t *testing.T) {
 	if !strings.Contains(result, "Success message") {
 		t.Fatalf("expected success message")
 	}
-	if !strings.Contains(result, "✅") {
+	if !strings.Contains(result, "✔") {
 		t.Fatalf("expected success icon")
 	}
 }
