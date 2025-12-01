@@ -834,3 +834,158 @@ func TestTreeSorting(t *testing.T) {
 		}
 	}
 }
+
+func TestShotgunignoreIntegration(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "shotgunignore_integration_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test directory structure
+	files := []struct {
+		path    string
+		content string
+	}{
+		{"main.go", "package main"},
+		{"main_test.go", "package main"},
+		{"lib/utils.go", "package lib"},
+		{"lib/utils_test.go", "package lib"},
+		{"test/e2e/e2e.go", "package e2e"},
+		{"docs/readme.md", "# Docs"},
+	}
+
+	for _, f := range files {
+		fullPath := filepath.Join(tempDir, f.path)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory for %s: %v", f.path, err)
+		}
+		err = os.WriteFile(fullPath, []byte(f.content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write file %s: %v", f.path, err)
+		}
+	}
+
+	t.Run("scan without shotgunignore includes all files", func(t *testing.T) {
+		scanner := NewFileSystemScanner()
+		config := DefaultScanConfig()
+		config.IncludeIgnored = false
+
+		root, err := scanner.Scan(tempDir, config)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		// Count all files recursively
+		var countFiles func(*FileNode) int
+		countFiles = func(node *FileNode) int {
+			count := 0
+			if !node.IsDir {
+				count = 1
+			}
+			for _, child := range node.Children {
+				count += countFiles(child)
+			}
+			return count
+		}
+
+		fileCount := countFiles(root)
+		if fileCount != 6 {
+			t.Errorf("Expected 6 files without shotgunignore, got %d", fileCount)
+		}
+	})
+
+	t.Run("scan with shotgunignore excludes matching files", func(t *testing.T) {
+		// Create .shotgunignore file
+		shotgunignoreContent := `# Ignore test files
+*_test.go
+test/**
+`
+		err := os.WriteFile(filepath.Join(tempDir, ".shotgunignore"), []byte(shotgunignoreContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create .shotgunignore: %v", err)
+		}
+
+		scanner := NewFileSystemScanner()
+		config := DefaultScanConfig()
+		config.IncludeIgnored = false
+
+		root, err := scanner.Scan(tempDir, config)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		// Collect all file paths recursively
+		var collectFiles func(*FileNode) []string
+		collectFiles = func(node *FileNode) []string {
+			var files []string
+			if !node.IsDir {
+				files = append(files, node.RelPath)
+			}
+			for _, child := range node.Children {
+				files = append(files, collectFiles(child)...)
+			}
+			return files
+		}
+
+		scannedFiles := collectFiles(root)
+
+		// Should exclude: main_test.go, lib/utils_test.go, test/e2e/e2e.go
+		// Should include: main.go, lib/utils.go, docs/readme.md
+		expectedCount := 3
+		if len(scannedFiles) != expectedCount {
+			t.Errorf("Expected %d files with shotgunignore, got %d: %v", expectedCount, len(scannedFiles), scannedFiles)
+		}
+
+		// Verify specific files are excluded
+		for _, f := range scannedFiles {
+			if strings.HasSuffix(f, "_test.go") {
+				t.Errorf("Test file should be excluded: %s", f)
+			}
+			if strings.HasPrefix(f, "test/") {
+				t.Errorf("Test directory should be excluded: %s", f)
+			}
+		}
+	})
+
+	t.Run("scan with IncludeIgnored=true includes ignored files with markers", func(t *testing.T) {
+		scanner := NewFileSystemScanner()
+		config := DefaultScanConfig()
+		config.IncludeIgnored = true
+
+		root, err := scanner.Scan(tempDir, config)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		// Collect all file nodes recursively
+		var collectFileNodes func(*FileNode) []*FileNode
+		collectFileNodes = func(node *FileNode) []*FileNode {
+			var nodes []*FileNode
+			if !node.IsDir {
+				nodes = append(nodes, node)
+			}
+			for _, child := range node.Children {
+				nodes = append(nodes, collectFileNodes(child)...)
+			}
+			return nodes
+		}
+
+		nodes := collectFileNodes(root)
+
+		// Should include all 6 files
+		if len(nodes) != 6 {
+			t.Errorf("Expected 6 files with IncludeIgnored=true, got %d", len(nodes))
+		}
+
+		// Check that test files are marked as ignored
+		for _, node := range nodes {
+			if strings.HasSuffix(node.RelPath, "_test.go") {
+				if !node.IsCustomIgnored {
+					t.Errorf("Test file should be marked as custom ignored: %s", node.RelPath)
+				}
+			}
+		}
+	})
+}

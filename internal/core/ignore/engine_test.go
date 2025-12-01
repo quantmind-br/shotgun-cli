@@ -478,6 +478,137 @@ func TestLayeredIgnoreEngine_PathNormalization(t *testing.T) {
 	}
 }
 
+func TestLayeredIgnoreEngine_LoadShotgunignore(t *testing.T) {
+	// Create temporary directory for test
+	tmpDir, err := os.MkdirTemp("", "shotgunignore_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	t.Run("missing shotgunignore file", func(t *testing.T) {
+		engine := NewIgnoreEngine()
+		err := engine.LoadShotgunignore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadShotgunignore() with missing file should not error, got %v", err)
+		}
+
+		// Should not ignore files when no .shotgunignore exists
+		ignored, reason := engine.ShouldIgnore("test.txt")
+		if ignored && reason == IgnoreReasonCustom {
+			t.Error("Should not ignore files when no .shotgunignore exists")
+		}
+	})
+
+	t.Run("valid shotgunignore file", func(t *testing.T) {
+		engine := NewIgnoreEngine()
+
+		// Create .shotgunignore file with patterns
+		shotgunignorePath := filepath.Join(tmpDir, ".shotgunignore")
+		shotgunignoreContent := `# Test files
+*_test.go
+test/**
+*.spec.js
+!important_test.go
+`
+		err := os.WriteFile(shotgunignorePath, []byte(shotgunignoreContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = engine.LoadShotgunignore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadShotgunignore() error = %v", err)
+		}
+
+		tests := []struct {
+			path     string
+			ignored  bool
+			reason   IgnoreReason
+			testName string
+		}{
+			{"main_test.go", true, IgnoreReasonCustom, "test file should be ignored"},
+			{"test/unit/example.go", true, IgnoreReasonCustom, "test directory should be ignored"},
+			{"app.spec.js", true, IgnoreReasonCustom, "spec file should be ignored"},
+			{"important_test.go", false, IgnoreReasonNone, "negated pattern should not be ignored"},
+			{"main.go", false, IgnoreReasonNone, "non-matching file should not be ignored"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				ignored, reason := engine.ShouldIgnore(tt.path)
+				if ignored != tt.ignored {
+					t.Errorf("ShouldIgnore(%q) ignored = %v, want %v", tt.path, ignored, tt.ignored)
+				}
+				if ignored && reason != tt.reason {
+					t.Errorf("ShouldIgnore(%q) reason = %v, want %v", tt.path, reason, tt.reason)
+				}
+			})
+		}
+	})
+
+	t.Run("nested shotgunignore file", func(t *testing.T) {
+		engine := NewIgnoreEngine()
+
+		// Create nested directory structure
+		nestedDir := filepath.Join(tmpDir, "nested")
+		err := os.MkdirAll(nestedDir, 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Create .shotgunignore file in nested directory
+		nestedShotgunignorePath := filepath.Join(nestedDir, ".shotgunignore")
+		nestedShotgunignoreContent := `*.local
+temp/
+`
+		err = os.WriteFile(nestedShotgunignorePath, []byte(nestedShotgunignoreContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = engine.LoadShotgunignore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadShotgunignore() error = %v", err)
+		}
+
+		tests := []struct {
+			path     string
+			ignored  bool
+			testName string
+		}{
+			{"nested/config.local", true, "nested local file should be ignored"},
+			{"nested/temp/data.txt", true, "nested temp directory should be ignored"},
+			{"config.local", false, "root local file should not be ignored by nested rule"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				ignored, _ := engine.ShouldIgnore(tt.path)
+				if ignored != tt.ignored {
+					t.Errorf("ShouldIgnore(%q) ignored = %v, want %v", tt.path, ignored, tt.ignored)
+				}
+			})
+		}
+	})
+
+	t.Run("empty shotgunignore file", func(t *testing.T) {
+		engine := NewIgnoreEngine()
+
+		// Create empty .shotgunignore file
+		shotgunignorePath := filepath.Join(tmpDir, ".shotgunignore")
+		err := os.WriteFile(shotgunignorePath, []byte(""), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = engine.LoadShotgunignore(tmpDir)
+		if err != nil {
+			t.Errorf("LoadShotgunignore() with empty file should not error, got %v", err)
+		}
+	})
+}
+
 // Benchmark tests
 func BenchmarkLayeredIgnoreEngine_ShouldIgnore(b *testing.B) {
 	engine := NewIgnoreEngine()

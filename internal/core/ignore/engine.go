@@ -67,6 +67,9 @@ type IgnoreEngine interface {
 
 	// IsCustomIgnored returns true if the path would be ignored by custom rules specifically
 	IsCustomIgnored(relPath string) bool
+
+	// LoadShotgunignore loads .shotgunignore rules from the specified directory
+	LoadShotgunignore(rootDir string) error
 }
 
 // LayeredIgnoreEngine implements the IgnoreEngine interface with layered rule support
@@ -371,4 +374,77 @@ func (e *LayeredIgnoreEngine) IsGitignored(relPath string) bool {
 func (e *LayeredIgnoreEngine) IsCustomIgnored(relPath string) bool {
 	normalizedPath := filepath.ToSlash(relPath)
 	return e.customMatcher.MatchesPath(normalizedPath)
+}
+
+// LoadShotgunignore loads .shotgunignore rules from the specified directory
+func (e *LayeredIgnoreEngine) LoadShotgunignore(rootDir string) error {
+	// Collect all .shotgunignore files in the directory tree
+	var shotgunignoreFiles []string
+
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() && info.Name() == ".shotgunignore" {
+			shotgunignoreFiles = append(shotgunignoreFiles, path)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// If no .shotgunignore files found, return early
+	if len(shotgunignoreFiles) == 0 {
+		return nil
+	}
+
+	// Collect all patterns from all .shotgunignore files
+	var allPatterns []string
+
+	for _, shotgunignoreFile := range shotgunignoreFiles {
+		// Read the file content
+		content, err := os.ReadFile(shotgunignoreFile)
+		if err != nil {
+			continue // Skip files we can't read
+		}
+
+		// Get relative path from root to adjust patterns
+		relDir, err := filepath.Rel(rootDir, filepath.Dir(shotgunignoreFile))
+		if err != nil {
+			continue
+		}
+
+		// Split content into lines and process each pattern
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue // Skip empty lines and comments
+			}
+
+			// If this is a nested .shotgunignore (not root), prefix patterns with relative path
+			if relDir != "." && relDir != "" {
+				// Adjust pattern for nested location
+				if strings.HasPrefix(line, "!") {
+					// Negation pattern - prefix after the !
+					line = "!" + filepath.Join(relDir, line[1:])
+				} else {
+					line = filepath.Join(relDir, line)
+				}
+			}
+
+			allPatterns = append(allPatterns, line)
+		}
+	}
+
+	// Add all patterns as custom rules
+	if len(allPatterns) > 0 {
+		return e.AddCustomRules(allPatterns)
+	}
+
+	return nil
 }

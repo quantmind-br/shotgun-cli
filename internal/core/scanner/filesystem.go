@@ -54,6 +54,11 @@ func (fs *FileSystemScanner) ScanWithProgress(
 		return nil, fmt.Errorf("failed to load gitignore rules: %w", err)
 	}
 
+	// Load .shotgunignore rules (project-specific ignore patterns)
+	if err := fs.ignoreEngine.LoadShotgunignore(rootPath); err != nil {
+		return nil, fmt.Errorf("failed to load shotgunignore rules: %w", err)
+	}
+
 	// Add custom patterns from config
 	if len(config.IgnorePatterns) > 0 {
 		if err := fs.ignoreEngine.AddCustomRules(config.IgnorePatterns); err != nil {
