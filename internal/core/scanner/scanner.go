@@ -31,9 +31,6 @@ type FileNode struct {
 	// Children contains child nodes for directories
 	Children []*FileNode `json:"children,omitempty"`
 
-	// Selected indicates if this node is selected in the UI
-	Selected bool `json:"selected"`
-
 	// IsGitignored indicates if this file is ignored by .gitignore
 	IsGitignored bool `json:"is_gitignored"`
 

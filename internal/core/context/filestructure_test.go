@@ -10,27 +10,24 @@ import (
 func TestFileStructureWithContentBlocks(t *testing.T) {
 	// Create a mock file tree
 	root := &scanner.FileNode{
-		Name:     "project",
-		Path:     "/tmp/project",
-		RelPath:  ".",
-		IsDir:    true,
-		Selected: true,
+		Name:    "project",
+		Path:    "/tmp/project",
+		RelPath: ".",
+		IsDir:   true,
 		Children: []*scanner.FileNode{
 			{
-				Name:     "main.go",
-				Path:     "/tmp/project/main.go",
-				RelPath:  "main.go",
-				IsDir:    false,
-				Selected: true,
-				Size:     50,
+				Name:    "main.go",
+				Path:    "/tmp/project/main.go",
+				RelPath: "main.go",
+				IsDir:   false,
+				Size:    50,
 			},
 			{
-				Name:     "README.md",
-				Path:     "/tmp/project/README.md",
-				RelPath:  "README.md",
-				IsDir:    false,
-				Selected: true,
-				Size:     20,
+				Name:    "README.md",
+				Path:    "/tmp/project/README.md",
+				RelPath: "README.md",
+				IsDir:   false,
+				Size:    20,
 			},
 		},
 	}

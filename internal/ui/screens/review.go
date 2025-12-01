@@ -3,11 +3,13 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
@@ -26,6 +28,14 @@ type ReviewModel struct {
 	// Cached stats calculated on initialization
 	totalBytes  int64
 	totalTokens int
+
+	// Gemini integration state
+	geminiAvailable  bool
+	geminiSending    bool
+	geminiComplete   bool
+	geminiOutputFile string
+	geminiDuration   time.Duration
+	geminiError      error
 }
 
 // NewReview creates a new ReviewModel with precomputed statistics.
@@ -37,11 +47,12 @@ func NewReview(
 	taskDesc, rules string,
 ) *ReviewModel {
 	m := &ReviewModel{
-		selectedFiles: selectedFiles,
-		fileTree:      fileTree,
-		template:      tmpl,
-		taskDesc:      taskDesc,
-		rules:         rules,
+		selectedFiles:   selectedFiles,
+		fileTree:        fileTree,
+		template:        tmpl,
+		taskDesc:        taskDesc,
+		rules:           rules,
+		geminiAvailable: gemini.IsAvailable() && gemini.IsConfigured(),
 	}
 	// Calculate stats on initialization (once)
 	m.totalBytes, m.totalTokens = m.calculateStats()
@@ -153,12 +164,32 @@ func (m *ReviewModel) View() string {
 			tip := "   Tip: Copy manually from the file or use 'cat " + m.generatedPath + " | wl-copy'"
 			content.WriteString(styles.HelpStyle.Render(tip))
 		}
+		content.WriteString("\n")
+
+		// Gemini status
+		content.WriteString("\n")
+		if m.geminiSending {
+			content.WriteString(styles.HelpStyle.Render("🤖 Sending to Gemini..."))
+		} else if m.geminiComplete {
+			content.WriteString(styles.SuccessStyle.Render(fmt.Sprintf("🤖 Gemini response saved to: %s", m.geminiOutputFile)))
+			content.WriteString("\n")
+			content.WriteString(styles.HelpStyle.Render(fmt.Sprintf("   Response time: %s", m.formatDuration(m.geminiDuration))))
+		} else if m.geminiError != nil {
+			content.WriteString(styles.ErrorStyle.Render(fmt.Sprintf("🤖 Gemini error: %v", m.geminiError)))
+		} else if m.geminiAvailable {
+			content.WriteString(styles.HelpStyle.Render("🤖 Gemini: Ready (press F9 to send)"))
+		} else {
+			content.WriteString(styles.HelpStyle.Render("🤖 Gemini: Not configured"))
+		}
 		content.WriteString("\n\n")
 
 		shortcuts := []string{
 			"Ctrl+Q: Exit",
-			"F1: Help",
 		}
+		if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
+			shortcuts = append([]string{"F9: Send to Gemini"}, shortcuts...)
+		}
+		shortcuts = append(shortcuts, "F1: Help")
 		footer := styles.RenderFooter(shortcuts)
 		content.WriteString(footer)
 	} else {
@@ -189,6 +220,39 @@ func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {
 	m.generated = true
 	m.generatedPath = filePath
 	m.clipboardCopied = clipboardSuccess
+}
+
+// SetGeminiSending sets the Gemini sending state
+func (m *ReviewModel) SetGeminiSending(sending bool) {
+	m.geminiSending = sending
+	m.geminiError = nil
+}
+
+// SetGeminiComplete sets the Gemini complete state
+func (m *ReviewModel) SetGeminiComplete(outputFile string, duration time.Duration) {
+	m.geminiSending = false
+	m.geminiComplete = true
+	m.geminiOutputFile = outputFile
+	m.geminiDuration = duration
+	m.geminiError = nil
+}
+
+// SetGeminiError sets the Gemini error state
+func (m *ReviewModel) SetGeminiError(err error) {
+	m.geminiSending = false
+	m.geminiComplete = false
+	m.geminiError = err
+}
+
+// formatDuration formats a duration for display
+func (m *ReviewModel) formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
 }
 
 // calculateStats computes accurate byte and token counts from selected files.

@@ -10,6 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 var configCmd = &cobra.Command{
@@ -132,7 +134,7 @@ func showCurrentConfig() error {
 	}
 
 	// Display by category
-	categoryOrder := []string{"scanner", "context", "template", "output"}
+	categoryOrder := []string{"scanner", "context", "template", "output", "gemini"}
 
 	for _, category := range categoryOrder {
 		if keys, exists := categories[category]; exists {
@@ -221,6 +223,14 @@ func isValidConfigKey(key string) bool {
 		"template.custom-path",
 		"output.format",
 		"output.clipboard",
+		// Gemini integration keys
+		"gemini.enabled",
+		"gemini.binary-path",
+		"gemini.model",
+		"gemini.timeout",
+		"gemini.browser-refresh",
+		"gemini.auto-send",
+		"gemini.save-response",
 	}
 
 	for _, validKey := range validKeys {
@@ -238,20 +248,31 @@ func validateConfigValue(key, value string) error {
 	case "scanner.max-file-size", "context.max-size":
 		return validateSizeFormat(value)
 	case "scanner.respect-gitignore", "scanner.skip-binary",
-		"context.include-tree", "context.include-summary", "output.clipboard":
+		"context.include-tree", "context.include-summary", "output.clipboard",
+		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
 		return validateBooleanValue(value)
 	case "output.format":
 		return validateOutputFormat(value)
-	case "template.custom-path":
+	case "template.custom-path", "gemini.binary-path":
 		return validateTemplatePath(value)
+	case "gemini.model":
+		return validateGeminiModel(value)
+	case "gemini.timeout":
+		return validateGeminiTimeout(value)
+	case "gemini.browser-refresh":
+		return validateGeminiBrowserRefresh(value)
 	}
 	return nil
 }
 
 func validateMaxFiles(value string) error {
-	if _, err := parseSize(value); err == nil {
+	// Reject size formats (e.g., "10MB", "1KB")
+	upper := strings.ToUpper(strings.TrimSpace(value))
+	if strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") ||
+		strings.HasSuffix(upper, "KB") || (strings.HasSuffix(upper, "B") && len(upper) > 1 && upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9') {
 		return fmt.Errorf("expected a number, got size format")
 	}
+
 	var dummy int
 	if _, err := fmt.Sscanf(value, "%d", &dummy); err != nil {
 		return fmt.Errorf("expected a positive integer")
@@ -263,7 +284,7 @@ func validateMaxFiles(value string) error {
 }
 
 func validateSizeFormat(value string) error {
-	if _, err := parseSize(value); err != nil {
+	if _, err := utils.ParseSize(value); err != nil {
 		return fmt.Errorf("expected size format (e.g., 1MB, 500KB): %w", err)
 	}
 	return nil
@@ -309,9 +330,43 @@ func validateTemplatePath(value string) error {
 	return nil
 }
 
+func validateGeminiModel(value string) error {
+	validModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.0-pro"}
+	for _, model := range validModels {
+		if value == model {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected one of: %s", strings.Join(validModels, ", "))
+}
+
+func validateGeminiTimeout(value string) error {
+	var timeout int
+	if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
+		return fmt.Errorf("expected a positive integer (seconds)")
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("timeout must be positive, got %d", timeout)
+	}
+	if timeout > 3600 {
+		return fmt.Errorf("timeout too large (max 3600 seconds), got %d", timeout)
+	}
+	return nil
+}
+
+func validateGeminiBrowserRefresh(value string) error {
+	validValues := []string{"", "auto", "chrome", "firefox", "edge", "chromium", "opera"}
+	for _, valid := range validValues {
+		if value == valid {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)")
+}
+
 func convertConfigValue(key, value string) (interface{}, error) {
 	switch key {
-	case "scanner.max-files":
+	case "scanner.max-files", "gemini.timeout":
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, err
@@ -319,7 +374,8 @@ func convertConfigValue(key, value string) (interface{}, error) {
 		return intVal, nil
 
 	case "scanner.respect-gitignore", "scanner.skip-binary",
-		"context.include-tree", "context.include-summary", "output.clipboard":
+		"context.include-tree", "context.include-summary", "output.clipboard",
+		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
 		return strings.ToLower(value) == "true", nil
 
 	default:

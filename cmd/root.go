@@ -15,6 +15,7 @@ import (
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 var (
@@ -67,7 +68,7 @@ func launchTUIWizard() {
 	// Create scanner configuration from Viper settings
 	config := &scanner.ScanConfig{
 		MaxFiles:      viper.GetInt64("scanner.max-files"),
-		MaxFileSize:   parseConfigSize(viper.GetString("scanner.max-file-size")),
+		MaxFileSize:   utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
 		SkipBinary:    viper.GetBool("scanner.skip-binary"),
 		IncludeHidden: false,
 		Workers:       1,
@@ -210,6 +211,15 @@ func setConfigDefaults() {
 	// Output defaults
 	viper.SetDefault("output.format", "markdown")
 	viper.SetDefault("output.clipboard", true)
+
+	// Gemini integration defaults
+	viper.SetDefault("gemini.enabled", false)
+	viper.SetDefault("gemini.binary-path", "")
+	viper.SetDefault("gemini.model", "gemini-2.5-flash")
+	viper.SetDefault("gemini.timeout", 300)
+	viper.SetDefault("gemini.browser-refresh", "auto")
+	viper.SetDefault("gemini.auto-send", false)
+	viper.SetDefault("gemini.save-response", true)
 }
 
 func updateLoggingLevel() {

@@ -9,40 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestParseSize(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name    string
-		input   string
-		expect  int64
-		wantErr bool
-	}{
-		{"bytes", "1024", 1024, false},
-		{"kb", "1KB", 1024, false},
-		{"mb", "2MB", 2 * 1024 * 1024, false},
-		{"gb", "1GB", 1024 * 1024 * 1024, false},
-		{"invalid", "abc", 0, true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseSize(tc.input)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error for %s", tc.input)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseSize error: %v", err)
-			}
-			if got != tc.expect {
-				t.Fatalf("expected %d, got %d", tc.expect, got)
-			}
-		})
-	}
-}
+// Note: ParseSize, ParseSizeWithDefault, and FormatBytes tests are in internal/utils/conversion_test.go
 
 func TestBuildGenerateConfigDefaults(t *testing.T) {
 	cmd := &cobra.Command{}
@@ -63,27 +30,6 @@ func TestBuildGenerateConfigDefaults(t *testing.T) {
 
 	if !strings.HasPrefix(filepath.Base(cfg.Output), "shotgun-prompt-") {
 		t.Fatalf("expected generated output name, got %s", cfg.Output)
-	}
-}
-
-func TestParseConfigSizeFallback(t *testing.T) {
-	size := parseConfigSize("invalid")
-	if size != 1024*1024 {
-		t.Fatalf("expected 1MB fallback, got %d", size)
-	}
-}
-
-func TestFormatBytes(t *testing.T) {
-	cases := map[int64]string{
-		42:          "42 B",
-		1024:        "1.0 KB",
-		1024 * 1024: "1.0 MB",
-	}
-
-	for input, expect := range cases {
-		if got := formatBytes(input); got != expect {
-			t.Fatalf("expected %s, got %s", expect, got)
-		}
 	}
 }
 

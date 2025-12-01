@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,19 +12,25 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 type GenerateConfig struct {
-	RootPath     string
-	Include      []string
-	Exclude      []string
-	Output       string
-	MaxSize      int64
-	EnforceLimit bool
+	RootPath      string
+	Include       []string
+	Exclude       []string
+	Output        string
+	MaxSize       int64
+	EnforceLimit  bool
+	SendGemini    bool
+	GeminiModel   string
+	GeminiOutput  string
+	GeminiTimeout int
 }
 
 var contextCmd = &cobra.Command{
@@ -79,7 +85,7 @@ Examples:
 
 		// Validate max-size format
 		maxSizeStr, _ := cmd.Flags().GetString("max-size")
-		if _, err := parseSize(maxSizeStr); err != nil {
+		if _, err := utils.ParseSize(maxSizeStr); err != nil {
 			return fmt.Errorf("invalid max-size format '%s': %w (use formats like 1MB, 5GB, 500KB)", maxSizeStr, err)
 		}
 
@@ -112,6 +118,12 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	maxSizeStr, _ := cmd.Flags().GetString("max-size")
 	enforceLimit, _ := cmd.Flags().GetBool("enforce-limit")
 
+	// Gemini flags
+	sendGemini, _ := cmd.Flags().GetBool("send-gemini")
+	geminiModel, _ := cmd.Flags().GetString("gemini-model")
+	geminiOutput, _ := cmd.Flags().GetString("gemini-output")
+	geminiTimeout, _ := cmd.Flags().GetInt("gemini-timeout")
+
 	// Convert root to absolute path
 	absPath, err := filepath.Abs(rootPath)
 	if err != nil {
@@ -119,7 +131,7 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	}
 
 	// Parse max size
-	maxSize, err := parseSize(maxSizeStr)
+	maxSize, err := utils.ParseSize(maxSizeStr)
 	if err != nil {
 		return GenerateConfig{}, fmt.Errorf("failed to parse max-size: %w", err)
 	}
@@ -130,13 +142,30 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		output = fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
 	}
 
+	// Use config defaults for Gemini if not specified via flags
+	if geminiModel == "" {
+		geminiModel = viper.GetString("gemini.model")
+	}
+	if geminiTimeout == 0 {
+		geminiTimeout = viper.GetInt("gemini.timeout")
+	}
+
+	// Enable gemini via config if auto-send is enabled
+	if !sendGemini && viper.GetBool("gemini.auto-send") {
+		sendGemini = true
+	}
+
 	return GenerateConfig{
-		RootPath:     absPath,
-		Include:      include,
-		Exclude:      exclude,
-		Output:       output,
-		MaxSize:      maxSize,
-		EnforceLimit: enforceLimit,
+		RootPath:      absPath,
+		Include:       include,
+		Exclude:       exclude,
+		Output:        output,
+		MaxSize:       maxSize,
+		EnforceLimit:  enforceLimit,
+		SendGemini:    sendGemini,
+		GeminiModel:   geminiModel,
+		GeminiOutput:  geminiOutput,
+		GeminiTimeout: geminiTimeout,
 	}, nil
 }
 
@@ -144,7 +173,7 @@ func generateContextHeadless(config GenerateConfig) error {
 	// Initialize scanner with configuration
 	scannerConfig := scanner.ScanConfig{
 		MaxFiles:        viper.GetInt64("scanner.max-files"),
-		MaxFileSize:     parseConfigSize(viper.GetString("scanner.max-file-size")),
+		MaxFileSize:     utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
 		SkipBinary:      viper.GetBool("scanner.skip-binary"),
 		IncludeHidden:   false,
 		Workers:         1,
@@ -161,17 +190,18 @@ func generateContextHeadless(config GenerateConfig) error {
 		return fmt.Errorf("failed to scan files: %w", err)
 	}
 
-	// Mark all non-ignored files as selected for content generation
-	selectAllFiles(tree)
+	// Create selection map for all valid files
+	selections := make(map[string]bool)
+	collectAllSelections(tree, selections)
 
 	// Extract file list from tree
 	fileCount := countFilesInTree(tree)
 	log.Info().Int("files", fileCount).Msg("Files scanned")
 
 	// Initialize context generator
-	generator := context.NewDefaultContextGenerator()
+	generator := ctxgen.NewDefaultContextGenerator()
 
-	contextConfig := context.GenerateConfig{
+	contextConfig := ctxgen.GenerateConfig{
 		MaxTotalSize: config.MaxSize,
 		TemplateVars: map[string]string{
 			"TASK":           "Context generation",
@@ -183,7 +213,7 @@ func generateContextHeadless(config GenerateConfig) error {
 	}
 
 	// Generate context
-	content, err := generator.Generate(tree, contextConfig)
+	content, err := generator.Generate(tree, selections, contextConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate context: %w", err)
 	}
@@ -195,7 +225,7 @@ func generateContextHeadless(config GenerateConfig) error {
 			return fmt.Errorf(
 				"generated context size (%s) exceeds limit (%s). "+
 					"Use --no-enforce-limit to allow truncation or generation without enforcement",
-				formatBytes(contentSize), formatBytes(config.MaxSize))
+				utils.FormatBytes(contentSize), utils.FormatBytes(config.MaxSize))
 		} else {
 			log.Warn().
 				Int64("actual", contentSize).
@@ -225,69 +255,68 @@ func generateContextHeadless(config GenerateConfig) error {
 	fmt.Printf("📁 Root path: %s\n", config.RootPath)
 	fmt.Printf("📄 Output file: %s\n", config.Output)
 	fmt.Printf("📊 Files processed: %d\n", fileCount)
-	fmt.Printf("📏 Total size: %s (~%s tokens)\n", formatBytes(contentBytes), tokens.FormatTokens(estimatedTokens))
-	fmt.Printf("🎯 Size limit: %s\n", formatBytes(config.MaxSize))
+	fmt.Printf("📏 Total size: %s (~%s tokens)\n", utils.FormatBytes(contentBytes), tokens.FormatTokens(estimatedTokens))
+	fmt.Printf("🎯 Size limit: %s\n", utils.FormatBytes(config.MaxSize))
+
+	// Send to Gemini if requested
+	if config.SendGemini {
+		if err := sendToGemini(config, content); err != nil {
+			log.Error().Err(err).Msg("Failed to send to Gemini")
+			fmt.Printf("❌ Gemini: %v\n", err)
+		}
+	}
 
 	return nil
 }
 
-func parseSize(sizeStr string) (int64, error) {
-	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
-
-	// Handle numeric-only input (assume bytes)
-	if val, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
-		return val, nil
+func sendToGemini(config GenerateConfig, content string) error {
+	// Check availability
+	if !gemini.IsAvailable() {
+		return fmt.Errorf("geminiweb not found. Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
 	}
 
-	// Parse with units
-	var multiplier int64
-	var numStr string
-
-	switch {
-	case strings.HasSuffix(sizeStr, "GB"):
-		multiplier = 1024 * 1024 * 1024
-		numStr = strings.TrimSuffix(sizeStr, "GB")
-	case strings.HasSuffix(sizeStr, "MB"):
-		multiplier = 1024 * 1024
-		numStr = strings.TrimSuffix(sizeStr, "MB")
-	case strings.HasSuffix(sizeStr, "KB"):
-		multiplier = 1024
-		numStr = strings.TrimSuffix(sizeStr, "KB")
-	case strings.HasSuffix(sizeStr, "B"):
-		multiplier = 1
-		numStr = strings.TrimSuffix(sizeStr, "B")
-	default:
-		return 0, fmt.Errorf("invalid size format, use KB, MB, GB, or B")
+	if !gemini.IsConfigured() {
+		return fmt.Errorf("geminiweb not configured. Run: geminiweb auto-login")
 	}
 
-	val, err := strconv.ParseFloat(strings.TrimSpace(numStr), 64)
+	// Build gemini config
+	geminiCfg := gemini.Config{
+		BinaryPath:     viper.GetString("gemini.binary-path"),
+		Model:          config.GeminiModel,
+		Timeout:        config.GeminiTimeout,
+		BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+		Verbose:        viper.GetBool("verbose"),
+	}
+
+	executor := gemini.NewExecutor(geminiCfg)
+
+	fmt.Printf("\n🤖 Sending to Gemini (%s)...\n", geminiCfg.Model)
+
+	ctx := context.Background()
+	result, err := executor.Send(ctx, content)
 	if err != nil {
-		return 0, fmt.Errorf("invalid numeric value: %w", err)
+		return err
 	}
 
-	return int64(val * float64(multiplier)), nil
-}
+	// Determine output file
+	geminiOutput := config.GeminiOutput
+	if geminiOutput == "" {
+		geminiOutput = strings.TrimSuffix(config.Output, ".md") + "_response.md"
+	}
 
-func parseConfigSize(sizeStr string) int64 {
-	size, err := parseSize(sizeStr)
-	if err != nil {
-		log.Debug().Err(err).Str("size", sizeStr).Msg("Failed to parse config size, using default")
-		return 1024 * 1024 // 1MB default
+	// Save response
+	if viper.GetBool("gemini.save-response") {
+		if err := os.WriteFile(geminiOutput, []byte(result.Response), 0600); err != nil {
+			return fmt.Errorf("failed to save response: %w", err)
+		}
+		fmt.Printf("✅ Gemini response saved to: %s\n", geminiOutput)
+	} else {
+		fmt.Printf("\n--- Gemini Response ---\n%s\n", result.Response)
 	}
-	return size
-}
 
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	fmt.Printf("⏱️  Response time: %s\n", gemini.FormatDuration(result.Duration))
+
+	return nil
 }
 
 func countFilesInTree(node *scanner.FileNode) int {
@@ -301,21 +330,21 @@ func countFilesInTree(node *scanner.FileNode) int {
 	return count
 }
 
-// selectAllFiles recursively marks all non-ignored files as selected
-func selectAllFiles(node *scanner.FileNode) {
+// collectAllSelections recursively collects all non-ignored files into the selections map
+func collectAllSelections(node *scanner.FileNode, selections map[string]bool) {
 	if node == nil {
 		return
 	}
 
-	// Mark node as selected if it's not ignored
+	// Mark file as selected if it's not ignored
 	if !node.IsIgnored() {
-		node.Selected = true
+		selections[node.Path] = true
 	}
 
 	// Recursively select children
 	if node.IsDir {
 		for _, child := range node.Children {
-			selectAllFiles(child)
+			collectAllSelections(child, selections)
 		}
 	}
 }
@@ -328,6 +357,12 @@ func init() {
 	contextGenerateCmd.Flags().StringP("output", "o", "", "Output file (default: shotgun-prompt-YYYYMMDD-HHMMSS.md)")
 	contextGenerateCmd.Flags().String("max-size", "10MB", "Maximum context size (e.g., 5MB, 1GB, 500KB)")
 	contextGenerateCmd.Flags().Bool("enforce-limit", true, "Enforce context size limit (default: true)")
+
+	// Gemini integration flags
+	contextGenerateCmd.Flags().Bool("send-gemini", false, "Send generated context to Gemini")
+	contextGenerateCmd.Flags().String("gemini-model", "", "Gemini model to use (gemini-2.5-flash, gemini-2.5-pro, gemini-3.0-pro)")
+	contextGenerateCmd.Flags().String("gemini-output", "", "File to save Gemini response (default: <output>_response.md)")
+	contextGenerateCmd.Flags().Int("gemini-timeout", 0, "Timeout in seconds for Gemini request (default: from config)")
 
 	// Mark root as required would be too restrictive since we have a default
 	// But we validate it in PreRunE instead

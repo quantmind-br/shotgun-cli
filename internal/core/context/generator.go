@@ -20,14 +20,12 @@ type GenProgress struct {
 }
 
 type ContextGenerator interface {
-	Generate(root *scanner.FileNode, config GenerateConfig) (string, error)
-	GenerateWithProgress(root *scanner.FileNode, config GenerateConfig, progress func(string)) (string, error)
-	GenerateWithProgressEx(root *scanner.FileNode, config GenerateConfig, progress func(GenProgress)) (string, error)
+	Generate(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) (string, error)
+	GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string)) (string, error)
+	GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress)) (string, error)
 }
 
 type GenerateConfig struct {
-	// Deprecated: use MaxTotalSize for cumulative and MaxFileSize for per-file limits
-	MaxSize      int64             `json:"maxSize"`
 	MaxFileSize  int64             `json:"maxFileSize"`  // Maximum size for individual files
 	MaxTotalSize int64             `json:"maxTotalSize"` // Maximum total size of all content
 	MaxFiles     int               `json:"maxFiles"`
@@ -57,12 +55,12 @@ func NewDefaultContextGenerator() *DefaultContextGenerator {
 	}
 }
 
-func (g *DefaultContextGenerator) Generate(root *scanner.FileNode, config GenerateConfig) (string, error) {
-	return g.GenerateWithProgress(root, config, nil)
+func (g *DefaultContextGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) (string, error) {
+	return g.GenerateWithProgress(root, selections, config, nil)
 }
 
 func (g *DefaultContextGenerator) GenerateWithProgress(
-	root *scanner.FileNode, config GenerateConfig, progress func(string),
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string),
 ) (string, error) {
 	// Use the new structured progress internally, adapting to the old interface
 	var adaptedProgress func(GenProgress)
@@ -71,11 +69,11 @@ func (g *DefaultContextGenerator) GenerateWithProgress(
 			progress(p.Message)
 		}
 	}
-	return g.GenerateWithProgressEx(root, config, adaptedProgress)
+	return g.GenerateWithProgressEx(root, selections, config, adaptedProgress)
 }
 
 func (g *DefaultContextGenerator) GenerateWithProgressEx(
-	root *scanner.FileNode, config GenerateConfig, progress func(GenProgress),
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress),
 ) (string, error) {
 	if err := g.validateConfig(&config); err != nil {
 		return "", fmt.Errorf("invalid config: %w", err)
@@ -94,7 +92,7 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 		progress(GenProgress{Stage: "content_collection", Message: "Collecting file contents..."})
 	}
 
-	files, err := g.collectFileContents(root, config)
+	files, err := g.collectFileContents(root, selections, config)
 	if err != nil {
 		return "", fmt.Errorf("failed to collect file contents: %w", err)
 	}
@@ -144,27 +142,13 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 
 //nolint:unparam // error return reserved for future validation logic
 func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
-	// Handle backward compatibility with MaxSize
-	if config.MaxSize > 0 {
-		// If MaxSize is set but new fields are not, use MaxSize for both
-		if config.MaxFileSize == 0 {
-			config.MaxFileSize = config.MaxSize
-		}
-		if config.MaxTotalSize == 0 {
-			config.MaxTotalSize = config.MaxSize
-		}
-	} else {
-		// Set defaults if neither old nor new fields are set
-		if config.MaxFileSize == 0 {
-			config.MaxFileSize = DefaultMaxSize
-		}
-		if config.MaxTotalSize == 0 {
-			config.MaxTotalSize = DefaultMaxSize
-		}
-		// Keep MaxSize for backward compatibility in templates
-		config.MaxSize = config.MaxTotalSize
+	// Set defaults if fields are not set
+	if config.MaxFileSize == 0 {
+		config.MaxFileSize = DefaultMaxSize
 	}
-
+	if config.MaxTotalSize == 0 {
+		config.MaxTotalSize = DefaultMaxSize
+	}
 	if config.MaxFiles <= 0 {
 		config.MaxFiles = DefaultMaxFiles
 	}
@@ -175,9 +159,9 @@ func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 }
 
 func (g *DefaultContextGenerator) collectFileContents(
-	root *scanner.FileNode, config GenerateConfig,
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
 ) ([]FileContent, error) {
-	return collectFileContents(root, config)
+	return collectFileContents(root, selections, config)
 }
 
 // buildCompleteFileStructure combines ASCII tree with file content blocks

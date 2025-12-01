@@ -1,0 +1,136 @@
+# .goreleaser.yml configuration
+# This file is used to configure GoReleaser for automated releases.
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+    binary: shotgun-cli
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-
+      {{ .Version }}-
+      {{ .Os }}-
+      {{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - docs/*.md
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      Merge branch
+
+source:
+  enabled: true
+
+release:
+  github:
+    owner: quantmind-br
+    name: shotgun-cli
+  draft: false
+  prerelease: auto
+  name_template: '{{.Version}}'
+  header: |
+    ## Shotgun CLI {{.Version}}
+
+    Welcome to this new release!
+  footer: |
+    ## Docker Images
+
+    - `ghcr.io/quantmind-br/shotgun-cli:{{.Tag}}` - Stable release
+    - `ghcr.io/quantmind-br/shotgun-cli:latest` - Latest release
+
+brews:
+  - repository:
+      owner: quantmind-br
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/quantmind-br/shotgun-cli
+    description: "Cross-platform CLI tool that generates LLM-optimized codebase contexts"
+    license: MIT
+    test: |
+      system "#{bin}/shotgun-cli --version"
+
+dockers:
+  - image_templates:
+      - ghcr.io/quantmind-br/shotgun-cli:{{ .Tag }}
+      - ghcr.io/quantmind-br/shotgun-cli:v{{ .Major }}
+      - ghcr.io/quantmind-br/shotgun-cli:v{{ .Major }}.{{ .Minor }}
+      - ghcr.io/quantmind-br/shotgun-cli:latest
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{.ProjectName}}
+      - --label=org.opencontainers.image.description={{.ProjectName}}
+      - --label=org.opencontainers.image.url={{.GitURL}}
+      - --label=org.opencontainers.image.source={{.GitURL}}
+      - --label=org.opencontainers.image.version={{.Version}}
+      - --label=org.opencontainers.image.revision={{.Commit}}
+      - --label=org.opencontainers.image.created={{.Date}}
+      - --label=org.opencontainers.image.licenses=MIT
+
+docker_signs:
+  - cmd: cosign
+    artifacts: all
+    output: true
+
+# SBOM generation
+sboms:
+  - id: archive
+    artifacts: archive
+    documents:
+      - "${artifact}.spdx.json"
+
+milestones:
+  - close: true
+    fail_on_error: false
+    name_template: '{{ .Version }}'
+
+# Announce new releases
+announce:
+  twitter:
+    enabled: false
+    message_template: '🚀 Shotgun CLI {{ .Version }} is out! Check it out: {{ .GitURL }}/releases/tag/{{ .Tag }} #golang #cli'

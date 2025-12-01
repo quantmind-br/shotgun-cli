@@ -28,21 +28,9 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 			name:  "defaults applied",
 			input: GenerateConfig{},
 			expected: GenerateConfig{
-				MaxSize:      DefaultMaxSize,
 				MaxFileSize:  DefaultMaxSize,
 				MaxTotalSize: DefaultMaxSize,
 				MaxFiles:     DefaultMaxFiles,
-				TemplateVars: map[string]string{},
-			},
-		},
-		{
-			name:  "legacy MaxSize propagated",
-			input: GenerateConfig{MaxSize: 2048, MaxFiles: 10},
-			expected: GenerateConfig{
-				MaxSize:      2048,
-				MaxFileSize:  2048,
-				MaxTotalSize: 2048,
-				MaxFiles:     10,
 				TemplateVars: map[string]string{},
 			},
 		},
@@ -53,7 +41,6 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 				TemplateVars: map[string]string{"TASK": "x"},
 			},
 			expected: GenerateConfig{
-				MaxSize:      1024,
 				MaxFileSize:  512,
 				MaxTotalSize: 1024,
 				MaxFiles:     5,
@@ -70,8 +57,7 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 			if err := gen.validateConfig(&cfg); err != nil {
 				t.Fatalf("validateConfig returned error: %v", err)
 			}
-			if cfg.MaxSize != tc.expected.MaxSize ||
-				cfg.MaxFileSize != tc.expected.MaxFileSize ||
+			if cfg.MaxFileSize != tc.expected.MaxFileSize ||
 				cfg.MaxTotalSize != tc.expected.MaxTotalSize {
 				t.Fatalf("unexpected size config: %+v", cfg)
 			}
@@ -94,17 +80,17 @@ type fileSpec struct {
 	customIgnored bool
 }
 
-func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, func()) {
+func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, map[string]bool, func()) {
 	tb.Helper()
 	rootDir := tb.TempDir()
 	root := &scanner.FileNode{
-		Name:     filepath.Base(rootDir),
-		Path:     rootDir,
-		RelPath:  ".",
-		IsDir:    true,
-		Selected: true,
+		Name:    filepath.Base(rootDir),
+		Path:    rootDir,
+		RelPath: ".",
+		IsDir:   true,
 	}
 
+	selections := make(map[string]bool)
 	nodes := map[string]*scanner.FileNode{rootDir: root}
 
 	// Sort to ensure parents created before children on case-insensitive FS
@@ -132,9 +118,12 @@ func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, func()) 
 			Path:            absPath,
 			RelPath:         spec.relPath,
 			IsDir:           spec.isDir,
-			Selected:        spec.selected,
 			IsGitignored:    spec.gitIgnored,
 			IsCustomIgnored: spec.customIgnored,
+		}
+
+		if spec.selected {
+			selections[absPath] = true
 		}
 		if !spec.isDir {
 			node.Size = int64(len(spec.content))
@@ -156,7 +145,7 @@ func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, func()) 
 		os.RemoveAll(rootDir)
 	}
 
-	return root, cleanup
+	return root, selections, cleanup
 }
 
 func ensureDirNode(tb testing.TB, nodes map[string]*scanner.FileNode, rootDir, path string) *scanner.FileNode {
@@ -174,12 +163,11 @@ func ensureDirNode(tb testing.TB, nodes map[string]*scanner.FileNode, rootDir, p
 	}
 
 	node := &scanner.FileNode{
-		Name:     filepath.Base(path),
-		Path:     path,
-		RelPath:  rel,
-		IsDir:    true,
-		Selected: true,
-		Parent:   parent,
+		Name:    filepath.Base(path),
+		Path:    path,
+		RelPath: rel,
+		IsDir:   true,
+		Parent:  parent,
 	}
 	parent.Children = append(parent.Children, node)
 	nodes[path] = node
@@ -322,7 +310,7 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			root, cleanup := buildTestTree(t, tc.specs)
+			root, selections, cleanup := buildTestTree(t, tc.specs)
 			defer cleanup()
 
 			gen := NewDefaultContextGenerator()
@@ -332,7 +320,7 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 			tc.config.MaxTotalSize = normalizeLimit(tc.config.MaxTotalSize)
 			tc.config.MaxFiles = normalizeFiles(tc.config.MaxFiles)
 
-			output, err := gen.Generate(root, tc.config)
+			output, err := gen.Generate(root, selections, tc.config)
 			if tc.expectError {
 				tc.verify(t, output, err)
 				return
@@ -383,14 +371,14 @@ func section(content, heading string) string {
 func TestDefaultContextGenerator_ProgressReporting(t *testing.T) {
 	t.Parallel()
 	specs := []fileSpec{{relPath: "file.txt", content: "content", selected: true}}
-	root, cleanup := buildTestTree(t, specs)
+	root, selections, cleanup := buildTestTree(t, specs)
 	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
 	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}
 
 	var events []GenProgress
-	out, err := gen.GenerateWithProgressEx(root, cfg, func(p GenProgress) {
+	out, err := gen.GenerateWithProgressEx(root, selections, cfg, func(p GenProgress) {
 		events = append(events, p)
 	})
 	if err != nil {
@@ -418,7 +406,7 @@ func TestDefaultContextGenerator_ErrorPropagation(t *testing.T) {
 	t.Parallel()
 
 	specs := []fileSpec{{relPath: "missing.txt", content: "temp", selected: true}}
-	root, cleanup := buildTestTree(t, specs)
+	root, selections, cleanup := buildTestTree(t, specs)
 	cleanup()
 	// remove file to trigger read error
 	os.Remove(filepath.Join(root.Path, "missing.txt"))
@@ -426,7 +414,7 @@ func TestDefaultContextGenerator_ErrorPropagation(t *testing.T) {
 	gen := NewDefaultContextGenerator()
 	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}
 
-	_, err := gen.Generate(root, cfg)
+	_, err := gen.Generate(root, selections, cfg)
 	if err == nil {
 		t.Fatalf("expected error when file is missing")
 	}
@@ -442,7 +430,7 @@ func TestDefaultContextGenerator_IgnoresFlaggedFilesInTree(t *testing.T) {
 		{relPath: "src/visible.go", content: "package main", selected: true},
 		{relPath: "src/ignored.go", content: "package main", selected: true, gitIgnored: true},
 	}
-	root, cleanup := buildTestTree(t, specs)
+	root, _, cleanup := buildTestTree(t, specs)
 	defer cleanup()
 
 	renderer := NewTreeRenderer()
@@ -467,19 +455,19 @@ func TestDefaultContextGenerator_TemplateValidation(t *testing.T) {
 	t.Parallel()
 
 	specs := []fileSpec{{relPath: "file.txt", content: "hello", selected: true}}
-	root, cleanup := buildTestTree(t, specs)
+	root, selections, cleanup := buildTestTree(t, specs)
 	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
 	cfg := GenerateConfig{TemplateVars: map[string]string{}}
 
-	_, err := gen.Generate(root, cfg)
+	_, err := gen.Generate(root, selections, cfg)
 	if err == nil || !strings.Contains(err.Error(), "required template variable 'TASK'") {
 		t.Fatalf("expected required variable error, got %v", err)
 	}
 
 	cfg.Template = "Custom {{.CurrentDate}}"
-	_, err = gen.Generate(root, cfg)
+	_, err = gen.Generate(root, selections, cfg)
 	if err != nil {
 		t.Fatalf("custom template should bypass TASK requirement: %v", err)
 	}
@@ -494,7 +482,7 @@ func BenchmarkDefaultContextGenerator(b *testing.B) {
 			selected: true,
 		})
 	}
-	root, cleanup := buildTestTree(b, specs)
+	root, selections, cleanup := buildTestTree(b, specs)
 	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
@@ -505,7 +493,7 @@ func BenchmarkDefaultContextGenerator(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := gen.Generate(root, cfg); err != nil {
+		if _, err := gen.Generate(root, selections, cfg); err != nil {
 			b.Fatalf("Generate failed: %v", err)
 		}
 	}

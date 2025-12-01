@@ -1,6 +1,7 @@
 package ui
 
 import (
+	gocontext "context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
@@ -65,6 +67,11 @@ type WizardModel struct {
 
 	// Generation result storage
 	generatedFilePath string
+	generatedContent  string
+
+	// Gemini state
+	geminiSending      bool
+	geminiResponseFile string
 }
 
 type ScanProgressMsg struct {
@@ -104,6 +111,23 @@ type ClipboardCompleteMsg struct {
 	Err     error
 }
 
+// Gemini integration messages
+type GeminiSendMsg struct{}
+
+type GeminiProgressMsg struct {
+	Stage string
+}
+
+type GeminiCompleteMsg struct {
+	Response   string
+	OutputFile string
+	Duration   time.Duration
+}
+
+type GeminiErrorMsg struct {
+	Err error
+}
+
 // Internal state for iterative commands
 type scanState struct {
 	scanner    *scanner.FileSystemScanner
@@ -117,6 +141,7 @@ type scanState struct {
 type generateState struct {
 	generator  context.ContextGenerator
 	fileTree   *scanner.FileNode
+	selections map[string]bool
 	config     *context.GenerateConfig
 	rootPath   string
 	progressCh chan context.GenProgress
@@ -193,6 +218,15 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ClipboardCompleteMsg:
 		m.handleClipboardComplete(msg)
+
+	case GeminiProgressMsg:
+		m.handleGeminiProgress(msg)
+
+	case GeminiCompleteMsg:
+		m.handleGeminiComplete(msg)
+
+	case GeminiErrorMsg:
+		m.handleGeminiError(msg)
 
 	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
 		cmd = m.handleTemplateMessage(msg)
@@ -304,6 +338,12 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "f8", "ctrl+pgdn":
 		cmd = m.handleNextStep()
 		cmds = append(cmds, cmd)
+	case "f9":
+		// Send to Gemini (only on review screen after generation)
+		cmd = m.handleSendToGemini()
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case "f10", "ctrl+pgup":
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
@@ -382,6 +422,7 @@ func (m *WizardModel) handleGenerationProgress(msg GenerationProgressMsg) tea.Cm
 func (m *WizardModel) handleGenerationComplete(msg GenerationCompleteMsg) tea.Cmd {
 	m.progress.Visible = false
 	m.generatedFilePath = msg.FilePath
+	m.generatedContent = msg.Content
 	return m.clipboardCopyCmd(msg.Content)
 }
 
@@ -393,6 +434,103 @@ func (m *WizardModel) handleGenerationError(msg GenerationErrorMsg) {
 func (m *WizardModel) handleClipboardComplete(msg ClipboardCompleteMsg) {
 	if m.review != nil && m.generatedFilePath != "" {
 		m.review.SetGenerated(m.generatedFilePath, msg.Success)
+	}
+}
+
+func (m *WizardModel) handleSendToGemini() tea.Cmd {
+	// Only allow on review screen after generation
+	if m.step != StepReview || m.generatedContent == "" {
+		return nil
+	}
+
+	// Check if already sending
+	if m.geminiSending {
+		return nil
+	}
+
+	// Check availability
+	if !gemini.IsAvailable() {
+		if m.review != nil {
+			m.review.SetGeminiError(fmt.Errorf("geminiweb not found"))
+		}
+		return nil
+	}
+
+	if !gemini.IsConfigured() {
+		if m.review != nil {
+			m.review.SetGeminiError(fmt.Errorf("geminiweb not configured - run: geminiweb auto-login"))
+		}
+		return nil
+	}
+
+	m.geminiSending = true
+	if m.review != nil {
+		m.review.SetGeminiSending(true)
+	}
+
+	return m.sendToGeminiCmd()
+}
+
+func (m *WizardModel) handleGeminiProgress(msg GeminiProgressMsg) {
+	m.progress = Progress{
+		Stage:   msg.Stage,
+		Message: "Sending to Gemini...",
+		Visible: true,
+	}
+	m.progressComponent.UpdateMessage(msg.Stage, "Sending to Gemini...")
+}
+
+func (m *WizardModel) handleGeminiComplete(msg GeminiCompleteMsg) {
+	m.geminiSending = false
+	m.geminiResponseFile = msg.OutputFile
+	m.progress.Visible = false
+
+	if m.review != nil {
+		m.review.SetGeminiComplete(msg.OutputFile, msg.Duration)
+	}
+}
+
+func (m *WizardModel) handleGeminiError(msg GeminiErrorMsg) {
+	m.geminiSending = false
+	m.progress.Visible = false
+
+	if m.review != nil {
+		m.review.SetGeminiError(msg.Err)
+	}
+}
+
+func (m *WizardModel) sendToGeminiCmd() tea.Cmd {
+	return func() tea.Msg {
+		cfg := gemini.Config{
+			BinaryPath:     viper.GetString("gemini.binary-path"),
+			Model:          viper.GetString("gemini.model"),
+			Timeout:        viper.GetInt("gemini.timeout"),
+			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+		}
+
+		executor := gemini.NewExecutor(cfg)
+
+		ctx := gocontext.Background()
+		result, err := executor.Send(ctx, m.generatedContent)
+		if err != nil {
+			return GeminiErrorMsg{Err: err}
+		}
+
+		// Determine output file
+		outputFile := strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
+
+		// Save response if configured
+		if viper.GetBool("gemini.save-response") {
+			if err := os.WriteFile(outputFile, []byte(result.Response), 0600); err != nil {
+				return GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
+			}
+		}
+
+		return GeminiCompleteMsg{
+			Response:   result.Response,
+			OutputFile: outputFile,
+			Duration:   result.Duration,
+		}
 	}
 }
 
@@ -416,11 +554,10 @@ func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
 }
 
 func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
-	markNodesAsSelected(msg.fileTree, msg.selectedFiles)
-
 	m.generateState = &generateState{
-		generator: context.NewDefaultContextGenerator(),
-		fileTree:  msg.fileTree,
+		generator:  context.NewDefaultContextGenerator(),
+		fileTree:   msg.fileTree,
+		selections: msg.selectedFiles,
 		config: &context.GenerateConfig{
 			TemplateVars: map[string]string{
 				"TASK":           msg.taskDesc,
@@ -686,6 +823,7 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 
 				content, err := m.generateState.generator.GenerateWithProgressEx(
 					m.generateState.fileTree,
+					m.generateState.selections,
 					*m.generateState.config,
 					func(p context.GenProgress) {
 						m.generateState.progressCh <- p
@@ -777,23 +915,4 @@ func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
 		return "", err
 	}
 	return filePath, nil
-}
-
-// markNodesAsSelected marks FileNode.Selected flag based on selectedFiles map
-func markNodesAsSelected(node *scanner.FileNode, selectedFiles map[string]bool) {
-	if node == nil {
-		return
-	}
-
-	// Mark this node as selected if it's in the selectedFiles map
-	if !node.IsDir && selectedFiles[node.Path] {
-		node.Selected = true
-	}
-
-	// Recursively mark children
-	if node.IsDir {
-		for _, child := range node.Children {
-			markNodesAsSelected(child, selectedFiles)
-		}
-	}
 }

@@ -1,0 +1,60 @@
+# Arquivos de teste do projeto
+
+# Testes unitários Go (*_test.go)
+cmd/template_test.go
+cmd/context_test.go
+cmd/root_test.go
+cmd/diff_test.go
+cmd/config_test.go
+internal/core/context/filestructure_test.go
+internal/core/context/state_test.go
+internal/core/context/generator_test.go
+internal/core/context/content_test.go
+internal/core/context/tree_test.go
+internal/core/template/loader_test.go
+internal/core/template/manager_test.go
+internal/core/template/template_struct_test.go
+internal/core/template/renderer_test.go
+internal/core/scanner/scanner_test.go
+internal/core/ignore/engine_test.go
+internal/core/tokens/estimator_test.go
+internal/ui/wizard_test.go
+internal/ui/components/tree_test.go
+internal/ui/components/progress_test.go
+internal/ui/screens/review_test.go
+internal/ui/screens/input_test.go
+internal/ui/screens/file_selection_test.go
+internal/ui/screens/template_selection_test.go
+internal/ui/styles/theme_test.go
+internal/platform/clipboard/clipboard_test.go
+cmd/completion_test.go
+
+# Testes E2E
+test/e2e/filestructure_test.go
+test/e2e/cli_test.go
+
+# Diretório completo de fixtures de teste
+test/**
+
+# Arquivos relacionados a testes
+.github/workflows/ci-test.yml
+.github/workflows/test-minimal.yml
+plan-tests.md
+teste.md
+
+# Arquivos de teste dentro do projeto sample
+test/fixtures/sample-project/internal/handlers/user_test.go
+test/fixtures/sample-project/internal/handlers/health_test.go
+test/fixtures/sample-project/internal/utils/helpers_test.go
+test/fixtures/sample-project/internal/utils/math/operations_test.go
+test/fixtures/sample-project/pkg/storage/storage_test.go
+test/fixtures/sample-project/internal/utils/env/env_test.go
+test/fixtures/sample-project/internal/handlers/middleware_test.go
+test/fixtures/sample-project/tests/unit/example_test.go
+
+# Scripts e configurações de teste do sample project
+test/fixtures/sample-project/scripts/test.sh
+test/fixtures/sample-project/tests/e2e/test_scenario.md
+test/fixtures/sample-project/tests/unit/config_test.yaml
+test/fixtures/sample-project/tests/integration/test_plan.md
+test/fixtures/sample-project/tests/e2e/config.json

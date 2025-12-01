@@ -56,7 +56,7 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 	}
 
 	// Simulate completion
-	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	model, _ = wiz.Update(ScanCompleteMsg{Tree: tree})
 	wiz = model.(*WizardModel)
 	if wiz.fileTree != tree {
@@ -74,7 +74,7 @@ func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = testTaskDescription
@@ -103,7 +103,7 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = testTaskDescription
@@ -126,7 +126,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = testTaskDescription
@@ -213,7 +213,7 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 
@@ -240,7 +240,7 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true, Selected: true}
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = testTaskDescription

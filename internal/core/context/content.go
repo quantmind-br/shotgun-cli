@@ -25,7 +25,7 @@ type FileContent struct {
 	Size     int64  `json:"size"`
 }
 
-func collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileContent, error) {
+func collectFileContents(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) ([]FileContent, error) {
 	var files []FileContent
 	var totalSize int64
 	fileCount := 0
@@ -35,7 +35,9 @@ func collectFileContents(root *scanner.FileNode, config GenerateConfig) ([]FileC
 			return nil
 		}
 
-		if !node.Selected {
+		// Check selection against the map
+		// If selections map is nil, we assume all non-ignored files are selected
+		if selections != nil && !selections[node.Path] {
 			return nil
 		}
 

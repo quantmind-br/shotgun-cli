@@ -21,7 +21,6 @@ func TestFileNodeBasic(t *testing.T) {
 				Path:            "/home/user/test.txt",
 				RelPath:         "test.txt",
 				IsDir:           false,
-				Selected:        false,
 				IsGitignored:    false,
 				IsCustomIgnored: false,
 				Size:            1024,
@@ -32,7 +31,6 @@ func TestFileNodeBasic(t *testing.T) {
 				"path":              "/home/user/test.txt",
 				"rel_path":          "test.txt",
 				"is_dir":            false,
-				"selected":          false,
 				"is_gitignored":     false,
 				"is_custom_ignored": false,
 				"size":              float64(1024),
@@ -46,7 +44,6 @@ func TestFileNodeBasic(t *testing.T) {
 				Path:            "/home/user/src",
 				RelPath:         "src",
 				IsDir:           true,
-				Selected:        true,
 				IsGitignored:    true,
 				IsCustomIgnored: false,
 				Size:            0,
@@ -57,7 +54,6 @@ func TestFileNodeBasic(t *testing.T) {
 				"path":              "/home/user/src",
 				"rel_path":          "src",
 				"is_dir":            true,
-				"selected":          true,
 				"is_gitignored":     true,
 				"is_custom_ignored": false,
 				"size":              float64(0),
@@ -460,13 +456,8 @@ func TestFileSystemScanner(t *testing.T) {
 		}
 	})
 
-	// Test gitignore functionality
+	// Test gitignore functionality (gitignore is loaded automatically during Scan)
 	t.Run("gitignore rules", func(t *testing.T) {
-		err := scanner.LoadGitIgnore(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to load gitignore: %v", err)
-		}
-
 		root, err := scanner.Scan(tempDir, config)
 		if err != nil {
 			t.Fatalf("Scan failed: %v", err)
@@ -756,47 +747,6 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 			t.Errorf("Explicitly included hidden file should still be excluded when IncludeHidden=false: %v", hiddenFiles)
 		}
 	})
-}
-
-func TestNewFileSystemScannerWithMatcher(t *testing.T) {
-	// Create a fake matcher for testing
-	fakeMatcher := &fakeMatcher{
-		shouldMatch: make(map[string]bool),
-	}
-
-	// Configure the fake matcher to ignore specific paths
-	fakeMatcher.shouldMatch["test.tmp"] = true
-	fakeMatcher.shouldMatch["important.txt"] = false
-
-	// Create scanner with the fake matcher
-	scanner := NewFileSystemScannerWithMatcher(fakeMatcher)
-
-	if scanner == nil {
-		t.Fatal("Expected non-nil scanner")
-	}
-
-	// Verify the scanner uses the injected matcher
-	// We can't easily test the full scan without creating files,
-	// but we can verify the constructor worked
-	if scanner.pathMatcher != fakeMatcher {
-		t.Error("Scanner should use the injected matcher")
-	}
-}
-
-// fakeMatcher is a test implementation of PathMatcher
-type fakeMatcher struct {
-	shouldMatch map[string]bool
-	calls       []matchCall
-}
-
-type matchCall struct {
-	path  string
-	isDir bool
-}
-
-func (f *fakeMatcher) Matches(path string, isDir bool) bool {
-	f.calls = append(f.calls, matchCall{path: path, isDir: isDir})
-	return f.shouldMatch[path]
 }
 
 func TestScannerInterface(t *testing.T) {
