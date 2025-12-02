@@ -13,6 +13,7 @@ import (
 
 const (
 	testTaskDescription = "Implement feature"
+	testSampleTask      = "Sample task"
 )
 
 func TestWizardInitStartsScanCommand(t *testing.T) {
@@ -289,5 +290,272 @@ func TestWizardHelpToggle(t *testing.T) {
 	wizard = model.(*WizardModel)
 	if wizard.showHelp {
 		t.Fatal("expected showHelp to be false after pressing F1 again")
+	}
+}
+
+// Test for wizard skip step logic based on template requirements
+func TestWizardSkipStepsNoTaskNoRules(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that has neither TASK nor RULES
+	wizard.template = &template.Template{
+		Name:    "file_structure_only",
+		Content: "File Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// Start at template selection (step 2)
+	wizard.step = StepTemplateSelection
+
+	// Press F8 to advance - should skip Task and Rules, go directly to Review
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepReview {
+		t.Fatalf("expected to skip to Review (step %d), got step %d", StepReview, wizard.step)
+	}
+}
+
+func TestWizardSkipStepsNoTaskHasRules(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that has RULES but not TASK
+	wizard.template = &template.Template{
+		Name:    "rules_only",
+		Content: "Rules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// Start at template selection (step 2)
+	wizard.step = StepTemplateSelection
+
+	// Press F8 to advance - should skip Task, go to Rules
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepRulesInput {
+		t.Fatalf("expected to skip to RulesInput (step %d), got step %d", StepRulesInput, wizard.step)
+	}
+}
+
+func TestWizardSkipStepsHasTaskNoRules(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that has TASK but not RULES
+	wizard.template = &template.Template{
+		Name:    "task_only",
+		Content: "Task: {TASK}\nFile Structure:\n{FILE_STRUCTURE}",
+	}
+	wizard.taskDesc = testSampleTask
+
+	// Start at task input (step 3)
+	wizard.step = StepTaskInput
+
+	// Press F8 to advance - should skip Rules, go to Review
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepReview {
+		t.Fatalf("expected to skip to Review (step %d), got step %d", StepReview, wizard.step)
+	}
+}
+
+func TestWizardNoSkipWhenBothRequired(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that has both TASK and RULES
+	wizard.template = &template.Template{
+		Name:    "full_template",
+		Content: "Task: {TASK}\nRules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// Start at template selection (step 2)
+	wizard.step = StepTemplateSelection
+
+	// Press F8 to advance - should go to Task (step 3)
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepTaskInput {
+		t.Fatalf("expected to go to TaskInput (step %d), got step %d", StepTaskInput, wizard.step)
+	}
+
+	// Provide task and advance
+	wizard.taskDesc = testSampleTask
+	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepRulesInput {
+		t.Fatalf("expected to go to RulesInput (step %d), got step %d", StepRulesInput, wizard.step)
+	}
+}
+
+func TestWizardBackwardNavigationSkipsCorrectly(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template with no TASK and no RULES
+	wizard.template = &template.Template{
+		Name:    "file_structure_only",
+		Content: "File Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// Start at Review (step 5)
+	wizard.step = StepReview
+	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, "", "")
+
+	// Press F7/F10 to go back - should skip Rules and Task, go to Template Selection
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepTemplateSelection {
+		t.Fatalf("expected to go back to TemplateSelection (step %d), got step %d", StepTemplateSelection, wizard.step)
+	}
+}
+
+func TestWizardBackwardFromRulesWithNoTask(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template with RULES but no TASK
+	wizard.template = &template.Template{
+		Name:    "rules_only",
+		Content: "Rules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// Start at Rules Input (step 4)
+	wizard.step = StepRulesInput
+	wizard.rulesInput = screens.NewRulesInput("")
+
+	// Press F7/F10 to go back - should skip Task, go to Template Selection
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
+	wizard = model.(*WizardModel)
+
+	if wizard.step != StepTemplateSelection {
+		t.Fatalf("expected to go back to TemplateSelection (step %d), got step %d", StepTemplateSelection, wizard.step)
+	}
+}
+
+func TestWizardRequiresTaskInput(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+
+	// No template set
+	if wizard.requiresTaskInput() {
+		t.Fatal("expected requiresTaskInput to be false when no template set")
+	}
+
+	// Template without TASK
+	wizard.template = &template.Template{
+		Name:    "no_task",
+		Content: "File Structure:\n{FILE_STRUCTURE}",
+	}
+	if wizard.requiresTaskInput() {
+		t.Fatal("expected requiresTaskInput to be false when template has no TASK")
+	}
+
+	// Template with TASK
+	wizard.template = &template.Template{
+		Name:    "with_task",
+		Content: "Task: {TASK}",
+	}
+	if !wizard.requiresTaskInput() {
+		t.Fatal("expected requiresTaskInput to be true when template has TASK")
+	}
+}
+
+func TestWizardRequiresRulesInput(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+
+	// No template set
+	if wizard.requiresRulesInput() {
+		t.Fatal("expected requiresRulesInput to be false when no template set")
+	}
+
+	// Template without RULES
+	wizard.template = &template.Template{
+		Name:    "no_rules",
+		Content: "Task: {TASK}",
+	}
+	if wizard.requiresRulesInput() {
+		t.Fatal("expected requiresRulesInput to be false when template has no RULES")
+	}
+
+	// Template with RULES
+	wizard.template = &template.Template{
+		Name:    "with_rules",
+		Content: "Rules: {RULES}",
+	}
+	if !wizard.requiresRulesInput() {
+		t.Fatal("expected requiresRulesInput to be true when template has RULES")
+	}
+}
+
+func TestWizardCanAdvanceWithoutTaskWhenNotRequired(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that does NOT require TASK
+	wizard.template = &template.Template{
+		Name:    "no_task",
+		Content: "File Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// At Task Input step with empty task description
+	wizard.step = StepTaskInput
+	wizard.taskDesc = ""
+
+	// Should be able to advance since template doesn't require TASK
+	if !wizard.canAdvanceStep() {
+		t.Fatal("expected canAdvanceStep to return true when template doesn't require TASK")
+	}
+}
+
+func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	// Template that requires TASK
+	wizard.template = &template.Template{
+		Name:    "with_task",
+		Content: "Task: {TASK}\nFile Structure:\n{FILE_STRUCTURE}",
+	}
+
+	// At Task Input step with empty task description
+	wizard.step = StepTaskInput
+	wizard.taskDesc = ""
+
+	// Should NOT be able to advance since template requires TASK
+	if wizard.canAdvanceStep() {
+		t.Fatal("expected canAdvanceStep to return false when template requires TASK and task is empty")
+	}
+
+	// Provide task description
+	wizard.taskDesc = testSampleTask
+
+	// Now should be able to advance
+	if !wizard.canAdvanceStep() {
+		t.Fatal("expected canAdvanceStep to return true when template requires TASK and task is provided")
 	}
 }

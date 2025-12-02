@@ -11,10 +11,11 @@ import (
 )
 
 type TaskInputModel struct {
-	textarea textarea.Model
-	width    int
-	height   int
-	focused  bool
+	textarea       textarea.Model
+	width          int
+	height         int
+	focused        bool
+	willSkipToNext bool // true if F8 will skip Rules and go directly to Review
 }
 
 func NewTaskInput(initialValue string) *TaskInputModel {
@@ -152,9 +153,15 @@ func (m *TaskInputModel) View() string {
 		"Type: Enter text",
 		"Esc: Edit/Done",
 	}
+
+	nextAction := "F8: Next"
+	if m.willSkipToNext {
+		nextAction = "F8: Skip to Review"
+	}
+
 	line2 := []string{
 		"F7: Back",
-		"F8: Next",
+		nextAction,
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}
@@ -175,4 +182,9 @@ func (m *TaskInputModel) IsValid() bool {
 
 func (m *TaskInputModel) IsFocused() bool {
 	return m.textarea.Focused()
+}
+
+// SetWillSkipToReview sets whether F8 will skip rules and go directly to Review
+func (m *TaskInputModel) SetWillSkipToReview(skip bool) {
+	m.willSkipToNext = skip
 }

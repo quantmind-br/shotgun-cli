@@ -328,9 +328,23 @@ func (m *TemplateSelectionModel) renderFooter() string {
 		"↑/↓: Navigate",
 		"Enter/Space: Select",
 	}
+
+	// Determine what F8 will do based on selected template's requirements
+	nextAction := "F8: Next"
+	if m.selectedTemplate != nil {
+		requiresTask := m.selectedTemplate.HasVariable(template.VarTask)
+		requiresRules := m.selectedTemplate.HasVariable(template.VarRules)
+
+		if !requiresTask && !requiresRules {
+			nextAction = "F8: Skip to Review"
+		} else if !requiresTask {
+			nextAction = "F8: Skip to Rules"
+		}
+	}
+
 	line2 := []string{
 		"F7: Back",
-		"F8: Next",
+		nextAction,
 		"F1: Help",
 		"Ctrl+Q: Quit",
 	}

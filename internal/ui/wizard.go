@@ -428,7 +428,7 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *WizardModel) handleNextStep() tea.Cmd {
 	if m.step < StepReview {
 		if m.canAdvanceStep() {
-			m.step++
+			m.step = m.getNextStep()
 			return m.initStep()
 		}
 	} else if m.step == StepReview {
@@ -439,7 +439,7 @@ func (m *WizardModel) handleNextStep() tea.Cmd {
 
 func (m *WizardModel) handlePrevStep() tea.Cmd {
 	if m.step > StepFileSelection {
-		m.step--
+		m.step = m.getPrevStep()
 		return m.initStep()
 	}
 	return nil
@@ -654,6 +654,10 @@ func (m *WizardModel) canAdvanceStep() bool {
 	case StepTemplateSelection:
 		return m.template != nil
 	case StepTaskInput:
+		// Only require task description if template has TASK variable
+		if m.template != nil && !m.template.HasVariable(template.VarTask) {
+			return true
+		}
 		return len(strings.TrimSpace(m.taskDesc)) > 0
 	case StepRulesInput:
 		return true
@@ -661,6 +665,66 @@ func (m *WizardModel) canAdvanceStep() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// requiresTaskInput returns true if the current template requires the TASK variable
+func (m *WizardModel) requiresTaskInput() bool {
+	return m.template != nil && m.template.HasVariable(template.VarTask)
+}
+
+// requiresRulesInput returns true if the current template requires the RULES variable
+func (m *WizardModel) requiresRulesInput() bool {
+	return m.template != nil && m.template.HasVariable(template.VarRules)
+}
+
+// getNextStep returns the next step to navigate to, skipping steps that are not needed
+func (m *WizardModel) getNextStep() int {
+	switch m.step {
+	case StepFileSelection:
+		return StepTemplateSelection
+	case StepTemplateSelection:
+		if !m.requiresTaskInput() {
+			if !m.requiresRulesInput() {
+				return StepReview
+			}
+			return StepRulesInput
+		}
+		return StepTaskInput
+	case StepTaskInput:
+		if !m.requiresRulesInput() {
+			return StepReview
+		}
+		return StepRulesInput
+	case StepRulesInput:
+		return StepReview
+	default:
+		return m.step + 1
+	}
+}
+
+// getPrevStep returns the previous step to navigate to, skipping steps that were not needed
+func (m *WizardModel) getPrevStep() int {
+	switch m.step {
+	case StepTemplateSelection:
+		return StepFileSelection
+	case StepTaskInput:
+		return StepTemplateSelection
+	case StepRulesInput:
+		if !m.requiresTaskInput() {
+			return StepTemplateSelection
+		}
+		return StepTaskInput
+	case StepReview:
+		if !m.requiresRulesInput() {
+			if !m.requiresTaskInput() {
+				return StepTemplateSelection
+			}
+			return StepTaskInput
+		}
+		return StepRulesInput
+	default:
+		return m.step - 1
 	}
 }
 
@@ -678,6 +742,8 @@ func (m *WizardModel) initStep() tea.Cmd {
 	case StepTaskInput:
 		m.taskInput = screens.NewTaskInput(m.taskDesc)
 		m.taskInput.SetSize(m.width, m.height)
+		// Set skip hint if template doesn't require RULES variable
+		m.taskInput.SetWillSkipToReview(!m.requiresRulesInput())
 	case StepRulesInput:
 		m.rulesInput = screens.NewRulesInput(m.rules)
 		m.rulesInput.SetSize(m.width, m.height)
