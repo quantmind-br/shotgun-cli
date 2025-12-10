@@ -585,3 +585,24 @@ func TestWizardHandleWindowResize(t *testing.T) {
 		t.Error("dimensions should have changed after resize")
 	}
 }
+
+func TestWizardHandleScanError(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.progress.Visible = true // Simulate progress being shown
+
+	testErr := fmt.Errorf("permission denied: /secret")
+	model, _ := wizard.Update(ScanErrorMsg{Err: testErr})
+	wizard = model.(*WizardModel)
+
+	if wizard.error == nil {
+		t.Fatal("expected error to be set")
+	}
+	if wizard.error.Error() != testErr.Error() {
+		t.Errorf("expected error %q, got %q", testErr.Error(), wizard.error.Error())
+	}
+	if wizard.progress.Visible {
+		t.Error("progress should be hidden after error")
+	}
+}
