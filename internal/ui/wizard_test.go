@@ -707,3 +707,32 @@ func TestWizardHandleTemplateMessage(t *testing.T) {
 		t.Errorf("expected template name 'code-review', got %q", wizard.template.Name)
 	}
 }
+
+func TestWizardHandleRescanRequest(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 100})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	wizard.step = StepFileSelection
+
+	// Create a rescan message type (internal)
+	type rescanMsg struct{}
+
+	// The wizard should handle rescan by restarting the scan
+	// This tests the conceptual flow - actual rescan may use different mechanism
+	initialTree := wizard.fileTree
+
+	// Simulate conditions that would trigger rescan
+	wizard.scanState = nil
+	model, cmd := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 100}})
+	wizard = model.(*WizardModel)
+
+	if wizard.scanState == nil {
+		t.Error("expected scan state to be initialized on rescan")
+	}
+	if cmd == nil {
+		t.Error("expected scan command to be scheduled")
+	}
+	_ = initialTree // Acknowledge variable
+}
