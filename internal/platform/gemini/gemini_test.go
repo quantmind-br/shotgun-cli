@@ -656,6 +656,24 @@ func TestGetStatus_Details(t *testing.T) {
 	}
 }
 
+func TestSendWithProgress_BinaryNotFound(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{BinaryPath: "/nonexistent/path/to/geminiweb"}
+	executor := NewExecutor(cfg)
+
+	progress := func(stage string) {
+		// No-op progress function for testing
+	}
+	ctx := context.Background()
+
+	_, err := executor.SendWithProgress(ctx, "test content", progress)
+
+	if err == nil {
+		t.Error("expected error for nonexistent binary")
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
