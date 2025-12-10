@@ -863,3 +863,42 @@ func TestWizardViewWithProgress(t *testing.T) {
 		t.Error("expected non-empty view with progress")
 	}
 }
+
+func TestWizardParseSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected int64
+		hasError bool
+	}{
+		{"1KB", 1024, false},
+		{"1MB", 1024 * 1024, false},
+		{"1GB", 1024 * 1024 * 1024, false},
+		{"100", 100, false},
+		{"0", 0, false},
+		{"invalid", 0, true},
+		{"", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result, err := parseSize(tt.input)
+			if tt.hasError {
+				if err == nil {
+					t.Errorf("expected error for invalid input %q, got nil", tt.input)
+				}
+				if result != 0 {
+					t.Errorf("expected 0 for invalid input %q, got %d", tt.input, result)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("parseSize(%q) unexpected error: %v", tt.input, err)
+				}
+				if result != tt.expected {
+					t.Errorf("parseSize(%q) = %d, want %d", tt.input, result, tt.expected)
+				}
+			}
+		})
+	}
+}
