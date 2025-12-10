@@ -694,6 +694,45 @@ func TestSendWithProgress_ContextCancelled(t *testing.T) {
 	}
 }
 
+func TestConfigWithAllOptions(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		Model:          "gemini-3.0-pro",
+		Timeout:        120,
+		BrowserRefresh: "never",
+		Verbose:        true,
+		BinaryPath:     "/custom/path/geminiweb",
+	}
+
+	executor := NewExecutor(cfg)
+	args := executor.buildArgs()
+
+	// Should contain model
+	foundModel := false
+	for i, arg := range args {
+		if arg == "-m" && i+1 < len(args) && args[i+1] == "gemini-3.0-pro" {
+			foundModel = true
+			break
+		}
+	}
+	if !foundModel {
+		t.Errorf("expected args to contain model flag, got: %v", args)
+	}
+
+	// Should contain browser-refresh
+	foundBrowser := false
+	for i, arg := range args {
+		if arg == "--browser-refresh" && i+1 < len(args) && args[i+1] == "never" {
+			foundBrowser = true
+			break
+		}
+	}
+	if !foundBrowser {
+		t.Errorf("expected args to contain browser-refresh flag, got: %v", args)
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
