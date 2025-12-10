@@ -1,8 +1,10 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
@@ -578,5 +580,268 @@ func TestFormatSizeHelper_Large(t *testing.T) {
 	result := formatSizeHelper(1536) // 1.5 KB
 	if !strings.HasPrefix(result, "1.5") {
 		t.Fatalf("expected '1.5 KB', got '%s'", result)
+	}
+}
+
+func TestReview_SetGeminiStates(t *testing.T) {
+	t.Parallel()
+
+	m := NewReview(nil, nil, nil, "", "")
+
+	// Test SetGeminiSending
+	m.SetGeminiSending(true)
+	if !m.geminiSending {
+		t.Fatalf("expected geminiSending to be true")
+	}
+	if m.geminiError != nil {
+		t.Fatalf("expected geminiError to be nil after SetGeminiSending")
+	}
+
+	// Test SetGeminiComplete
+	duration := 5 * time.Second
+	m.SetGeminiComplete("/tmp/output.txt", duration)
+	if m.geminiSending {
+		t.Fatalf("expected geminiSending to be false after SetGeminiComplete")
+	}
+	if !m.geminiComplete {
+		t.Fatalf("expected geminiComplete to be true")
+	}
+	if m.geminiOutputFile != "/tmp/output.txt" {
+		t.Fatalf("expected geminiOutputFile to be '/tmp/output.txt', got %s", m.geminiOutputFile)
+	}
+	if m.geminiDuration != duration {
+		t.Fatalf("expected geminiDuration to be %v, got %v", duration, m.geminiDuration)
+	}
+	if m.geminiError != nil {
+		t.Fatalf("expected geminiError to be nil after SetGeminiComplete")
+	}
+
+	// Test SetGeminiError
+	testErr := errors.New("test error")
+	m.SetGeminiError(testErr)
+	if m.geminiSending {
+		t.Fatalf("expected geminiSending to be false after SetGeminiError")
+	}
+	if m.geminiComplete {
+		t.Fatalf("expected geminiComplete to be false after SetGeminiError")
+	}
+	if m.geminiError != testErr {
+		t.Fatalf("expected geminiError to be testErr")
+	}
+}
+
+func TestReview_ViewGeminiSending(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  512,
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "Content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m.SetGenerated("/tmp/test.md", true)
+	m.SetGeminiSending(true)
+
+	view := m.View()
+
+	if !strings.Contains(view, "Sending to Gemini...") {
+		t.Fatalf("expected 'Sending to Gemini...' in view during sending")
+	}
+}
+
+func TestReview_ViewGeminiComplete(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  512,
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "Content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m.SetGenerated("/tmp/test.md", true)
+	m.SetGeminiComplete("/tmp/gemini-output.txt", 3*time.Second)
+
+	view := m.View()
+
+	// Just verify the view doesn't crash and contains some content
+	if len(view) == 0 {
+		t.Fatalf("expected non-empty view after gemini completion")
+	}
+}
+
+func TestReview_ViewGeminiError(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  512,
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "Content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m.SetGenerated("/tmp/test.md", true)
+	m.SetGeminiError(errors.New("gemini connection failed"))
+
+	view := m.View()
+
+	if !strings.Contains(view, "Error:") {
+		t.Fatalf("expected 'Error:' in view after error")
+	}
+	if !strings.Contains(view, "gemini connection failed") {
+		t.Fatalf("expected error message in view")
+	}
+}
+
+func TestReview_ViewGeminiStatus(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  512,
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "Content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m.SetGenerated("/tmp/test.md", true)
+
+	// Test view with no gemini state (should show option to send to gemini)
+	view := m.View()
+	if !strings.Contains(view, "Send to Gemini") {
+		t.Fatalf("expected 'Send to Gemini' option when not yet sent")
+	}
+}
+
+func TestReview_ViewSizeLimit(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  1024 * 1024, // 1MB file
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: strings.Repeat("content", 1000)}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m.SetSize(80, 24)
+
+	view := m.View()
+
+	// Should show some form of size information
+	if !strings.Contains(view, "Size") && !strings.Contains(view, "1.0") {
+		t.Fatalf("expected size information in view, got: %s", view)
+	}
+}
+
+func TestReview_parseSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input       string
+		expectError bool
+		expected    int64
+	}{
+		{"100", false, 100},
+		{"1KB", false, 1024},
+		{"2MB", false, 2 * 1024 * 1024},
+		{"invalid", true, 0},
+		{"", true, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run("parse "+tt.input, func(t *testing.T) {
+			result, err := parseSize(tt.input)
+			if tt.expectError && err == nil {
+				t.Fatalf("expected error for input '%s'", tt.input)
+			}
+			if !tt.expectError && err != nil {
+				t.Fatalf("unexpected error for input '%s': %v", tt.input, err)
+			}
+			if !tt.expectError && result != tt.expected {
+				t.Fatalf("expected %d, got %d for input '%s'", tt.expected, result, tt.input)
+			}
+		})
+	}
+}
+
+func TestReview_calculateStatsLargeFile(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/large.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "large.go",
+				Path:  "/path/to/large.go",
+				IsDir: false,
+				Size:  10 * 1024 * 1024, // 10MB file
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: strings.Repeat("content", 10000)}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+
+	totalBytes, totalTokens := m.calculateStats()
+
+	// Should handle large files correctly
+	if totalBytes < 10*1024*1024 {
+		t.Fatalf("expected bytes to include large file size")
+	}
+	if totalTokens <= 0 {
+		t.Fatalf("expected positive token count for large content")
 	}
 }

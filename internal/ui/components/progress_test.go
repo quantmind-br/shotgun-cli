@@ -2,7 +2,6 @@ package components
 
 import (
 	"testing"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -344,10 +343,7 @@ func TestProgressUpdateSpinner(t *testing.T) {
 	initialSpinner := p.spinner
 
 	// Create a test spinner message
-	msg := spinner.TickMsg{
-		Frame: 1,
-		Time:  time.Now(),
-	}
+	msg := spinner.TickMsg{}
 
 	// Update spinner should process the tick message
 	updatedModel, cmd := p.UpdateSpinner(msg)
@@ -364,9 +360,7 @@ func TestProgressUpdateSpinnerWithDifferentMessage(t *testing.T) {
 	p := NewProgress()
 
 	// Test with a different type of message (should not crash)
-	msg := tea.KeyMsg{
-		Type: tea.KeyCtrlC,
-	}
+	msg := tea.KeyMsg{}
 
 	updatedModel, cmd := p.UpdateSpinner(msg)
 
