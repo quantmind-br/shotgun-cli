@@ -674,6 +674,26 @@ func TestSendWithProgress_BinaryNotFound(t *testing.T) {
 	}
 }
 
+func TestSendWithProgress_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	if !IsAvailable() {
+		t.Skip("geminiweb not available")
+	}
+
+	cfg := DefaultConfig()
+	executor := NewExecutor(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	_, err := executor.SendWithProgress(ctx, "test", func(stage string) {})
+
+	if err == nil {
+		t.Error("expected error on cancelled context")
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
