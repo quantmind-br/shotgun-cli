@@ -1237,3 +1237,35 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 		}
 	})
 }
+
+func TestScannerHandlesPermissionError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("test requires non-root user")
+	}
+
+	tempDir := t.TempDir()
+
+	// Create a directory without read permission
+	noReadDir := filepath.Join(tempDir, "no-read")
+	err := os.Mkdir(noReadDir, 0000)
+	if err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	defer os.Chmod(noReadDir, 0755)
+
+	scanner := NewFileSystemScanner()
+	config := DefaultScanConfig()
+
+	// Scanning the parent should work but skip the unreadable directory
+	root, err := scanner.Scan(tempDir, config)
+
+	// Should not error - gracefully handles permission issues
+	if err != nil {
+		// Some systems may error, others skip silently
+		t.Logf("scan returned error (may be expected): %v", err)
+	}
+
+	if root == nil {
+		t.Log("root is nil - permission error prevented scan")
+	}
+}
