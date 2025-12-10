@@ -1,0 +1,38 @@
+---
+description: Focuses on the unique Gemini AI integration pattern, which uses an external binary (`geminiweb`) instead of a direct API call. It details the execution flow and key files.
+globs:
+  - "internal/platform/gemini/**/*.go"
+  - "cmd/send.go"
+  - "internal/ui/wizard.go"
+alwaysApply: false
+---
+
+# Gemini AI Integration Rules
+
+This document outlines the specific patterns for interacting with the Google Gemini AI service.
+
+## Integration via External Binary
+
+A critical architectural choice is that the application **does not directly call the Gemini REST API**. Instead, it orchestrates the execution of an external CLI tool: `geminiweb`.
+
+All logic for this interaction is encapsulated in the `@internal/platform/gemini` package.
+
+## Key File: `executor.go`
+
+The primary component for this interaction is the `Executor` struct in `@internal/platform/gemini/executor.go`. It is responsible for the entire lifecycle of a request.
+
+## Execution Flow
+
+When modifying or extending the Gemini integration, you must follow this sequence:
+
+1.  **Prerequisite Checks**: Before attempting to send, the code must call `gemini.IsAvailable()` and `gemini.IsConfigured()` to ensure the `geminiweb` binary exists and has credentials.
+2.  **Build Command**: The `buildArgs` function constructs the command-line arguments for `geminiweb`, including the model, timeout, and other flags from the configuration.
+3.  **Execute with `stdin`**: The generated context/prompt is passed to the `geminiweb` process via its standard input (`stdin`).
+4.  **Capture `stdout`**: The raw response from the AI is captured from the process's standard output (`stdout`).
+5.  **Process Response**: The raw response, which may contain ANSI color codes, is cleaned up by `StripANSI` and parsed by `ParseResponse`.
+
+**Anti-Pattern**: Do not attempt to make HTTP requests to Google's APIs directly. All interactions must go through the `gemini.Executor`.
+
+## Configuration
+
+Gemini-related settings are defined in `@internal/platform/gemini/config.go` and managed via Viper. When adding new features (e.g., supporting a new `geminiweb` flag), add it to the `Config` struct and the `buildArgs` method.

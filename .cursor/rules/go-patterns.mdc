@@ -1,0 +1,71 @@
+---
+description: Defines Go-specific coding standards for the project, including the use of interfaces, error wrapping, structured logging with zerolog, and configuration management patterns.
+globs:
+  - "internal/**/*.go"
+  - "cmd/**/*.go"
+alwaysApply: false
+---
+
+# Go Coding Patterns & Conventions
+
+This file outlines specific coding patterns, conventions, and best practices to follow when writing Go code for this project.
+
+## Interface-Driven Core Logic
+
+The `internal/core` packages are designed around interfaces to promote decoupling and testability. When interacting with core components, always use the defined interfaces.
+
+*   **`Scanner`**: For filesystem traversal.
+*   **`ContextGenerator`**: For building the LLM context.
+*   **`TemplateManager`**: For handling prompt templates.
+*   **`IgnoreEngine`**: For file filtering logic.
+
+**Example**: When a command needs to scan files, it should accept a `scanner.Scanner` interface, not a concrete `scanner.FileSystemScanner`.
+
+```go
+// internal/core/scanner/scanner.go
+
+type Scanner interface {
+    Scan(rootPath string, config *ScanConfig) (*FileNode, error)
+    ScanWithProgress(rootPath string, config *ScanConfig, progress chan<- Progress) (*FileNode, error)
+}
+```
+
+## Error Handling
+
+Always wrap errors with context to create a meaningful error stack. Use `fmt.Errorf` with the `%w` verb.
+
+```go
+// Good
+if err != nil {
+    return nil, fmt.Errorf("failed to scan directory %s: %w", rootPath, err)
+}
+
+// Bad - loses original error context
+if err != nil {
+    return nil, errors.New("scan failed")
+}
+```
+
+## Logging
+
+Use the `zerolog` library for structured, leveled logging. Do not use `fmt.Println` or the standard `log` package for application logging.
+
+*   Inject the `zerolog.Logger` into components that need to log.
+*   Use levels like `log.Debug()`, `log.Info()`, `log.Error()`.
+
+## Configuration Management
+
+Configuration is managed by Viper and initialized in `@cmd/root.go`.
+
+*   **DO NOT** access Viper globally (e.g., `viper.GetString()`) from within `internal/core` or `internal/platform`.
+*   **DO** pass configuration values or dedicated config structs from the `cmd` layer down to the components that need them. This follows the principle of explicit dependencies.
+
+## TUI Development (`internal/ui`)
+
+The interactive UI is built with Bubble Tea and follows the Model-View-Update (MVU) pattern.
+
+*   **Model**: Contains the state of a component or screen.
+*   **View**: Renders the UI based on the model's state.
+*   **Update**: Handles incoming messages (e.g., key presses, data loading) and updates the model's state.
+
+When working in `@internal/ui`, ensure new components and screens adhere to this pattern.

@@ -1,0 +1,51 @@
+---
+description: High-level overview of the project's Clean Architecture, key layers (cmd, core, platform, ui), and core frameworks like Cobra and Bubble Tea.
+globs:
+  - "**/*.go"
+alwaysApply: true
+---
+
+# Project Overview: shotgun-cli
+
+This document provides a high-level overview of the `shotgun-cli` Go project, its architecture, and core principles.
+
+## Architecture: Clean/Hexagonal
+
+The project follows a Clean Architecture pattern, separating concerns into distinct layers. When adding new features, respect these boundaries.
+
+1.  **`cmd` (Presentation/Adapter Layer)**
+    *   **Purpose**: Handles user interaction via CLI commands using the Cobra framework. This is the application's composition root.
+    *   **Responsibilities**: Parsing flags, orchestrating calls to core services, and handling top-level errors.
+    *   **Example**: `@cmd/send.go` defines the `context send` command.
+
+2.  **`internal/ui` (Presentation/Adapter Layer)**
+    *   **Purpose**: Implements the interactive TUI wizard using the Bubble Tea framework.
+    *   **Pattern**: Follows the Model-View-Update (MVU) pattern. State is managed in models, views render the UI, and updates are handled via messages.
+    *   **Example**: `@internal/ui/wizard.go` is the main orchestrator for the TUI.
+
+3.  **`internal/core` (Core/Domain Layer)**
+    *   **Purpose**: Contains the core business logic, independent of external frameworks and tools.
+    *   **Sub-packages**:
+        *   `context`: Builds the final LLM context.
+        *   `scanner`: Scans the filesystem.
+        *   `template`: Manages prompt templates.
+        *   `ignore`: Handles file ignore logic.
+        *   `tokens`: Estimates token counts.
+    *   **Rule**: Code in this layer should NOT depend on `cmd`, `ui`, or `platform`.
+
+4.  **`internal/platform` (Infrastructure Layer)**
+    *   **Purpose**: Implements integrations with external systems.
+    *   **Sub-packages**:
+        *   `gemini`: Interacts with the Google Gemini AI via an external binary.
+        *   `clipboard`: Provides cross-platform clipboard access.
+
+## Key Frameworks
+
+*   **CLI**: `github.com/spf13/cobra`
+*   **Configuration**: `github.com/spf13/viper`
+*   **TUI**: `github.com/charmbracelet/bubbletea`
+*   **Logging**: `github.com/rs/zerolog`
+
+## Dependency Injection
+
+The project uses manual dependency injection. The `cmd` package acts as the **composition root**, where services from `core` and `platform` are instantiated and wired together. Avoid creating global instances; pass dependencies explicitly.
