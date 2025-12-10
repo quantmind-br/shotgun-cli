@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
@@ -625,5 +626,41 @@ func TestWizardHandleGenerationError(t *testing.T) {
 	}
 	if wizard.progress.Visible {
 		t.Error("progress should be hidden after error")
+	}
+}
+
+func TestWizardGeminiLifecycle(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
+	wizard.taskDesc = "Test task"
+	wizard.generatedContent = "generated context"
+	wizard.generatedFilePath = "/tmp/test.md"
+	wizard.step = StepReview
+	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "")
+
+	// Test GeminiProgressMsg
+	model, _ := wizard.Update(GeminiProgressMsg{Stage: "sending"})
+	wizard = model.(*WizardModel)
+	if wizard.progress.Stage != "sending" {
+		t.Errorf("expected progress stage 'sending', got %q", wizard.progress.Stage)
+	}
+
+	// Test GeminiCompleteMsg
+	model, _ = wizard.Update(GeminiCompleteMsg{
+		Response:   "AI response here",
+		OutputFile: "/tmp/response.md",
+		Duration:   5 * time.Second,
+	})
+	wizard = model.(*WizardModel)
+
+	if wizard.geminiResponseFile != "/tmp/response.md" {
+		t.Errorf("expected response file '/tmp/response.md', got %q", wizard.geminiResponseFile)
+	}
+	if wizard.geminiSending {
+		t.Error("geminiSending should be false after completion")
 	}
 }
