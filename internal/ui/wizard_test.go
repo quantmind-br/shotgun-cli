@@ -736,3 +736,130 @@ func TestWizardHandleRescanRequest(t *testing.T) {
 	}
 	_ = initialTree // Acknowledge variable
 }
+
+func TestWizardViewRendersFileSelectionStep(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	wizard.step = StepFileSelection
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+	// View should contain file selection content
+	if !strings.Contains(view, "root") && !strings.Contains(view, "File") {
+		t.Error("expected view to contain file selection elements")
+	}
+}
+
+func TestWizardViewRendersTemplateSelectionStep(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.step = StepTemplateSelection
+	wizard.templateSelection = screens.NewTemplateSelection() // Will use default templates
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestWizardViewRendersTaskInputStep(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
+	wizard.step = StepTaskInput
+	wizard.taskInput = screens.NewTaskInput("")
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestWizardViewRendersRulesInputStep(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.template = &template.Template{Name: "basic", Content: "Rules: {RULES}"}
+	wizard.step = StepRulesInput
+	wizard.rulesInput = screens.NewRulesInput("")
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestWizardViewRendersReviewStep(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	wizard.template = &template.Template{Name: "basic"}
+	wizard.taskDesc = "Test task"
+	wizard.step = StepReview
+	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "")
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestWizardViewWithError(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.error = fmt.Errorf("test error message")
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "error") && !strings.Contains(view, "Error") {
+		t.Error("expected view to show error")
+	}
+}
+
+func TestWizardViewWithProgress(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.progress.Visible = true
+	wizard.progress.Stage = "scanning"
+	wizard.progress.Current = 50
+	wizard.progress.Total = 100
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if view == "" {
+		t.Error("expected non-empty view with progress")
+	}
+}
