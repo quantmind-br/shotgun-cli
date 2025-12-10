@@ -66,6 +66,17 @@ func (fs *FileSystemScanner) ScanWithProgress(
 		}
 	}
 
+	// Send initial progress to indicate counting phase has started
+	if progress != nil {
+		progress <- Progress{
+			Current:   0,
+			Total:     0,
+			Stage:     "counting",
+			Message:   "Counting files...",
+			Timestamp: time.Now(),
+		}
+	}
+
 	// First pass: count total items for accurate progress reporting
 	total, err := fs.countItems(rootPath, config)
 	if err != nil {

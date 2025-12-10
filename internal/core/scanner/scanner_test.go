@@ -400,8 +400,8 @@ func TestFileSystemScanner(t *testing.T) {
 
 		// Check first and last progress
 		first := progressUpdates[0]
-		if first.Stage != "scanning" {
-			t.Errorf("Expected first stage to be 'scanning', got %q", first.Stage)
+		if first.Stage != "counting" {
+			t.Errorf("Expected first stage to be 'counting', got %q", first.Stage)
 		}
 
 		last := progressUpdates[len(progressUpdates)-1]

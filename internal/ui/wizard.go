@@ -934,7 +934,8 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 				return ScanCompleteMsg{Tree: tree}
 			}
 		default:
-			// No progress yet, re-enqueue
+			// No progress yet, yield to event loop and re-check
+			time.Sleep(10 * time.Millisecond)
 			return m.iterativeScanCmd()()
 		}
 	}
