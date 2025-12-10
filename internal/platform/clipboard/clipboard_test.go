@@ -1,6 +1,7 @@
 package clipboard
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,33 @@ func TestClipboardErrorUnwrap(t *testing.T) {
 func TestIsAvailable(t *testing.T) {
 	// Just verify it doesn't panic - actual availability depends on system
 	_ = IsAvailable()
+}
+
+func TestCopySuccess(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("clipboard not available in this environment")
+	}
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"simple text", "hello world"},
+		{"empty string", ""},
+		{"unicode", "こんにちは世界"},
+		{"multiline", "line1\nline2\nline3"},
+		{"special chars", "tab\there\nnewline"},
+		{"long text", strings.Repeat("x", 10000)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Copy(tt.content)
+			if err != nil {
+				t.Errorf("Copy(%q) failed: %v", tt.name, err)
+			}
+		})
+	}
 }
 
 // Note: Copy function cannot be easily unit tested without mocking the system clipboard.
