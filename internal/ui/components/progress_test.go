@@ -2,7 +2,10 @@ package components
 
 import (
 	"testing"
+	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/stretchr/testify/assert"
@@ -323,4 +326,51 @@ func TestProgressGetProgress(t *testing.T) {
 	assert.Equal(t, int64(100), total)
 	assert.Equal(t, "stage", stage)
 	assert.Equal(t, "message", message)
+}
+
+func TestProgressInit(t *testing.T) {
+	p := NewProgress()
+
+	cmd := p.Init()
+
+	// Init should return a spinner tick command
+	assert.NotNil(t, cmd)
+	// The command should be a function that can be executed
+	// We can't easily test the actual execution without more complex setup
+}
+
+func TestProgressUpdateSpinner(t *testing.T) {
+	p := NewProgress()
+	initialSpinner := p.spinner
+
+	// Create a test spinner message
+	msg := spinner.TickMsg{
+		Frame: 1,
+		Time:  time.Now(),
+	}
+
+	// Update spinner should process the tick message
+	updatedModel, cmd := p.UpdateSpinner(msg)
+
+	// Should return the same model instance
+	assert.Equal(t, p, updatedModel)
+	// Should return a command for the next tick
+	assert.NotNil(t, cmd)
+	// Spinner should have been updated
+	assert.NotEqual(t, initialSpinner, p.spinner)
+}
+
+func TestProgressUpdateSpinnerWithDifferentMessage(t *testing.T) {
+	p := NewProgress()
+
+	// Test with a different type of message (should not crash)
+	msg := tea.KeyMsg{
+		Type: tea.KeyCtrlC,
+	}
+
+	updatedModel, cmd := p.UpdateSpinner(msg)
+
+	// Should handle gracefully and return same model and nil cmd
+	assert.Equal(t, p, updatedModel)
+	assert.Nil(t, cmd)
 }

@@ -199,118 +199,119 @@ func NewWizard(rootPath string, config *scanner.ScanConfig) *WizardModel {
 
 ```mermaid
 graph TD
-    A[main.go] --> B[cmd/root.go]
+    A[main.go] --> B[cmd]
+    B --> C[internal/core/context]
+    B --> D[internal/core/scanner]
+    B --> E[internal/core/template]
+    B --> F[internal/core/ignore]
+    B --> G[internal/core/tokens]
+    B --> H[internal/platform/gemini]
+    B --> I[internal/platform/clipboard]
+    B --> J[internal/ui/wizard]
+    B --> K[internal/utils]
     
-    subgraph "CLI Layer"
-        B --> C[cmd/send.go]
-        B --> D[cmd/template.go]
-        B --> E[cmd/config.go]
-    end
+    C --> D
+    C --> E
+    C --> F
+    C --> G
     
-    subgraph "Core Business Logic"
-        F[internal/core/context]
-        G[internal/core/scanner]
-        H[internal/core/ignore]
-        I[internal/core/template]
-        J[internal/core/tokens]
-    end
+    D --> F
     
-    subgraph "Platform Integrations"
-        K[internal/platform/gemini]
-        L[internal/platform/clipboard]
-    end
+    J --> C
+    J --> D
+    J --> E
+    J --> H
+    J --> I
+    J --> L[internal/ui/screens]
+    J --> M[internal/ui/components]
     
-    subgraph "UI Layer"
-        M[internal/ui/wizard]
-        N[internal/ui/screens]
-        O[internal/ui/components]
-        P[internal/ui/styles]
-    end
-    
-    subgraph "External Libraries"
-        Q[spf13/cobra]
-        R[spf13/viper]
-        S[charmbracelet/bubbletea]
-        T[charmbracelet/bubbles]
-        U[rs/zerolog]
-        V[sabhiram/go-gitignore]
-        W[atotto/clipboard]
-        X[adrg/xdg]
-    end
-    
-    B --> F
-    B --> G
-    B --> K
-    B --> L
-    B --> M
-    
-    F --> G
-    F --> H
-    F --> I
-    F --> J
-    
-    G --> H
+    L --> M
+    L --> N[internal/ui/styles]
     
     M --> N
-    M --> O
-    M --> F
-    M --> K
-    M --> L
     
-    N --> O
-    N --> P
+    E --> O[github.com/adrg/xdg]
+    F --> P[github.com/sabhiram/go-gitignore]
+    H --> Q[External: geminiweb]
+    I --> R[github.com/atotto/clipboard]
     
-    O --> P
+    B --> S[github.com/spf13/cobra]
+    B --> T[github.com/spf13/viper]
+    J --> U[github.com/charmbracelet/bubbletea]
+    J --> V[github.com/charmbracelet/bubbles]
+    J --> W[github.com/charmbracelet/lipgloss]
     
-    B --> Q
-    B --> R
-    B --> U
-    
-    M --> S
-    N --> S
-    O --> S
-    O --> T
-    
-    H --> V
-    L --> W
-    I --> X
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#e8f5e8
+    style D fill:#e8f5e8
+    style E fill:#e8f5e8
+    style F fill:#e8f5e8
+    style G fill:#e8f5e8
+    style H fill:#fff3e0
+    style I fill:#fff3e0
+    style J fill:#fce4ec
+    style K fill:#f5f5f5
 ```
 
 ## Potential Dependency Issues
 
-### 1. TUI Framework Lock-in
-**Issue:** Heavy reliance on `charmbracelet` ecosystem creates tight coupling
-**Impact:** Difficult to migrate to different UI paradigms (web UI, simple CLI)
-**Mitigation:** The coupling is contained within the `internal/ui` package, making it manageable
+### 1. External Binary Dependency
+**Issue:** Heavy reliance on external `geminiweb` binary
+- **Location:** `internal/platform/gemini`
+- **Impact:** Runtime dependency that must be installed separately
+- **Mitigation:** Clear documentation and availability checks before use
 
-### 2. External Binary Dependency
-**Issue:** `geminiweb` binary dependency for Gemini integration
-**Impact:** Requires external tool installation and configuration
-**Mitigation:** Proper availability checks and clear error messages guide users
+### 2. High Coupling in UI Wizard
+**Issue:** `internal/ui/wizard` has dependencies on most internal packages
+- **Impact:** Makes testing complex and changes ripple through the system
+- **Recommendation:** Consider mediator pattern or event-driven architecture for UI coordination
 
 ### 3. Configuration Complexity
-**Issue:** Viper's global state can lead to implicit dependencies
-**Impact:** Potential for configuration access patterns that are hard to test
-**Current State:** Well-managed with explicit configuration passing in most cases
+**Issue:** Multiple configuration sources (files, env vars, flags) can create confusion
+- **Location:** `cmd/root.go` initConfig()
+- **Impact:** Difficult to debug configuration issues
+- **Mitigation:** Enhanced logging of configuration resolution
 
 ### 4. Template System Complexity
-**Issue:** Multi-source template loading (embedded, user config, custom path) adds complexity
-**Impact:** Potential for template conflicts and debugging challenges
-**Mitigation:** Clear priority system and source tracking in template metadata
+**Issue:** Multi-source template loading with priority override logic
+- **Location:** `internal/core/template/manager.go`
+- **Impact:** Complex debugging when templates don't load as expected
+- **Recommendation:** Add detailed logging of template source resolution
 
-### 5. Platform-Specific Dependencies
-**Issue:** Clipboard and filesystem operations have platform-specific behaviors
-**Impact:** Potential inconsistencies across different operating systems
-**Mitigation:** Use of well-tested cross-platform libraries (`atotto/clipboard`, `xdg`)
+### 5. Error Propagation
+**Issue:** Deep call stacks can make error handling complex
+- **Example:** UI → Wizard → Context Generator → Scanner → Ignore Engine
+- **Impact:** Error context can be lost across layers
+- **Mitigation:** Use structured error wrapping with context
 
-### 6. No LLM Provider Abstraction
-**Issue:** Direct coupling to Gemini API implementation
-**Impact:** Difficult to add support for other LLM providers
-**Recommendation:** Consider introducing an LLM provider interface in `internal/core` for future extensibility
+### 6. Platform-Specific Dependencies
+**Issue:** Clipboard and filesystem operations have platform-specific behavior
+- **Location:** `internal/platform/clipboard`, configuration path handling
+- **Impact:** Potential inconsistencies across operating systems
+- **Mitigation:** Comprehensive cross-platform testing
 
-### 7. Large Dependency Tree
-**Issue:** 50+ direct and indirect dependencies for a CLI tool
-**Impact:** Larger binary size, potential security surface area
-**Mitigation:** Dependencies are well-chosen and primarily from reputable sources
+### 7. Memory Usage in Large Scans
+**Issue:** File tree construction can consume significant memory
+- **Location:** `internal/core/scanner`
+- **Impact:** Performance degradation with large codebases
+- **Mitigation:** Streaming processing and memory limits already implemented
 
-The dependency structure is generally well-architected with clear separation of concerns, though some areas could benefit from additional abstraction for future extensibility.
+### 8. Template Variable Conversion
+**Issue:** Manual conversion between template syntaxes ({VAR} → {{.Var}})
+- **Location:** `internal/core/context/generator.go`
+- **Impact:** Maintenance overhead and potential for missed conversions
+- **Recommendation:** Standardize on one template syntax throughout
+
+### Recommendations for Improvement:
+
+1. **Introduce Service Locator Pattern** for UI coordination to reduce wizard coupling
+2. **Implement Configuration Validation** with detailed error reporting
+3. **Add Telemetry** for dependency usage and performance monitoring
+4. **Create Abstraction Layer** for external binary dependencies
+5. **Standardize Error Handling** with consistent wrapping and context preservation
+6. **Implement Circuit Breaker Pattern** for external service calls
+7. **Add Dependency Health Checks** for external integrations
+8. **Consider Plugin Architecture** for future extensibility
+
+The dependency structure is generally well-organized with clear separation of concerns, though some areas could benefit from reduced coupling and enhanced error handling patterns.

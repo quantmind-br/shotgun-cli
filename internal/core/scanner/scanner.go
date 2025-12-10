@@ -52,7 +52,8 @@ type Progress struct {
 	// Current number of items processed
 	Current int64 `json:"current"`
 
-	// Total number of items to process
+	// Total number of items to process.
+	// A value of -1 indicates streaming mode where total is unknown.
 	Total int64 `json:"total"`
 
 	// Stage describes the current scanning stage
@@ -198,19 +199,40 @@ func FormatSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// Percentage calculates the completion percentage for progress reporting
+// Percentage calculates the completion percentage for progress reporting.
+// Returns -1 if in streaming mode (Total < 0), or 0 if Total is 0.
 func (p *Progress) Percentage() float64 {
+	if p.Total < 0 {
+		return -1.0
+	}
 	if p.Total == 0 {
 		return 0.0
 	}
 	return float64(p.Current) / float64(p.Total) * 100.0
 }
 
+// IsStreaming returns true if progress is in streaming mode (total unknown)
+func (p *Progress) IsStreaming() bool {
+	return p.Total < 0
+}
+
 // String returns a formatted progress string
 func (p *Progress) String() string {
+	if p.IsStreaming() {
+		if p.Message != "" {
+			return fmt.Sprintf("%d items - %s: %s", p.Current, p.Stage, p.Message)
+		}
+		return fmt.Sprintf("%d items - %s", p.Current, p.Stage)
+	}
 	percentage := p.Percentage()
 	if p.Message != "" {
 		return fmt.Sprintf("%.1f%% (%d/%d) - %s: %s", percentage, p.Current, p.Total, p.Stage, p.Message)
 	}
 	return fmt.Sprintf("%.1f%% (%d/%d) - %s", percentage, p.Current, p.Total, p.Stage)
 }
+
+// StageConstants for standardized stage names
+const (
+	StageScanning = "scanning"
+	StageComplete = "complete"
+)

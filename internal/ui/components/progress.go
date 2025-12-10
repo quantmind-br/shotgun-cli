@@ -148,7 +148,7 @@ func (m *ProgressModel) View() string {
 		content.WriteString("\n")
 	}
 
-	// Progress bar (if we have totals)
+	// Progress bar (if we have known totals)
 	if m.total > 0 {
 		progressBar := m.renderProgressBar(modalWidth - 4)
 		progressLine := lipgloss.NewStyle().Foreground(borderColor).Render("│ ") +
@@ -163,6 +163,15 @@ func (m *ProgressModel) View() string {
 		statsStyled := lipgloss.NewStyle().Foreground(styles.AccentColor).Render(stats)
 		statsLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
 			m.padCenter(statsStyled, modalWidth-2) +
+			lipgloss.NewStyle().Foreground(borderColor).Render("│")
+		content.WriteString(m.centerLine(statsLine))
+		content.WriteString("\n")
+	} else if m.total < 0 {
+		// Streaming mode: show counter without percentage
+		stats := fmt.Sprintf("%d files scanned...", m.current)
+		statsStyled := lipgloss.NewStyle().Foreground(styles.AccentColor).Render(stats)
+		statsLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+			m.padCenter(m.spinner.View()+" "+statsStyled, modalWidth-2) +
 			lipgloss.NewStyle().Foreground(borderColor).Render("│")
 		content.WriteString(m.centerLine(statsLine))
 		content.WriteString("\n")

@@ -2,7 +2,9 @@ package gemini
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -653,6 +655,338 @@ func TestGetStatus_Details(t *testing.T) {
 	// If not configured but available, should have an error message
 	if status.Available && !status.Configured && status.Error == "" {
 		t.Error("Error should be set when available but not configured")
+	}
+}
+
+func TestExecutor_Send_Success(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("geminiweb not available for integration test")
+	}
+
+	cfg := DefaultConfig()
+	executor := NewExecutor(cfg)
+
+	ctx := context.Background()
+	result, err := executor.Send(ctx, "Test message for Gemini")
+
+	if err != nil {
+		t.Errorf("expected successful send, got error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+
+	if result.Response == "" {
+		t.Error("expected non-empty response")
+	}
+
+	if result.Model != cfg.Model {
+		t.Errorf("expected model %s, got %s", cfg.Model, result.Model)
+	}
+
+	if result.Duration == 0 {
+		t.Error("expected non-zero duration")
+	}
+
+	if result.RawResponse == "" {
+		t.Error("expected non-empty raw response")
+	}
+}
+
+func TestExecutor_Send_Timeout(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("geminiweb not available")
+	}
+
+	cfg := Config{
+		Timeout: 1, // Very short timeout
+	}
+	executor := NewExecutor(cfg)
+
+	ctx := context.Background()
+	_, err := executor.Send(ctx, "This should timeout quickly")
+
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+
+	errorMsg := err.Error()
+	if !strings.Contains(errorMsg, "timeout") && !strings.Contains(errorMsg, "timed out") {
+		t.Errorf("expected timeout-related error, got: %s", errorMsg)
+	}
+}
+
+func TestExecutor_Send_ContextCancelled(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("geminiweb not available")
+	}
+
+	cfg := DefaultConfig()
+	executor := NewExecutor(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	_, err := executor.Send(ctx, "Test with cancelled context")
+
+	if err == nil {
+		t.Error("expected error for cancelled context")
+	}
+
+	if !strings.Contains(err.Error(), "context") && !strings.Contains(err.Error(), "cancel") {
+		t.Errorf("expected context-related error, got: %s", err.Error())
+	}
+}
+
+func TestExecutor_Send_NotConfigured(t *testing.T) {
+	// Use a fake binary that exists but is not geminiweb
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		t.Skip("go binary not found for testing")
+	}
+
+	cfg := Config{
+		BinaryPath: goPath,
+		Timeout:    10, // Higher timeout to avoid timeout errors
+	}
+	executor := NewExecutor(cfg)
+
+	ctx := context.Background()
+	_, err = executor.Send(ctx, "Test with non-gemini binary")
+
+	if err == nil {
+		t.Error("expected error when geminiweb is not configured")
+	}
+
+	errorMsg := err.Error()
+	// Should either get configuration error or execution error
+	if !strings.Contains(errorMsg, "configured") &&
+		!strings.Contains(errorMsg, "auto-login") &&
+		!strings.Contains(errorMsg, "execution failed") {
+		t.Errorf("expected configuration or execution error, got: %s", errorMsg)
+	}
+}
+
+func TestExecutor_Send_ExecutionError(t *testing.T) {
+	// Test with a binary that exists but will fail quickly
+	cfg := Config{
+		BinaryPath: "/bin/sh",
+		Timeout:    5, // Short timeout
+	}
+	executor := NewExecutor(cfg)
+
+	ctx := context.Background()
+	_, err := executor.Send(ctx, "-c 'exit 1'")
+
+	if err == nil {
+		t.Error("expected error when execution fails")
+	}
+
+	errorMsg := err.Error()
+	// Should get either execution failed or timeout, both are acceptable
+	if !strings.Contains(errorMsg, "execution failed") &&
+		!strings.Contains(errorMsg, "timeout") {
+		t.Errorf("expected execution or timeout error, got: %s", errorMsg)
+	}
+}
+
+func TestConfig_FindBinary_SearchPath(t *testing.T) {
+	// Test with empty config - should search PATH
+	cfg := Config{}
+
+	path, err := cfg.FindBinary()
+
+	if err != nil {
+		// This is OK - geminiweb might not be installed
+		t.Logf("geminiweb not found in PATH (this is expected if not installed): %v", err)
+		return
+	}
+
+	if path == "" {
+		t.Error("expected non-empty path when found")
+	}
+
+	// Verify it's actually the geminiweb binary
+	if !strings.Contains(path, "geminiweb") {
+		t.Errorf("expected path to contain 'geminiweb', got: %s", path)
+	}
+}
+
+func TestConfig_FindBinary_CommonPaths(t *testing.T) {
+	// Create a temporary "geminiweb" file in a common location
+	tmpDir := t.TempDir()
+	commonPath := filepath.Join(tmpDir, "bin", "geminiweb")
+
+	err := os.MkdirAll(filepath.Dir(commonPath), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a fake geminiweb binary
+	file, err := os.Create(commonPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.WriteString("#!/bin/bash\necho fake geminiweb")
+	file.Close()
+	os.Chmod(commonPath, 0755)
+
+	// Test with GOPATH set to temp dir and clear PATH to avoid finding real geminiweb
+	oldGopath := os.Getenv("GOPATH")
+	oldPath := os.Getenv("PATH")
+	os.Setenv("GOPATH", tmpDir)
+	os.Setenv("PATH", tmpDir+":/bin:/usr/bin") // Minimal PATH without real geminiweb
+	defer os.Setenv("GOPATH", oldGopath)
+	defer os.Setenv("PATH", oldPath)
+
+	cfg := Config{} // Empty config should search common paths
+	path, err := cfg.FindBinary()
+
+	if err != nil {
+		t.Errorf("expected to find binary in common path, got error: %v", err)
+	}
+
+	if path != commonPath {
+		t.Errorf("expected path %s, got %s", commonPath, path)
+	}
+}
+
+func TestConfig_FindBinary_ExplicitPathNotFound(t *testing.T) {
+	cfg := Config{BinaryPath: "/definitely/does/not/exist/geminiweb"}
+
+	_, err := cfg.FindBinary()
+
+	if err == nil {
+		t.Error("expected error for nonexistent explicit path")
+	}
+
+	errorMsg := err.Error()
+	if !strings.Contains(errorMsg, "not found at specified path") {
+		t.Errorf("expected 'not found at specified path' error, got: %s", errorMsg)
+	}
+}
+
+func TestExecutor_SendWithProgress_Success(t *testing.T) {
+	if !IsAvailable() {
+		t.Skip("geminiweb not available for integration test")
+	}
+
+	cfg := DefaultConfig()
+	executor := NewExecutor(cfg)
+
+	var progressStages []string
+	progress := func(stage string) {
+		progressStages = append(progressStages, stage)
+	}
+
+	ctx := context.Background()
+	result, err := executor.SendWithProgress(ctx, "Test message for progress", progress)
+
+	if err != nil {
+		t.Errorf("expected successful send with progress, got error: %v", err)
+	}
+
+	if result == nil {
+		t.Error("expected non-nil result")
+	}
+
+	if len(progressStages) == 0 {
+		t.Error("expected progress updates to be called")
+	}
+
+	// Verify expected progress stages were called
+	expectedStages := []string{"Locating geminiweb...", "Preparing request...", "Processing response..."}
+	for _, expected := range expectedStages {
+		found := false
+		for _, actual := range progressStages {
+			if strings.Contains(actual, expected) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected progress stage '%s' to be called", expected)
+		}
+	}
+}
+
+func TestExtractThoughts_Complex(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedThought string
+		hasThoughts     bool
+		expectedRest    string
+	}{
+		{
+			name:            "simple thinking tags",
+			input:           "<thinking>Some reasoning</thinking>Actual response.",
+			expectedThought: "<thinking>Some reasoning</thinking>",
+			hasThoughts:     true,
+			expectedRest:    "Actual response.",
+		},
+		{
+			name:            "thinking with newlines and double newline ending",
+			input:           "<thinking>\nComplex reasoning\nwith multiple lines\n</thinking>\n\nThe actual answer.",
+			expectedThought: "<thinking>\nComplex reasoning\nwith multiple lines\n</thinking>",
+			hasThoughts:     true,
+			expectedRest:    "The actual answer.",
+		},
+		{
+			name:            "emoji thinking marker",
+			input:           "💭 This is thinking\n\nActual response.",
+			expectedThought: "💭 This is thinking",
+			hasThoughts:     true,
+			expectedRest:    "Actual response.",
+		},
+		{
+			name:            "markdown thinking marker",
+			input:           "**Thinking:** This is thinking\n\nActual response.",
+			expectedThought: "**Thinking:** This is thinking",
+			hasThoughts:     true,
+			expectedRest:    "Actual response.",
+		},
+		{
+			name:            "malformed thinking tags",
+			input:           "<thinking unclosed>Some reasoning</thinking>Response",
+			expectedThought: "",
+			hasThoughts:     false,
+			expectedRest:    "<thinking unclosed>Some reasoning</thinking>Response",
+		},
+		{
+			name:            "empty thinking tags",
+			input:           "<thinking></thinking>Response",
+			expectedThought: "<thinking></thinking>",
+			hasThoughts:     true,
+			expectedRest:    "Response",
+		},
+		{
+			name:            "multiple thinking sections - first wins",
+			input:           "<thinking>First reasoning</thinking>Middle <thinking>Second reasoning</thinking>",
+			expectedThought: "<thinking>First reasoning</thinking>",
+			hasThoughts:     true,
+			expectedRest:    "Middle <thinking>Second reasoning</thinking>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			thoughts, rest := ExtractThoughts(tt.input)
+
+			if thoughts != tt.expectedThought {
+				t.Errorf("ExtractThoughts() thoughts = %q, want %q", thoughts, tt.expectedThought)
+			}
+
+			if rest != tt.expectedRest {
+				t.Errorf("ExtractThoughts() rest = %q, want %q", rest, tt.expectedRest)
+			}
+
+			hasThoughts := thoughts != ""
+			if hasThoughts != tt.hasThoughts {
+				t.Errorf("ExtractThoughts() hasThoughts = %v, want %v", hasThoughts, tt.hasThoughts)
+			}
+		})
 	}
 }
 

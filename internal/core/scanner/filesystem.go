@@ -66,35 +66,19 @@ func (fs *FileSystemScanner) ScanWithProgress(
 		}
 	}
 
-	// Send initial progress to indicate counting phase has started
+	// Send initial progress in streaming mode (total unknown)
 	if progress != nil {
 		progress <- Progress{
 			Current:   0,
-			Total:     0,
-			Stage:     "counting",
-			Message:   "Counting files...",
-			Timestamp: time.Now(),
-		}
-	}
-
-	// First pass: count total items for accurate progress reporting
-	total, err := fs.countItems(rootPath, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to count items: %w", err)
-	}
-
-	if progress != nil {
-		progress <- Progress{
-			Current:   0,
-			Total:     total,
+			Total:     -1, // Streaming mode - total unknown until complete
 			Stage:     "scanning",
-			Message:   "Starting scan...",
+			Message:   "Scanning files...",
 			Timestamp: time.Now(),
 		}
 	}
 
-	// Second pass: build the file tree
-	root, actualCount, err := fs.walkAndBuild(rootPath, config, progress, total)
+	// Single pass: build the file tree (streaming mode with total = -1)
+	root, actualCount, err := fs.walkAndBuild(rootPath, config, progress, -1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan directory: %w", err)
 	}
@@ -105,7 +89,7 @@ func (fs *FileSystemScanner) ScanWithProgress(
 	if progress != nil {
 		progress <- Progress{
 			Current:   actualCount,
-			Total:     total,
+			Total:     actualCount, // Now we know the total
 			Stage:     "complete",
 			Message:   "Scan completed successfully",
 			Timestamp: time.Now(),

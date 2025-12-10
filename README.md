@@ -2,35 +2,29 @@
 
 ## Project Overview
 
-**Shotgun CLI** is a sophisticated Command-Line Interface tool written in Go that serves as a Context Generation and AI Orchestration Engine. The tool is designed to generate LLM-optimized codebase contexts and facilitate AI-assisted development workflows by gathering comprehensive codebase context and dispatching it to AI models for processing.
+**Shotgun CLI** is a sophisticated Command-Line Interface tool written in Go that functions as a **Context Generation and AI Orchestration Engine**. The tool bridges complex codebases with AI language models, providing both interactive (TUI) and programmatic (CLI) interfaces for generating LLM-optimized codebase contexts and facilitating AI-assisted development workflows.
 
 ### Purpose and Main Functionality
 
-The primary purpose of Shotgun CLI is to bridge the gap between complex codebases and AI language models by:
-
-- Scanning and analyzing project structures with intelligent filtering
-- Generating optimized context files within LLM token limits
-- Providing both interactive (TUI) and programmatic (CLI) interfaces
-- Integrating with Google Gemini API for AI-powered code analysis
-- Managing templates for different AI interaction patterns
+The primary purpose of Shotgun CLI is to transform complex codebases into structured, LLM-optimized contexts that can be sent to AI models like Google Gemini. It intelligently scans file systems, applies layered ignore patterns, and generates comprehensive context files that include file structure representations and relevant content.
 
 ### Key Features and Capabilities
 
-- **Intelligent File Scanning**: Recursive directory traversal with layered ignore rules (.gitignore, .shotgunignore, custom patterns)
-- **Interactive TUI Wizard**: 5-step guided workflow for complex configurations using Bubble Tea framework
-- **Template Management**: Multi-source template loading with variable substitution and validation
-- **Token Optimization**: Built-in token estimation and context window validation
+- **Interactive TUI Wizard**: 5-step guided workflow using Bubble Tea framework for intuitive user interaction
+- **CLI Commands**: Programmatic interface for automation and scripting
+- **Intelligent File Scanning**: Recursive directory traversal with layered ignore rule processing
+- **Template Management**: Multi-source template loading with variable substitution
+- **Context Optimization**: Token estimation and size validation for LLM compatibility
 - **AI Integration**: Seamless integration with Google Gemini API via external tool execution
-- **Cross-platform Support**: Clipboard operations and filesystem access across different platforms
-- **Progress Reporting**: Real-time progress updates for long-running operations
+- **Cross-platform Support**: Works across different operating systems with platform-specific optimizations
 
 ### Likely Intended Use Cases
 
-- **Code Review Automation**: Generate comprehensive context for AI-powered code reviews
-- **Documentation Generation**: Create AI-assisted documentation from codebase analysis
-- **Refactoring Assistance**: Provide AI models with complete project context for refactoring suggestions
-- **Onboarding Tools**: Help new developers understand complex codebases through AI analysis
-- **Code Migration**: Assist in migrating code between different frameworks or languages
+- **Code Review Automation**: Generate comprehensive context for AI-powered code analysis
+- **Documentation Generation**: Create structured representations of codebases for AI-assisted documentation
+- **Refactoring Assistance**: Provide AI models with complete context for intelligent refactoring suggestions
+- **Onboarding Tools**: Help new developers understand complex codebase structures
+- **Code Migration**: Facilitate AI-assisted code migration between languages or frameworks
 
 ## Table of Contents
 
@@ -47,82 +41,79 @@ The primary purpose of Shotgun CLI is to bridge the gap between complex codebase
 
 ### High-level Architecture Overview
 
-Shotgun CLI follows **Clean Architecture/Hexagonal Architecture** principles with clear separation of concerns across three main layers:
+Shotgun CLI implements a **Clean Architecture/Hexagonal Architecture** pattern with clear separation of concerns across three main layers:
 
 1. **Presentation/Adapter Layer** (`cmd`, `internal/ui`): Handles user interaction through CLI commands and interactive TUI wizard
-2. **Core/Domain Layer** (`internal/core`): Contains business logic for context generation, file scanning, template management, and token estimation
-3. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (Gemini AI API, clipboard)
-
-The architecture emphasizes dependency inversion, with core business logic remaining independent of external frameworks and services.
+2. **Core/Domain Layer** (`internal/core`): Contains pure business logic for context generation, file scanning, template management, and token estimation
+3. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (Gemini AI API, clipboard operations)
 
 ### Technology Stack and Frameworks
 
-- **Language**: Go 1.21+
-- **CLI Framework**: Cobra (github.com/spf13/cobra) for command structure and argument parsing
-- **Configuration**: Viper (github.com/spf13/viper) for configuration management
-- **TUI Framework**: Bubble Tea (github.com/charmbracelet/bubbletea) with Bubbles components
-- **Logging**: Zerolog (github.com/rs/zerolog) for structured logging
-- **Template Engine**: Go's built-in text/template with custom variable syntax
-- **Ignore Processing**: go-gitignore (github.com/sabhiram/go-gitignore) for pattern matching
+- **Language**: Go
+- **CLI Framework**: Cobra (`github.com/spf13/cobra`)
+- **Configuration**: Viper (`github.com/spf13/viper`)
+- **TUI Framework**: Bubble Tea (`github.com/charmbracelet/bubbletea`)
+- **Logging**: Zerolog (`github.com/rs/zerolog`)
+- **Template Engine**: Go standard library templates
+- **Ignore Processing**: go-gitignore (`github.com/sabhiram/go-gitignore`)
 
 ### Component Relationships
 
 ```mermaid
-graph TB
-    subgraph "Presentation Layer"
-        CMD[cmd Package]
-        TUI[internal/ui]
-    end
+graph TD
+    A[main.go] → B[cmd]
+    B → C[internal/core/context]
+    B → D[internal/core/scanner]
+    B → E[internal/core/template]
+    B → F[internal/core/ignore]
+    B → G[internal/core/tokens]
+    B → H[internal/platform/gemini]
+    B → I[internal/platform/clipboard]
+    B → J[internal/ui/wizard]
+    B → K[internal/utils]
     
-    subgraph "Core Business Logic"
-        Context[internal/core/context]
-        Scanner[internal/core/scanner]
-        Template[internal/core/template]
-        Ignore[internal/core/ignore]
-        Tokens[internal/core/tokens]
-    end
+    C → D
+    C → E
+    C → F
+    C → G
     
-    subgraph "Infrastructure Layer"
-        Gemini[internal/platform/gemini]
-        Clipboard[internal/platform/clipboard]
-    end
+    D → F
     
-    subgraph "External Services"
-        GeminiAPI[Google Gemini API]
-        FileSystem[File System]
-        ConfigFiles[Configuration Files]
-    end
+    J → C
+    J → D
+    J → E
+    J → H
+    J → I
+    J → L[internal/ui/screens]
+    J → M[internal/ui/components]
     
-    CMD -. orchestrates .|color:blue| Context
-    CMD -. orchestrates .|color:blue| Scanner
-    CMD -. orchestrates .|color:blue| Gemini
-    CMD -. orchestrates .|color:blue| TUI
+    L → M
+    L → N[internal/ui/styles]
     
-    TUI -. uses .|color:green| Context
-    TUI -. uses .|color:green| Scanner
-    TUI -. uses .|color:green| Template
+    M → N
     
-    Context -. aggregates from .|color:orange| Scanner
-    Context -. uses .|color:orange| Template
-    Context -. consults .|color:orange| Tokens
-    
-    Scanner -. uses .|color:red| Ignore
-    Scanner -. reads from .|color:red| FileSystem
-    
-    Gemini -. communicates with .|color:purple| GeminiAPI
-    Clipboard -. accesses .|color:purple| System Clipboard
-    
-    CMD -. loads .|color:brown| ConfigFiles
+    style A fill:#e1f5fe
+    style B fill:#f3e5f5
+    style C fill:#e8f5e8
+    style D fill:#e8f5e8
+    style E fill:#e8f5e8
+    style F fill:#e8f5e8
+    style G fill:#e8f5e8
+    style H fill:#fff3e0
+    style I fill:#fff3e0
+    style J fill:#fce4ec
+    style K fill:#f5f5f5
 ```
 
 ### Key Design Patterns
 
-1. **Command Pattern**: Implemented in `cmd` package structure with each command file handling specific operations
-2. **Builder/Generator Pattern**: Used in `internal/core/context` for complex context object assembly
-3. **Strategy Pattern**: Abstracted AI provider interfaces for potential multi-provider support
-4. **MVU Pattern** (Model-View-Update): TUI state management through Bubble Tea framework
-5. **Template Method Pattern**: Standardized template rendering process with variable substitution
-6. **Layered Architecture**: Clear separation between presentation, business logic, and infrastructure
+- **Command Pattern**: CLI command structure in `cmd` package
+- **Builder/Generator Pattern**: Context generation in `internal/core/context`
+- **Strategy Pattern**: AI provider abstraction for multi-provider support
+- **MVU Pattern**: TUI state management with Bubble Tea
+- **Template Method Pattern**: Standardized template rendering process
+- **Layered Architecture**: Clear separation between presentation, business logic, and infrastructure
+- **Factory Pattern**: Template manager and scanner creation
 
 ## C4 Model Architecture
 

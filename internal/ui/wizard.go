@@ -136,6 +136,8 @@ type scanState struct {
 	progressCh chan scanner.Progress
 	done       chan bool
 	started    bool
+	result     *scanner.FileNode // Store scan result to avoid double-scanning
+	scanErr    error             // Store any error from scan
 }
 
 type generateState struct {
@@ -881,21 +883,21 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 			m.scanState.started = true
 			go func() {
 				defer close(m.scanState.done)
-				_, err := m.scanState.scanner.ScanWithProgress(
+				// Store the scan result instead of discarding it
+				tree, err := m.scanState.scanner.ScanWithProgress(
 					m.scanState.rootPath,
 					m.scanState.config,
 					m.scanState.progressCh,
 				)
-				if err != nil {
-					return
-				}
+				m.scanState.result = tree
+				m.scanState.scanErr = err
 
-				// Signal completion and send final result
+				// Signal completion
 				select {
 				case <-m.scanState.done:
 					return
 				default:
-					// Use a separate channel or mechanism to send completion
+					// Send completion signal via progress channel
 					go func() {
 						time.Sleep(10 * time.Millisecond) // Small delay to allow progress messages
 						m.scanState.progressCh <- scanner.Progress{
@@ -914,11 +916,11 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 			if !ok || (progress.Current == -1 && progress.Total == -1) {
 				// Channel closed or completion signal
 				<-m.scanState.done
-				if tree, err := m.scanState.scanner.ScanWithProgress(m.scanState.rootPath, m.scanState.config, nil); err != nil {
-					return ScanErrorMsg{Err: err}
-				} else {
-					return ScanCompleteMsg{Tree: tree}
+				// Use the stored result instead of rescanning
+				if m.scanState.scanErr != nil {
+					return ScanErrorMsg{Err: m.scanState.scanErr}
 				}
+				return ScanCompleteMsg{Tree: m.scanState.result}
 			}
 			// Send progress and re-enqueue
 			return ScanProgressMsg{
@@ -927,12 +929,11 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 				Stage:   progress.Stage,
 			}
 		case <-m.scanState.done:
-			// Completed
-			if tree, err := m.scanState.scanner.ScanWithProgress(m.scanState.rootPath, m.scanState.config, nil); err != nil {
-				return ScanErrorMsg{Err: err}
-			} else {
-				return ScanCompleteMsg{Tree: tree}
+			// Completed - use stored result
+			if m.scanState.scanErr != nil {
+				return ScanErrorMsg{Err: m.scanState.scanErr}
 			}
+			return ScanCompleteMsg{Tree: m.scanState.result}
 		default:
 			// No progress yet, yield to event loop and re-check
 			time.Sleep(10 * time.Millisecond)

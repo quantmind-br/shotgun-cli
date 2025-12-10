@@ -200,9 +200,7 @@ flowchart TD
     K --> L
     L --> M[Template Manager]
     M --> N[Template Renderer]
-    N --> O[Final Context String]
+    N --> O[Final Context]
     O --> P[Gemini Executor]
-    P --> Q[External LLM]
-    Q --> R[Response Processing]
-    R --> S[Clean Output]
+    P --> Q[LLM Response]
 ```

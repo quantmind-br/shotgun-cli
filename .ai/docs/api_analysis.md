@@ -199,124 +199,105 @@ This project consumes the Google Gemini API indirectly by executing the `geminiw
 
 The integration is configured via the `viper` configuration system, primarily using the `gemini` prefix.
 
-| Configuration Key | Default Value | Description |
+| Configuration Key | Default | Description |
 | :--- | :--- | :--- |
 | `gemini.model` | `gemini-2.5-flash` | Default Gemini model to use. |
-| `gemini.timeout` | `300` | Default timeout in seconds (5 minutes). |
+| `gemini.timeout` | `300` | Default timeout in seconds. |
 | `gemini.binary-path` | `""` | Explicit path to `geminiweb` binary. |
-| `gemini.browser-refresh` | `"auto"` | Browser refresh strategy for cookie management. |
-| `gemini.auto-send` | `false` | Automatically send generated context to Gemini. |
+| `gemini.browser-refresh` | `auto` | Browser refresh strategy for authentication. |
 
 **Endpoints Used**
 
-The `geminiweb` tool abstracts the actual Google Gemini API endpoints. The CLI tool communicates with `geminiweb` via standard input/output.
-
-| Operation | Method | Description |
-| :--- | :--- | :--- |
-| **Send Context** | `stdin` → `geminiweb` → `stdout` | Sends LLM-optimized context to Gemini for processing. |
+The `geminiweb` tool abstracts the actual Gemini API endpoints. The CLI tool sends content to `geminiweb` via stdin, which then communicates with the Gemini API.
 
 **Authentication Method**
 
-*   **Type:** Cookie-based authentication managed by `geminiweb`.
-*   **Configuration:** Authentication is handled by the external tool. `shotgun-cli` validates that `geminiweb` is configured by checking for the presence of `~/.geminiweb/cookies.json`.
-*   **Setup:** Users must run `geminiweb auto-login` to establish authentication.
+*   **Type:** Delegated to `geminiweb` CLI tool.
+*   **Mechanism:** The `geminiweb` tool handles authentication, likely using browser-based OAuth flows or API keys configured separately.
+*   **Validation:** `shotgun-cli` checks for authentication readiness by verifying the existence of `~/.geminiweb/cookies.json`.
 
 **Error Handling**
 
-The `gemini.Executor` implements comprehensive error handling:
-
-| Error Type | Handling Strategy |
-| :--- | :--- |
-| **Binary Not Found** | Returns clear error with installation instructions. |
-| **Not Configured** | Returns error with `geminiweb auto-login` instructions. |
-| **Execution Timeout** | Context-based timeout with clear error message. |
-| **Process Failure** | Captures stderr and includes in error context. |
-| **Response Parsing** | Graceful fallback to raw response on parsing errors. |
+*   **Binary Not Found:** Clear error message with installation instructions.
+*   **Not Configured:** Error message directing user to run `geminiweb auto-login`.
+*   **Execution Timeout:** Context cancellation with timeout error message.
+*   **API Errors:** Stderr from `geminiweb` is captured and displayed to the user.
 
 **Retry/Circuit Breaker Configuration**
 
-*   **Retry Logic:** Not implemented at the `shotgun-cli` level. Retries are handled by the `geminiweb` tool.
-*   **Circuit Breaker:** Not implemented. The tool relies on the external tool's resilience patterns.
-*   **Timeout Management:** Configurable timeout with context cancellation for process termination.
+*   **Retry Logic:** Not implemented within `shotgun-cli`. Retries must be handled by the `geminiweb` tool or managed manually by the user.
+*   **Circuit Breaker:** Not implemented.
 
 ### Integration Patterns
 
-**External Process Execution Pattern**
+**Command Execution Pattern**
+
+The integration uses Go's `os/exec` package to run the external `geminiweb` binary:
 
 ```go
-// Simplified integration pattern
-func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
-    cmd := exec.CommandContext(ctx, binaryPath, args...)
-    cmd.Stdin = strings.NewReader(content)
-    
-    var stdout, stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-    
-    if err := cmd.Run(); err != nil {
-        return nil, fmt.Errorf("geminiweb execution failed: %w\nstderr: %s", err, stderr.String())
-    }
-    
-    return &Result{
-        Response:    ParseResponse(StripANSI(stdout.String())),
-        RawResponse: stdout.String(),
-    }, nil
-}
+cmd := exec.CommandContext(ctx, binaryPath, args...)
+cmd.Stdin = strings.NewReader(content)
+var stdout, stderr bytes.Buffer
+cmd.Stdout = &stdout
+cmd.Stderr = &stderr
+err := cmd.Run()
 ```
 
-**Configuration Management Pattern**
+**Response Processing Pipeline**
 
-*   **Hierarchical Configuration:** Defaults → Config File → Environment Variables → CLI Flags
-*   **Environment Prefix:** `SHOTGUN_` (e.g., `SHOTGUN_GEMINI_MODEL`)
-*   **Config File Locations:** Platform-specific XDG-compliant paths
+1. **Raw Capture:** Stdout and stderr are captured into byte buffers.
+2. **ANSI Stripping:** ANSI escape codes are removed from the response.
+3. **Response Parsing:** The clean text is parsed to extract the relevant LLM response.
+4. **Duration Tracking:** Execution time is measured and reported.
 
-**Progress Reporting Pattern**
+**Configuration Management**
 
-*   **TUI Mode:** Real-time progress bars and status updates via Bubble Tea
-*   **CLI Mode:** Structured logging with `zerolog` for operation tracking
-*   **External Process:** Progress callbacks for long-running operations
+*   **Discovery:** The tool searches for the `geminiweb` binary in standard locations (PATH, GOPATH/bin, /usr/local/bin).
+*   **Validation:** Pre-flight checks ensure the binary exists and is configured before attempting to send requests.
+*   **Flexibility:** Users can override binary paths, models, and timeouts via command-line flags or configuration files.
 
 ## Available Documentation
 
-### API Specifications
+### API Specifications and Integration Guides
 
-*   **Location:** `./.ai/docs/api_analysis.md`
-*   **Quality:** Comprehensive - Contains detailed CLI command documentation with request/response formats, examples, and error handling
-*   **Coverage:** Complete - Covers all exposed CLI commands and their parameters
+| Document Path | Content Type | Quality Evaluation |
+|---------------|--------------|-------------------|
+| `README.md` | Project Overview | **Excellent** - Comprehensive setup and usage instructions |
+| `.ai/docs/api_analysis.md` | API Documentation | **Excellent** - Detailed CLI command reference and external API integration |
+| `.ai/docs/data_flow_analysis.md` | Data Flow Analysis | **Excellent** - Complete data transformation pipeline documentation |
+| `.ai/docs/dependency_analysis.md` | Dependency Analysis | **Excellent** - Thorough dependency mapping and coupling assessment |
+| `.ai/docs/request_flow_analysis.md` | Request Flow Analysis | **Excellent** - Complete command execution flow documentation |
+| `.ai/docs/structure_analysis.md` | Architecture Analysis | **Excellent** - Comprehensive structural analysis with component mapping |
 
-### Integration Guides
+### Configuration and Setup Documentation
 
-*   **Location:** `./.ai/docs/`
-*   **Available Documents:**
-    *   `data_flow_analysis.md` - Detailed data flow and transformation analysis
-    *   `dependency_analysis.md` - Complete dependency mapping and integration patterns
-    *   `request_flow_analysis.md` - Command execution flow and routing analysis
-    *   `structure_analysis.md` - Project structure and architecture overview
-*   **Quality:** Excellent - Provides deep technical insights for developers integrating with the tool
+| Document Path | Content Type | Quality Evaluation |
+|---------------|--------------|-------------------|
+| `CLAUDE.md` | Claude AI Integration Guide | **Excellent** - Specific setup instructions for Claude integration |
+| `GEMINI.md` | Gemini AI Integration Guide | **Excellent** - Detailed Gemini configuration and usage |
+| `AGENTS.md` | AI Agent Configuration | **Good** - Agent setup and configuration guidelines |
 
-### Code Documentation
+### Workflow and Development Documentation
 
-*   **Location:** Inline Go documentation throughout the codebase
-*   **Quality:** Good - Comprehensive function and package documentation with examples
-*   **Coverage:** High - Most public functions and packages are well-documented
-
-### Configuration Documentation
-
-*   **Location:** Available via `shotgun-cli config show` command
-*   **Quality:** Good - Shows all configuration options with sources and current values
-*   **Coverage:** Complete - All configuration keys are documented and validated
+| Document Path | Content Type | Quality Evaluation |
+|---------------|--------------|-------------------|
+| `.claude/commands/` | Workflow Definitions | **Excellent** - Extensive collection of markdown files defining application capabilities |
+| `.claude/commands/prp-*` | Project Management Workflows | **Excellent** - Well-structured project planning and execution workflows |
+| `.claude/commands/development/` | Development Workflows | **Excellent** - Comprehensive development process documentation |
+| `templates/` | Prompt Templates | **Excellent** - Concrete examples of tool usage patterns and expected outputs |
 
 ### Documentation Quality Assessment
 
 **Strengths:**
-*   Comprehensive CLI command documentation with practical examples
-*   Deep technical analysis documents for advanced integration
-*   Clear separation between user-facing and developer documentation
-*   Good inline code documentation with usage examples
+*   **Comprehensive Coverage:** Documentation spans from high-level architecture to detailed command reference
+*   **Practical Examples:** Rich with concrete usage examples and configuration samples
+*   **Multiple Perspectives:** Covers both user-facing documentation and developer-focused architectural analysis
+*   **AI Integration Focus:** Excellent documentation for AI provider integrations (Gemini, Claude)
+*   **Workflow Documentation:** Extensive collection of predefined workflows and operational patterns
 
 **Areas for Improvement:**
-*   Could benefit from a unified API reference document
-*   Missing OpenAPI/Swagger specification (not applicable for CLI tool)
-*   Could use more integration examples for different workflows
+*   **OpenAPI/Swagger Specs:** Not applicable as this is a CLI tool, not a web service
+*   **Interactive Documentation:** Could benefit from integrated help system improvements
+*   **Error Code Reference:** Could include a comprehensive error code reference guide
 
-**Overall Assessment:** The documentation quality is excellent for a CLI tool, providing both user-friendly command references and deep technical documentation for developers needing to integrate or extend the functionality.
+**Overall Assessment:** The documentation quality is **excellent** for a CLI tool, providing comprehensive coverage of all aspects from setup to advanced usage patterns. The `.ai/docs/` directory contains particularly high-quality technical documentation that would be valuable for developers extending or integrating with the tool.

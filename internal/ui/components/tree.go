@@ -23,6 +23,10 @@ type FileTreeModel struct {
 	height          int
 	visibleItems    []treeItem
 	topIndex        int
+
+	// Filter cache for performance optimization
+	lastFilter       string // Last filter string that was computed
+	filterCacheValid bool   // Whether the filter cache is still valid
 }
 
 type treeItem struct {
@@ -40,12 +44,13 @@ func NewFileTree(tree *scanner.FileNode, selections map[string]bool) *FileTreeMo
 	}
 
 	model := &FileTreeModel{
-		tree:            tree,
-		selections:      make(map[string]bool),
-		selectionStates: make(map[string]styles.SelectionState),
-		expanded:        expanded,
-		showIgnored:     false,
-		filter:          "",
+		tree:             tree,
+		selections:       make(map[string]bool),
+		selectionStates:  make(map[string]styles.SelectionState),
+		expanded:         expanded,
+		showIgnored:      false,
+		filter:           "",
+		filterCacheValid: false,
 	}
 
 	// Copy selections
@@ -114,6 +119,7 @@ func (m *FileTreeModel) ToggleSelection() {
 
 func (m *FileTreeModel) ToggleShowIgnored() {
 	m.showIgnored = !m.showIgnored
+	m.filterCacheValid = false // Invalidate cache since visibility rules changed
 	m.rebuildVisibleItems()
 }
 
@@ -130,15 +136,24 @@ func (m *FileTreeModel) GetFilter() string {
 func (m *FileTreeModel) ClearFilter() {
 	m.filter = ""
 	m.filterMatches = nil
+	m.filterCacheValid = false
 	m.rebuildVisibleItems()
 }
 
 // computeFilterMatches pre-computes which nodes match the filter using fuzzy matching
-// It also marks ancestor directories of matching nodes so they remain visible
+// It also marks ancestor directories of matching nodes so they remain visible.
+// Uses caching to avoid recomputation when filter hasn't changed.
 func (m *FileTreeModel) computeFilterMatches() {
+	// Quick return if filter unchanged and cache is valid
+	if m.filter == m.lastFilter && m.filterCacheValid {
+		return
+	}
+
 	m.filterMatches = make(map[string]bool)
 
 	if m.filter == "" || m.tree == nil {
+		m.lastFilter = m.filter
+		m.filterCacheValid = true
 		return
 	}
 
@@ -159,6 +174,9 @@ func (m *FileTreeModel) computeFilterMatches() {
 	}
 
 	findMatches(m.tree)
+
+	m.lastFilter = m.filter
+	m.filterCacheValid = true
 }
 
 // markAncestorsVisible marks all ancestor directories of a node as visible
