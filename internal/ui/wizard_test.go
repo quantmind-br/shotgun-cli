@@ -664,3 +664,22 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 		t.Error("geminiSending should be false after completion")
 	}
 }
+
+func TestWizardHandleGeminiError(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.step = StepReview
+	wizard.review = screens.NewReview(map[string]bool{}, wizard.fileTree, nil, "", "")
+	wizard.geminiSending = true
+
+	testErr := fmt.Errorf("geminiweb: connection timeout")
+	model, _ := wizard.Update(GeminiErrorMsg{Err: testErr})
+	wizard = model.(*WizardModel)
+
+	if wizard.geminiSending {
+		t.Error("geminiSending should be false after error")
+	}
+	// Error is handled by review screen, check that no panic occurred
+}
