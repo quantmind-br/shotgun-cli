@@ -400,8 +400,13 @@ func TestFileSystemScanner(t *testing.T) {
 
 		// Check first and last progress
 		first := progressUpdates[0]
-		if first.Stage != "counting" {
-			t.Errorf("Expected first stage to be 'counting', got %q", first.Stage)
+		if first.Stage != "scanning" {
+			t.Errorf("Expected first stage to be 'scanning', got %q", first.Stage)
+		}
+
+		// First progress should be in streaming mode (total unknown)
+		if first.Total != -1 {
+			t.Errorf("Expected first progress to be in streaming mode (Total=-1), got %d", first.Total)
 		}
 
 		last := progressUpdates[len(progressUpdates)-1]
@@ -985,6 +990,249 @@ test/**
 				if !node.IsCustomIgnored {
 					t.Errorf("Test file should be marked as custom ignored: %s", node.RelPath)
 				}
+			}
+		}
+	})
+}
+
+//nolint:gocyclo // comprehensive table-driven test with multiple pattern scenarios
+func TestIncludePatterns(t *testing.T) {
+	t.Parallel()
+
+	// Create a temporary directory structure for testing
+	tempDir, err := os.MkdirTemp("", "include_patterns_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create diverse test files
+	testFiles := []string{
+		"main.go",
+		"utils.go",
+		"README.md",
+		"config.yaml",
+		"data.json",
+		"script.sh",
+		"src/app.go",
+		"src/handler.js",
+		"docs/guide.md",
+		"tests/test.py",
+	}
+
+	for _, file := range testFiles {
+		fullPath := filepath.Join(tempDir, file)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		if err != nil {
+			t.Fatalf("Failed to create directory for %s: %v", file, err)
+		}
+		content := "test content for " + file
+		err = os.WriteFile(fullPath, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	tests := []struct {
+		name            string
+		patterns        []string
+		expectedFiles   []string
+		unexpectedFiles []string
+		description     string
+	}{
+		{
+			name:     "empty patterns matches all",
+			patterns: []string{},
+			expectedFiles: []string{
+				"main.go", "utils.go", "README.md", "config.yaml",
+				"data.json", "script.sh", "src/app.go", "src/handler.js",
+				"docs/guide.md", "tests/test.py",
+			},
+			unexpectedFiles: []string{},
+			description:     "When no patterns are specified, all files should be included",
+		},
+		{
+			name:            "single extension match",
+			patterns:        []string{"*.go"},
+			expectedFiles:   []string{"main.go", "utils.go", "src/app.go"},
+			unexpectedFiles: []string{"README.md", "config.yaml", "data.json", "src/handler.js"},
+			description:     "Only .go files should be included",
+		},
+		{
+			name:            "single extension no match",
+			patterns:        []string{"*.txt"},
+			expectedFiles:   []string{}, // No .txt files exist
+			unexpectedFiles: []string{"main.go", "README.md", "config.yaml"},
+			description:     "When pattern matches no files, no files should be included",
+		},
+		{
+			name:            "multiple patterns",
+			patterns:        []string{"*.go", "*.md"},
+			expectedFiles:   []string{"main.go", "utils.go", "src/app.go", "README.md", "docs/guide.md"},
+			unexpectedFiles: []string{"config.yaml", "data.json", "script.sh"},
+			description:     "Files matching any pattern should be included",
+		},
+		{
+			name:            "wildcard all",
+			patterns:        []string{"*"},
+			expectedFiles:   []string{"main.go", "README.md", "config.yaml", "data.json", "script.sh"},
+			unexpectedFiles: []string{},
+			description:     "Wildcard should match all files",
+		},
+		{
+			name:            "specific filename",
+			patterns:        []string{"README.md"},
+			expectedFiles:   []string{"README.md"},
+			unexpectedFiles: []string{"main.go", "config.yaml", "docs/guide.md"},
+			description:     "Exact filename pattern should match only that file",
+		},
+		{
+			name:            "multiple extensions",
+			patterns:        []string{"*.json", "*.yaml", "*.sh"},
+			expectedFiles:   []string{"config.yaml", "data.json", "script.sh"},
+			unexpectedFiles: []string{"main.go", "README.md"},
+			description:     "Multiple extension patterns should match all specified types",
+		},
+		{
+			name:            "path pattern",
+			patterns:        []string{"src/*"},
+			expectedFiles:   []string{"src/app.go", "src/handler.js"},
+			unexpectedFiles: []string{"main.go", "docs/guide.md"},
+			description:     "Path pattern should match files in specific directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scanner := NewFileSystemScanner()
+			config := DefaultScanConfig()
+			config.IncludePatterns = tt.patterns
+
+			root, err := scanner.Scan(tempDir, config)
+			if err != nil {
+				t.Fatalf("Scan failed: %v", err)
+			}
+
+			// Collect all scanned file paths
+			var collectFiles func(*FileNode) []string
+			collectFiles = func(node *FileNode) []string {
+				var files []string
+				if !node.IsDir {
+					files = append(files, node.RelPath)
+				}
+				for _, child := range node.Children {
+					files = append(files, collectFiles(child)...)
+				}
+				return files
+			}
+
+			scannedFiles := collectFiles(root)
+
+			// Check expected files are present
+			for _, expectedFile := range tt.expectedFiles {
+				found := false
+				for _, scanned := range scannedFiles {
+					if scanned == expectedFile {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected file %q not found in results. Scanned files: %v", expectedFile, scannedFiles)
+				}
+			}
+
+			// Check unexpected files are absent
+			for _, unexpectedFile := range tt.unexpectedFiles {
+				for _, scanned := range scannedFiles {
+					if scanned == unexpectedFile {
+						t.Errorf("Unexpected file %q found in results. Should have been excluded by pattern %v", unexpectedFile, tt.patterns)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestIncludePatternsWithIgnoreRules(t *testing.T) {
+	t.Parallel()
+
+	tempDir, err := os.MkdirTemp("", "include_with_ignore_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test files
+	testFiles := []string{
+		"main.go",
+		"main_test.go",
+		"utils.go",
+		"utils_test.go",
+		"README.md",
+	}
+
+	for _, file := range testFiles {
+		fullPath := filepath.Join(tempDir, file)
+		content := "test content for " + file
+		err = os.WriteFile(fullPath, []byte(content), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	t.Run("include patterns work with ignore patterns", func(t *testing.T) {
+		scanner := NewFileSystemScanner()
+		config := DefaultScanConfig()
+		config.IncludePatterns = []string{"*.go"} // Only include .go files
+		config.IgnorePatterns = []string{"*_test.go"} // Ignore test files
+
+		root, err := scanner.Scan(tempDir, config)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		var collectFiles func(*FileNode) []string
+		collectFiles = func(node *FileNode) []string {
+			var files []string
+			if !node.IsDir {
+				files = append(files, node.RelPath)
+			}
+			for _, child := range node.Children {
+				files = append(files, collectFiles(child)...)
+			}
+			return files
+		}
+
+		scannedFiles := collectFiles(root)
+
+		// Should only include main.go and utils.go
+		expectedFiles := []string{"main.go", "utils.go"}
+		if len(scannedFiles) != len(expectedFiles) {
+			t.Errorf("Expected %d files, got %d: %v", len(expectedFiles), len(scannedFiles), scannedFiles)
+		}
+
+		// Verify expected files are present
+		for _, expected := range expectedFiles {
+			found := false
+			for _, scanned := range scannedFiles {
+				if scanned == expected {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Expected file %q not found", expected)
+			}
+		}
+
+		// Verify test files and README are excluded
+		for _, scanned := range scannedFiles {
+			if strings.HasSuffix(scanned, "_test.go") {
+				t.Errorf("Test file should be excluded: %s", scanned)
+			}
+			if scanned == "README.md" {
+				t.Errorf("README.md should be excluded by include pattern")
 			}
 		}
 	})
