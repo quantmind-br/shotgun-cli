@@ -559,3 +559,29 @@ func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
 		t.Fatal("expected canAdvanceStep to return true when template requires TASK and task is provided")
 	}
 }
+
+func TestWizardHandleWindowResize(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+
+	// Initial dimensions
+	initialWidth := wizard.width
+	initialHeight := wizard.height
+
+	// Send window resize message
+	model, _ := wizard.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	wizard = model.(*WizardModel)
+
+	if wizard.width != 120 {
+		t.Errorf("expected width 120, got %d", wizard.width)
+	}
+	if wizard.height != 40 {
+		t.Errorf("expected height 40, got %d", wizard.height)
+	}
+	if wizard.width == initialWidth && wizard.height == initialHeight {
+		t.Error("dimensions should have changed after resize")
+	}
+}
