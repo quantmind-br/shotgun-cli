@@ -683,3 +683,27 @@ func TestWizardHandleGeminiError(t *testing.T) {
 	}
 	// Error is handled by review screen, check that no panic occurred
 }
+
+func TestWizardHandleTemplateMessage(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{})
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.selectedFiles["main.go"] = true
+	wizard.step = StepTemplateSelection
+
+	selectedTemplate := &template.Template{
+		Name:    "code-review",
+		Content: "Review: {TASK}\nFiles: {FILE_STRUCTURE}",
+	}
+
+	model, _ := wizard.Update(TemplateSelectedMsg{Template: selectedTemplate})
+	wizard = model.(*WizardModel)
+
+	if wizard.template == nil {
+		t.Fatal("expected template to be set")
+	}
+	if wizard.template.Name != "code-review" {
+		t.Errorf("expected template name 'code-review', got %q", wizard.template.Name)
+	}
+}
