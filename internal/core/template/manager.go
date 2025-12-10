@@ -30,8 +30,6 @@ type Manager struct {
 	renderer  *Renderer
 }
 
-var templatesFS fs.FS
-
 // NewManager creates a new template manager instance
 func NewManager() (*Manager, error) {
 	manager := &Manager{
@@ -44,8 +42,7 @@ func NewManager() (*Manager, error) {
 	sources := []TemplateSource{}
 
 	// 1. Embedded templates (lowest priority)
-	var err error
-	templatesFS, err = fs.Sub(assets.Templates, "templates")
+	templatesFS, err := fs.Sub(assets.Templates, "templates")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create templates filesystem: %w", err)
 	}
