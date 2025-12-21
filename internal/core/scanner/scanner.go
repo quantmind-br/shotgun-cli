@@ -100,17 +100,25 @@ type ScanConfig struct {
 	// IncludeIgnored indicates whether to include ignored files in the tree
 	// When true, ignored files are included but marked with IsGitignored/IsCustomIgnored flags
 	IncludeIgnored bool `json:"include_ignored"`
+
+	// RespectGitignore indicates whether to load and respect .gitignore rules
+	RespectGitignore bool `json:"respect_gitignore"`
+
+	// RespectShotgunignore indicates whether to load and respect .shotgunignore rules
+	RespectShotgunignore bool `json:"respect_shotgunignore"`
 }
 
 // DefaultScanConfig returns a default scanning configuration
 func DefaultScanConfig() *ScanConfig {
 	return &ScanConfig{
-		MaxFileSize:   0, // No limit
-		MaxFiles:      0, // No limit
-		MaxMemory:     0, // No limit
-		SkipBinary:    false,
-		IncludeHidden: false,
-		Workers:       1, // Single-threaded by default for simplicity
+		MaxFileSize:          0, // No limit
+		MaxFiles:             0, // No limit
+		MaxMemory:            0, // No limit
+		SkipBinary:           false,
+		IncludeHidden:        false,
+		Workers:              1, // Single-threaded by default for simplicity
+		RespectGitignore:     true,
+		RespectShotgunignore: true,
 	}
 }
 

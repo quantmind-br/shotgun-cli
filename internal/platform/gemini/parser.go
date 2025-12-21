@@ -15,7 +15,7 @@ func ParseResponse(raw string) string {
 	}
 
 	lines := strings.Split(raw, "\n")
-	var result []string
+	result := make([]string, 0, len(lines))
 	skipNext := false
 
 	for i, line := range lines {

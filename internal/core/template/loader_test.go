@@ -67,7 +67,7 @@ Another test template.
 
 	for filename, content := range testTemplates {
 		path := filepath.Join(tmpDir, filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("Failed to create test file %s: %v", filename, err)
 		}
 	}
@@ -138,14 +138,14 @@ func TestFilesystemSource_MalformedTemplate(t *testing.T) {
 
 	// Create a malformed template (empty content)
 	malformedPath := filepath.Join(tmpDir, "malformed.md")
-	if err := os.WriteFile(malformedPath, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(malformedPath, []byte(""), 0o600); err != nil {
 		t.Fatalf("Failed to create malformed template: %v", err)
 	}
 
 	// Create a valid template
 	validPath := filepath.Join(tmpDir, "valid.md")
 	validContent := "# Valid Template\n{TASK}\n"
-	if err := os.WriteFile(validPath, []byte(validContent), 0644); err != nil {
+	if err := os.WriteFile(validPath, []byte(validContent), 0o600); err != nil {
 		t.Fatalf("Failed to create valid template: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestLoadTemplatesFromFS_NameExtraction(t *testing.T) {
 	for _, tc := range testCases {
 		content := "# Test\n{TASK}\n"
 		path := filepath.Join(tmpDir, tc.filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
 	}

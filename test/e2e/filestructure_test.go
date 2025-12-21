@@ -28,7 +28,7 @@ This is a test.`,
 
 	for filename, content := range testFiles {
 		path := filepath.Join(tmpDir, filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("Failed to create test file %s: %v", filename, err)
 		}
 	}
@@ -38,7 +38,7 @@ This is a test.`,
 
 	// Generate context
 	outputFile := filepath.Join(tmpDir, "output.md")
-	cmd := exec.Command(binaryPath,
+	cmd := exec.Command(binaryPath, //nolint:gosec // test command with controlled args
 		"context", "generate",
 		"--root", tmpDir,
 		"--include", "*.go,*.md,*.yaml",
@@ -51,7 +51,7 @@ This is a test.`,
 	}
 
 	// Read generated output
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test reading controlled file
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestFileStructureOnlyIncludesSelectedFiles(t *testing.T) {
 
 	for filename, content := range testFiles {
 		path := filepath.Join(tmpDir, filename)
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("Failed to create test file %s: %v", filename, err)
 		}
 	}
@@ -124,7 +124,7 @@ func TestFileStructureOnlyIncludesSelectedFiles(t *testing.T) {
 
 	// Generate context with only .go files
 	outputFile := filepath.Join(tmpDir, "output.md")
-	cmd := exec.Command(binaryPath,
+	cmd := exec.Command(binaryPath, //nolint:gosec // test command with controlled args
 		"context", "generate",
 		"--root", tmpDir,
 		"--include", "*.go",
@@ -137,7 +137,7 @@ func TestFileStructureOnlyIncludesSelectedFiles(t *testing.T) {
 	}
 
 	// Read generated output
-	content, err := os.ReadFile(outputFile)
+	content, err := os.ReadFile(outputFile) //nolint:gosec // test reading controlled file
 	if err != nil {
 		t.Fatalf("Failed to read output file: %v", err)
 	}

@@ -67,12 +67,15 @@ func launchTUIWizard() {
 
 	// Create scanner configuration from Viper settings
 	config := &scanner.ScanConfig{
-		MaxFiles:       viper.GetInt64("scanner.max-files"),
-		MaxFileSize:    utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
-		SkipBinary:     viper.GetBool("scanner.skip-binary"),
-		IncludeHidden:  false,
-		IncludeIgnored: true, // Include ignored files in tree for toggle functionality
-		Workers:        1,
+		MaxFiles:             viper.GetInt64("scanner.max-files"),
+		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
+		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString("scanner.max-memory"), 500*1024*1024),
+		SkipBinary:           viper.GetBool("scanner.skip-binary"),
+		IncludeHidden:        viper.GetBool("scanner.include-hidden"),
+		IncludeIgnored:       true, // Include ignored files in tree for toggle functionality
+		Workers:              viper.GetInt("scanner.workers"),
+		RespectGitignore:     viper.GetBool("scanner.respect-gitignore"),
+		RespectShotgunignore: viper.GetBool("scanner.respect-shotgunignore"),
 	}
 
 	// Create wizard model
@@ -200,6 +203,11 @@ func setConfigDefaults() {
 	viper.SetDefault("scanner.max-file-size", "1MB")
 	viper.SetDefault("scanner.respect-gitignore", true)
 	viper.SetDefault("scanner.skip-binary", true)
+	viper.SetDefault("scanner.workers", 1)
+	viper.SetDefault("scanner.include-hidden", false)
+	viper.SetDefault("scanner.include-ignored", false)
+	viper.SetDefault("scanner.respect-shotgunignore", true)
+	viper.SetDefault("scanner.max-memory", "500MB")
 
 	// Context generation defaults
 	viper.SetDefault("context.max-size", "10MB")

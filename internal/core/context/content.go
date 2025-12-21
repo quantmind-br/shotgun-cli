@@ -25,7 +25,9 @@ type FileContent struct {
 	Size     int64  `json:"size"`
 }
 
-func collectFileContents(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) ([]FileContent, error) {
+func collectFileContents(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+) ([]FileContent, error) {
 	var files []FileContent
 	var totalSize int64
 	fileCount := 0
@@ -51,7 +53,7 @@ func collectFileContents(root *scanner.FileNode, selections map[string]bool, con
 
 		// First peek at the file header to check if it's binary before reading full content
 		if config.SkipBinary {
-			header, err := peekFileHeader(node.Path, 1024)
+			header, err := peekFileHeader(node.Path)
 			if err != nil {
 				return fmt.Errorf("failed to peek file header %s: %w", node.Path, err)
 			}
@@ -115,14 +117,15 @@ func walkSelectedNodes(node *scanner.FileNode, fn func(*scanner.FileNode) error)
 	return nil
 }
 
-func peekFileHeader(path string, n int) ([]byte, error) {
-	file, err := os.Open(path)
+func peekFileHeader(path string) ([]byte, error) {
+	file, err := os.Open(path) //nolint:gosec // path is validated by caller
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
-	header := make([]byte, n)
+	const headerSize = 1024
+	header := make([]byte, headerSize)
 	bytesRead, err := file.Read(header)
 	if err != nil && err != io.EOF {
 		return nil, err
@@ -132,11 +135,11 @@ func peekFileHeader(path string, n int) ([]byte, error) {
 }
 
 func readFileContent(path string) (string, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) //nolint:gosec // path is validated by caller
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	content, err := io.ReadAll(file)
 	if err != nil {

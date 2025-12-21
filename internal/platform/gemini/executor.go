@@ -64,7 +64,7 @@ func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
 	startTime := time.Now()
 
 	// Create command
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...) //nolint:gosec // binaryPath is validated via FindBinary
 
 	// Configure stdin with content
 	cmd.Stdin = strings.NewReader(content)
@@ -131,7 +131,7 @@ func (e *Executor) SendWithProgress(ctx context.Context, content string, progres
 	progress(fmt.Sprintf("Sending to Gemini (%s)...", e.config.Model))
 
 	startTime := time.Now()
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	cmd := exec.CommandContext(ctx, binaryPath, args...) //nolint:gosec // binaryPath is validated via FindBinary
 	cmd.Stdin = strings.NewReader(content)
 
 	var stdout, stderr bytes.Buffer

@@ -71,15 +71,23 @@ func TestBuildGenerateConfigHonorsOutput(t *testing.T) {
 }
 
 func TestGenerateContextHeadlessInvalidOutput(t *testing.T) {
+	// Create a truly invalid path by using a file as directory
+	tmpFile, err := os.CreateTemp("", "test_file")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
 	cfg := GenerateConfig{
-		RootPath: filepath.Join(os.TempDir(), "missing"),
+		RootPath: filepath.Join(tmpFile.Name(), "subdir"), // Using file as directory
 		Include:  []string{"*"},
 		Exclude:  nil,
 		Output:   filepath.Join(os.TempDir(), "out.md"),
 		MaxSize:  1024,
 	}
 
-	err := generateContextHeadless(cfg)
+	err = generateContextHeadless(cfg)
 	if err == nil {
 		t.Fatal("expected error for invalid root path")
 	}

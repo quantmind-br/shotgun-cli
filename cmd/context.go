@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,11 +15,31 @@ import (
 
 	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
+
+// ProgressMode defines how progress is reported
+type ProgressMode string
+
+const (
+	ProgressNone  ProgressMode = "none"
+	ProgressHuman ProgressMode = "human"
+	ProgressJSON  ProgressMode = "json"
+)
+
+// ProgressOutput represents a progress event for output
+type ProgressOutput struct {
+	Timestamp string  `json:"timestamp"`
+	Stage     string  `json:"stage"`
+	Message   string  `json:"message"`
+	Current   int64   `json:"current,omitempty"`
+	Total     int64   `json:"total,omitempty"`
+	Percent   float64 `json:"percent,omitempty"`
+}
 
 type GenerateConfig struct {
 	RootPath      string
@@ -31,6 +52,17 @@ type GenerateConfig struct {
 	GeminiModel   string
 	GeminiOutput  string
 	GeminiTimeout int
+	// Template configuration
+	Template   string            // Template name to use
+	Task       string            // Task description for LLM
+	Rules      string            // Rules/constraints for LLM
+	CustomVars map[string]string // Custom template variables (KEY=VALUE)
+	// Scanner overrides (0/false = use config)
+	Workers        int
+	IncludeHidden  bool
+	IncludeIgnored bool
+	// Progress output
+	ProgressMode ProgressMode
 }
 
 var contextCmd = &cobra.Command{
@@ -124,6 +156,41 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	geminiOutput, _ := cmd.Flags().GetString("gemini-output")
 	geminiTimeout, _ := cmd.Flags().GetInt("gemini-timeout")
 
+	// Template flags
+	templateName, _ := cmd.Flags().GetString("template")
+	task, _ := cmd.Flags().GetString("task")
+	rules, _ := cmd.Flags().GetString("rules")
+	varFlags, _ := cmd.Flags().GetStringArray("var")
+
+	// Scanner override flags
+	workers, _ := cmd.Flags().GetInt("workers")
+	includeHidden, _ := cmd.Flags().GetBool("include-hidden")
+	includeIgnored, _ := cmd.Flags().GetBool("include-ignored")
+
+	// Progress flag
+	progressStr, _ := cmd.Flags().GetString("progress")
+	var progressMode ProgressMode
+	switch progressStr {
+	case "none", "":
+		progressMode = ProgressNone
+	case "human":
+		progressMode = ProgressHuman
+	case "json":
+		progressMode = ProgressJSON
+	default:
+		return GenerateConfig{}, fmt.Errorf("invalid --progress value: %q (expected: none, human, json)", progressStr)
+	}
+
+	// Parse custom variables
+	customVars := make(map[string]string)
+	for _, v := range varFlags {
+		parts := strings.SplitN(v, "=", 2)
+		if len(parts) != 2 {
+			return GenerateConfig{}, fmt.Errorf("invalid --var format: %q (expected KEY=VALUE)", v)
+		}
+		customVars[parts[0]] = parts[1]
+	}
+
 	// Convert root to absolute path
 	absPath, err := filepath.Abs(rootPath)
 	if err != nil {
@@ -150,42 +217,100 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		geminiTimeout = viper.GetInt("gemini.timeout")
 	}
 
-	// Enable gemini via config if auto-send is enabled
-	if !sendGemini && viper.GetBool("gemini.auto-send") {
+	// Enable gemini via config if auto-send is enabled AND gemini is enabled
+	if !sendGemini && viper.GetBool("gemini.auto-send") && viper.GetBool("gemini.enabled") {
 		sendGemini = true
 	}
 
 	return GenerateConfig{
-		RootPath:      absPath,
-		Include:       include,
-		Exclude:       exclude,
-		Output:        output,
-		MaxSize:       maxSize,
-		EnforceLimit:  enforceLimit,
-		SendGemini:    sendGemini,
-		GeminiModel:   geminiModel,
-		GeminiOutput:  geminiOutput,
-		GeminiTimeout: geminiTimeout,
+		RootPath:       absPath,
+		Include:        include,
+		Exclude:        exclude,
+		Output:         output,
+		MaxSize:        maxSize,
+		EnforceLimit:   enforceLimit,
+		SendGemini:     sendGemini,
+		GeminiModel:    geminiModel,
+		GeminiOutput:   geminiOutput,
+		GeminiTimeout:  geminiTimeout,
+		Template:       templateName,
+		Task:           task,
+		Rules:          rules,
+		CustomVars:     customVars,
+		Workers:        workers,
+		IncludeHidden:  includeHidden,
+		IncludeIgnored: includeIgnored,
+		ProgressMode:   progressMode,
 	}, nil
 }
 
 func generateContextHeadless(config GenerateConfig) error {
-	// Initialize scanner with configuration
+	// Initialize scanner with configuration from viper
 	scannerConfig := scanner.ScanConfig{
-		MaxFiles:        viper.GetInt64("scanner.max-files"),
-		MaxFileSize:     utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
-		SkipBinary:      viper.GetBool("scanner.skip-binary"),
-		IncludeHidden:   false,
-		Workers:         1,
-		IgnorePatterns:  config.Exclude,
-		IncludePatterns: config.Include,
+		MaxFiles:             viper.GetInt64("scanner.max-files"),
+		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
+		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString("scanner.max-memory"), 500*1024*1024),
+		SkipBinary:           viper.GetBool("scanner.skip-binary"),
+		IncludeHidden:        viper.GetBool("scanner.include-hidden"),
+		IncludeIgnored:       viper.GetBool("scanner.include-ignored"),
+		Workers:              viper.GetInt("scanner.workers"),
+		RespectGitignore:     viper.GetBool("scanner.respect-gitignore"),
+		RespectShotgunignore: viper.GetBool("scanner.respect-shotgunignore"),
+		IgnorePatterns:       config.Exclude,
+		IncludePatterns:      config.Include,
+	}
+
+	// Apply CLI flag overrides
+	if config.Workers > 0 {
+		scannerConfig.Workers = config.Workers
+	}
+	if config.IncludeHidden {
+		scannerConfig.IncludeHidden = true
+	}
+	if config.IncludeIgnored {
+		scannerConfig.IncludeIgnored = true
 	}
 
 	log.Debug().Interface("config", scannerConfig).Msg("Scanner configuration")
 
 	// Create and run scanner
 	fs := scanner.NewFileSystemScanner()
-	tree, err := fs.Scan(config.RootPath, &scannerConfig)
+	var tree *scanner.FileNode
+	var err error
+
+	if config.ProgressMode != ProgressNone {
+		// Scan with progress
+		progressCh := make(chan scanner.Progress, 100)
+		doneCh := make(chan struct{})
+
+		// Goroutine to consume progress
+		go func() {
+			defer close(doneCh)
+			for p := range progressCh {
+				var percent float64
+				if p.Total > 0 {
+					percent = float64(p.Current) / float64(p.Total) * 100
+				}
+				renderProgress(config.ProgressMode, ProgressOutput{
+					Timestamp: p.Timestamp.Format(time.RFC3339),
+					Stage:     p.Stage,
+					Message:   p.Message,
+					Current:   p.Current,
+					Total:     p.Total,
+					Percent:   percent,
+				})
+			}
+		}()
+
+		tree, err = fs.ScanWithProgress(config.RootPath, &scannerConfig, progressCh)
+		close(progressCh)
+		<-doneCh
+
+		clearProgressLine(config.ProgressMode)
+	} else {
+		tree, err = fs.Scan(config.RootPath, &scannerConfig)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to scan files: %w", err)
 	}
@@ -201,19 +326,65 @@ func generateContextHeadless(config GenerateConfig) error {
 	// Initialize context generator
 	generator := ctxgen.NewDefaultContextGenerator()
 
-	contextConfig := ctxgen.GenerateConfig{
-		MaxTotalSize: config.MaxSize,
-		TemplateVars: map[string]string{
-			"TASK":           "Context generation",
-			"RULES":          "",
-			"FILE_STRUCTURE": "",
-			"CURRENT_DATE":   time.Now().Format("2006-01-02"),
-		},
-		SkipBinary: viper.GetBool("scanner.skip-binary"),
+	// Determine task and rules values
+	taskValue := config.Task
+	if taskValue == "" {
+		taskValue = "Context generation"
+	}
+	rulesValue := config.Rules
+
+	// Initialize template variables
+	templateVars := map[string]string{
+		"TASK":           taskValue,
+		"RULES":          rulesValue,
+		"FILE_STRUCTURE": "",
+		"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 	}
 
-	// Generate context
-	content, err := generator.Generate(tree, selections, contextConfig)
+	// Merge custom variables (they can override defaults)
+	for k, v := range config.CustomVars {
+		templateVars[k] = v
+	}
+
+	// Load template content if specified
+	var templateContent string
+	if config.Template != "" {
+		tmplMgr, err := template.NewManager()
+		if err != nil {
+			return fmt.Errorf("failed to initialize template manager: %w", err)
+		}
+		tmpl, err := tmplMgr.GetTemplate(config.Template)
+		if err != nil {
+			return fmt.Errorf("failed to load template %q: %w", config.Template, err)
+		}
+		templateContent = tmpl.Content
+		log.Debug().Str("template", config.Template).Msg("Using custom template")
+	}
+
+	contextConfig := ctxgen.GenerateConfig{
+		MaxTotalSize:   config.MaxSize,
+		TemplateVars:   templateVars,
+		Template:       templateContent,
+		SkipBinary:     viper.GetBool("scanner.skip-binary"),
+		IncludeTree:    viper.GetBool("context.include-tree"),
+		IncludeSummary: viper.GetBool("context.include-summary"),
+	}
+
+	// Generate context (with or without progress)
+	var content string
+	if config.ProgressMode != ProgressNone {
+		content, err = generator.GenerateWithProgressEx(tree, selections, contextConfig, func(p ctxgen.GenProgress) {
+			renderProgress(config.ProgressMode, ProgressOutput{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Stage:     p.Stage,
+				Message:   p.Message,
+			})
+		})
+		clearProgressLine(config.ProgressMode)
+	} else {
+		content, err = generator.Generate(tree, selections, contextConfig)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to generate context: %w", err)
 	}
@@ -270,13 +441,18 @@ func generateContextHeadless(config GenerateConfig) error {
 }
 
 func sendToGemini(config GenerateConfig, content string) error {
+	// Check if Gemini is enabled
+	if !viper.GetBool("gemini.enabled") {
+		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set gemini.enabled true")
+	}
+
 	// Check availability
 	if !gemini.IsAvailable() {
-		return fmt.Errorf("geminiweb not found. Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
+		return fmt.Errorf("geminiweb not found. Run 'shotgun-cli gemini doctor' for help")
 	}
 
 	if !gemini.IsConfigured() {
-		return fmt.Errorf("geminiweb not configured. Run: geminiweb auto-login")
+		return fmt.Errorf("geminiweb not configured. Run 'shotgun-cli gemini doctor' for help")
 	}
 
 	// Build gemini config
@@ -349,6 +525,41 @@ func collectAllSelections(node *scanner.FileNode, selections map[string]bool) {
 	}
 }
 
+// renderProgressHuman renders progress for humans
+func renderProgressHuman(p ProgressOutput) {
+	if p.Total > 0 {
+		fmt.Fprintf(os.Stderr, "\r[%s] %s: %d/%d (%.1f%%)  ",
+			p.Stage, p.Message, p.Current, p.Total, p.Percent)
+	} else {
+		fmt.Fprintf(os.Stderr, "\r[%s] %s  ", p.Stage, p.Message)
+	}
+}
+
+// renderProgressJSON renders progress as JSON (one line per event)
+func renderProgressJSON(p ProgressOutput) {
+	data, _ := json.Marshal(p)
+	fmt.Fprintln(os.Stderr, string(data))
+}
+
+// renderProgress renders progress in the specified mode
+func renderProgress(mode ProgressMode, p ProgressOutput) {
+	switch mode {
+	case ProgressHuman:
+		renderProgressHuman(p)
+	case ProgressJSON:
+		renderProgressJSON(p)
+	case ProgressNone:
+		// Silent
+	}
+}
+
+// clearProgressLine clears the progress line (for human mode)
+func clearProgressLine(mode ProgressMode) {
+	if mode == ProgressHuman {
+		fmt.Fprint(os.Stderr, "\r\033[K")
+	}
+}
+
 func init() {
 	// Context generate flags
 	contextGenerateCmd.Flags().StringP("root", "r", ".", "Root directory to scan")
@@ -360,9 +571,23 @@ func init() {
 
 	// Gemini integration flags
 	contextGenerateCmd.Flags().Bool("send-gemini", false, "Send generated context to Gemini")
-	contextGenerateCmd.Flags().String("gemini-model", "", "Gemini model to use (gemini-2.5-flash, gemini-2.5-pro, gemini-3.0-pro)")
-	contextGenerateCmd.Flags().String("gemini-output", "", "File to save Gemini response (default: <output>_response.md)")
-	contextGenerateCmd.Flags().Int("gemini-timeout", 0, "Timeout in seconds for Gemini request (default: from config)")
+	contextGenerateCmd.Flags().String("gemini-model", "", "Gemini model (gemini-2.5-flash, gemini-2.5-pro)")
+	contextGenerateCmd.Flags().String("gemini-output", "", "File to save Gemini response")
+	contextGenerateCmd.Flags().Int("gemini-timeout", 0, "Timeout in seconds for Gemini request")
+
+	// Template configuration flags
+	contextGenerateCmd.Flags().StringP("template", "t", "", "Template name (e.g., makePlan, analyzeBug)")
+	contextGenerateCmd.Flags().String("task", "", "Task description for the LLM")
+	contextGenerateCmd.Flags().String("rules", "", "Rules/constraints for the LLM")
+	contextGenerateCmd.Flags().StringArrayP("var", "V", []string{}, "Custom template vars KEY=VALUE (repeatable)")
+
+	// Scanner override flags
+	contextGenerateCmd.Flags().Int("workers", 0, "Number of parallel workers (0 = use config)")
+	contextGenerateCmd.Flags().Bool("include-hidden", false, "Include hidden files")
+	contextGenerateCmd.Flags().Bool("include-ignored", false, "Include ignored files")
+
+	// Progress output flag
+	contextGenerateCmd.Flags().String("progress", "none", "Progress output mode: none, human, json")
 
 	// Mark root as required would be too restrictive since we have a default
 	// But we validate it in PreRunE instead

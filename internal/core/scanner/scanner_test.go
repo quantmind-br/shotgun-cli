@@ -320,7 +320,7 @@ func TestFileSystemScanner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test structure
 	testFiles := []string{
@@ -335,13 +335,13 @@ func TestFileSystemScanner(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tempDir, file)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 		if err != nil {
 			t.Fatalf("Failed to create directory for %s: %v", file, err)
 		}
 
 		content := "test content for " + file
-		err = os.WriteFile(fullPath, []byte(content), 0644)
+		err = os.WriteFile(fullPath, []byte(content), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create file %s: %v", file, err)
 		}
@@ -349,7 +349,7 @@ func TestFileSystemScanner(t *testing.T) {
 
 	// Create .gitignore content
 	gitignoreContent := "*.tmp\n.env\nsubdir/file3.py\n"
-	err = os.WriteFile(filepath.Join(tempDir, ".gitignore"), []byte(gitignoreContent), 0644)
+	err = os.WriteFile(filepath.Join(tempDir, ".gitignore"), []byte(gitignoreContent), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create .gitignore: %v", err)
 	}
@@ -495,7 +495,7 @@ func BenchmarkFileSystemScanner(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create a reasonable number of files for benchmarking
 	numDirs := 10
@@ -503,7 +503,7 @@ func BenchmarkFileSystemScanner(b *testing.B) {
 
 	for i := 0; i < numDirs; i++ {
 		dirPath := filepath.Join(tempDir, "dir"+string(rune('0'+i)))
-		err := os.MkdirAll(dirPath, 0755)
+		err := os.MkdirAll(dirPath, 0o750)
 		if err != nil {
 			b.Fatalf("Failed to create directory: %v", err)
 		}
@@ -511,7 +511,7 @@ func BenchmarkFileSystemScanner(b *testing.B) {
 		for j := 0; j < numFilesPerDir; j++ {
 			fileName := filepath.Join(dirPath, "file"+string(rune('0'+j))+".txt")
 			content := "benchmark test content " + string(rune('0'+j))
-			err := os.WriteFile(fileName, []byte(content), 0644)
+			err := os.WriteFile(fileName, []byte(content), 0o600)
 			if err != nil {
 				b.Fatalf("Failed to create file: %v", err)
 			}
@@ -577,7 +577,7 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test structure with hidden files
 	testFiles := []string{
@@ -589,13 +589,13 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tempDir, file)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 		if err != nil {
 			t.Fatalf("Failed to create directory for %s: %v", file, err)
 		}
 
 		content := "test content for " + file
-		err = os.WriteFile(fullPath, []byte(content), 0644)
+		err = os.WriteFile(fullPath, []byte(content), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create file %s: %v", file, err)
 		}
@@ -765,7 +765,7 @@ func TestTreeSorting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create files and directories in non-alphabetical order
 	items := []string{
@@ -779,12 +779,12 @@ func TestTreeSorting(t *testing.T) {
 	for _, item := range items {
 		fullPath := filepath.Join(tempDir, item)
 		if strings.HasSuffix(item, "/") {
-			err := os.MkdirAll(fullPath, 0755)
+			err := os.MkdirAll(fullPath, 0o750)
 			if err != nil {
 				t.Fatalf("Failed to create directory %s: %v", item, err)
 			}
 		} else {
-			err := os.WriteFile(fullPath, []byte("test"), 0644)
+			err := os.WriteFile(fullPath, []byte("test"), 0o600)
 			if err != nil {
 				t.Fatalf("Failed to create file %s: %v", item, err)
 			}
@@ -845,7 +845,7 @@ func TestShotgunignoreIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test directory structure
 	files := []struct {
@@ -862,11 +862,11 @@ func TestShotgunignoreIntegration(t *testing.T) {
 
 	for _, f := range files {
 		fullPath := filepath.Join(tempDir, f.path)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 		if err != nil {
 			t.Fatalf("Failed to create directory for %s: %v", f.path, err)
 		}
-		err = os.WriteFile(fullPath, []byte(f.content), 0644)
+		err = os.WriteFile(fullPath, []byte(f.content), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to write file %s: %v", f.path, err)
 		}
@@ -907,7 +907,7 @@ func TestShotgunignoreIntegration(t *testing.T) {
 *_test.go
 test/**
 `
-		err := os.WriteFile(filepath.Join(tempDir, ".shotgunignore"), []byte(shotgunignoreContent), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, ".shotgunignore"), []byte(shotgunignoreContent), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create .shotgunignore: %v", err)
 		}
@@ -1004,7 +1004,7 @@ func TestIncludePatterns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create diverse test files
 	testFiles := []string{
@@ -1022,12 +1022,12 @@ func TestIncludePatterns(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tempDir, file)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 		if err != nil {
 			t.Fatalf("Failed to create directory for %s: %v", file, err)
 		}
 		content := "test content for " + file
-		err = os.WriteFile(fullPath, []byte(content), 0644)
+		err = os.WriteFile(fullPath, []byte(content), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create file %s: %v", file, err)
 		}
@@ -1146,7 +1146,8 @@ func TestIncludePatterns(t *testing.T) {
 			for _, unexpectedFile := range tt.unexpectedFiles {
 				for _, scanned := range scannedFiles {
 					if scanned == unexpectedFile {
-						t.Errorf("Unexpected file %q found in results. Should have been excluded by pattern %v", unexpectedFile, tt.patterns)
+						t.Errorf("Unexpected file %q found. Should have been excluded by %v",
+							unexpectedFile, tt.patterns)
 					}
 				}
 			}
@@ -1161,7 +1162,7 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test files
 	testFiles := []string{
@@ -1175,7 +1176,7 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tempDir, file)
 		content := "test content for " + file
-		err = os.WriteFile(fullPath, []byte(content), 0644)
+		err = os.WriteFile(fullPath, []byte(content), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create file %s: %v", file, err)
 		}
@@ -1184,7 +1185,7 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 	t.Run("include patterns work with ignore patterns", func(t *testing.T) {
 		scanner := NewFileSystemScanner()
 		config := DefaultScanConfig()
-		config.IncludePatterns = []string{"*.go"} // Only include .go files
+		config.IncludePatterns = []string{"*.go"}     // Only include .go files
 		config.IgnorePatterns = []string{"*_test.go"} // Ignore test files
 
 		root, err := scanner.Scan(tempDir, config)
@@ -1251,7 +1252,7 @@ func TestScannerHandlesPermissionError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
-	defer os.Chmod(noReadDir, 0755)
+	defer func() { _ = os.Chmod(noReadDir, 0o755) }() //nolint:gosec // test cleanup needs write permission
 
 	scanner := NewFileSystemScanner()
 	config := DefaultScanConfig()

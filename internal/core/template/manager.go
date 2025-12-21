@@ -50,7 +50,7 @@ func NewManager() (*Manager, error) {
 
 	// 2. User config directory templates (XDG compliant)
 	userTemplatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
-	if err := os.MkdirAll(userTemplatesDir, 0755); err == nil {
+	if err := os.MkdirAll(userTemplatesDir, 0o750); err == nil {
 		// Only add if directory creation succeeded or already exists
 		sources = append(sources, NewFilesystemSource(userTemplatesDir, "user"))
 	}
@@ -67,7 +67,7 @@ func NewManager() (*Manager, error) {
 		}
 
 		// Create directory if it doesn't exist
-		if err := os.MkdirAll(customPath, 0755); err == nil {
+		if err := os.MkdirAll(customPath, 0o750); err == nil {
 			// Use basename of custom path as source name for display
 			sourceName := filepath.Base(customPath)
 			sources = append(sources, NewFilesystemSource(customPath, sourceName))

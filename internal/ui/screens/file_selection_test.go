@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testFilterValue = "test"
+
 func TestNewFileSelection(t *testing.T) {
 	fileTree := &scanner.FileNode{
 		Name:  "root",
@@ -62,17 +64,17 @@ func TestFileSelectionHandleFilterMode(t *testing.T) {
 	}
 	model := NewFileSelection(fileTree, nil)
 	model.filterMode = true
-	model.filterBuffer = "test"
+	model.filterBuffer = testFilterValue
 
 	// Test Enter applies filter
 	cmd := model.handleFilterMode(tea.KeyMsg{Type: tea.KeyEnter, Runes: []rune{'x'}})
 	assert.Nil(t, cmd)
 	assert.False(t, model.filterMode)
-	assert.Equal(t, "test", model.tree.GetFilter())
+	assert.Equal(t, testFilterValue, model.tree.GetFilter())
 
 	// Test Esc cancels filter
 	model.filterMode = true
-	model.filterBuffer = "test"
+	model.filterBuffer = testFilterValue
 	cmd = model.handleFilterMode(tea.KeyMsg{Type: tea.KeyEsc, Runes: []rune{'x'}})
 	assert.Nil(t, cmd)
 	assert.False(t, model.filterMode)
@@ -80,7 +82,7 @@ func TestFileSelectionHandleFilterMode(t *testing.T) {
 
 	// Test Backspace removes character
 	model.filterMode = true
-	model.filterBuffer = "test"
+	model.filterBuffer = testFilterValue
 	cmd = model.handleFilterMode(tea.KeyMsg{Type: tea.KeyBackspace, Runes: []rune{'x'}})
 	assert.Nil(t, cmd)
 	assert.Equal(t, "tes", model.filterBuffer)

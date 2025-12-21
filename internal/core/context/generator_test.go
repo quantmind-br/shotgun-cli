@@ -101,14 +101,14 @@ func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, map[stri
 	for _, spec := range specs {
 		absPath := filepath.Join(rootDir, filepath.FromSlash(spec.relPath))
 		if spec.isDir {
-			if err := os.MkdirAll(absPath, 0o755); err != nil {
+			if err := os.MkdirAll(absPath, 0o750); err != nil {
 				tb.Fatalf("mkdir: %v", err)
 			}
 		} else {
-			if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(absPath), 0o750); err != nil {
 				tb.Fatalf("mkdir parent: %v", err)
 			}
-			if err := os.WriteFile(absPath, []byte(spec.content), 0o644); err != nil {
+			if err := os.WriteFile(absPath, []byte(spec.content), 0o600); err != nil {
 				tb.Fatalf("write file: %v", err)
 			}
 		}
@@ -142,7 +142,7 @@ func buildTestTree(tb testing.TB, specs []fileSpec) (*scanner.FileNode, map[stri
 	}
 
 	cleanup := func() {
-		os.RemoveAll(rootDir)
+		_ = os.RemoveAll(rootDir)
 	}
 
 	return root, selections, cleanup
@@ -194,6 +194,7 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 				MaxFileSize:  1 << 20,
 				MaxFiles:     10,
 				TemplateVars: map[string]string{"TASK": "Summarize", "RULES": "Be concise"},
+				IncludeTree:  true,
 			},
 			verify: func(t *testing.T, output string, err error) {
 				if err != nil {
@@ -375,7 +376,10 @@ func TestDefaultContextGenerator_ProgressReporting(t *testing.T) {
 	defer cleanup()
 
 	gen := NewDefaultContextGenerator()
-	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}
+	cfg := GenerateConfig{
+		TemplateVars: map[string]string{"TASK": "x"},
+		IncludeTree:  true, // Enable tree to get all progress events
+	}
 
 	var events []GenProgress
 	out, err := gen.GenerateWithProgressEx(root, selections, cfg, func(p GenProgress) {
@@ -409,7 +413,7 @@ func TestDefaultContextGenerator_ErrorPropagation(t *testing.T) {
 	root, selections, cleanup := buildTestTree(t, specs)
 	cleanup()
 	// remove file to trigger read error
-	os.Remove(filepath.Join(root.Path, "missing.txt"))
+	_ = os.Remove(filepath.Join(root.Path, "missing.txt"))
 
 	gen := NewDefaultContextGenerator()
 	cfg := GenerateConfig{TemplateVars: map[string]string{"TASK": "x"}}

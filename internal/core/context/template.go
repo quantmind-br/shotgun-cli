@@ -86,11 +86,11 @@ func (tr *TemplateRenderer) getDefaultTemplate() string {
 **Generated:** {{now}}
 {{if .Task}}**Task:** {{.Task}}{{end}}
 {{if .Rules}}**Rules:** {{.Rules}}{{end}}
-
+{{if .FileStructure}}
 ## File Structure
 
 {{.FileStructure}}
-
+{{end}}
 ## File Contents
 {{range .Files}}
 ### {{.RelPath}}{{if .Language}} ({{.Language}}){{end}}

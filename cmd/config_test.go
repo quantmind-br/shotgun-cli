@@ -167,7 +167,7 @@ func TestValidateTemplatePath(t *testing.T) {
 
 	// Create a file (not directory) for testing
 	filePath := filepath.Join(tmpDir, "afile.txt")
-	_ = os.WriteFile(filePath, []byte("test"), 0644)
+	_ = os.WriteFile(filePath, []byte("test"), 0o600)
 
 	tests := []struct {
 		name      string

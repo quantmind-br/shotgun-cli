@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const testString = "test"
+
 func TestNewProgress(t *testing.T) {
 	p := NewProgress()
 
@@ -201,10 +203,10 @@ func TestProgressCenterLine(t *testing.T) {
 	p := NewProgress()
 	p.SetSize(50, 20)
 
-	line := "test"
+	line := testString
 	result := p.centerLine(line)
 
-	assert.Contains(t, result, "test")
+	assert.Contains(t, result, testString)
 	// Should be centered or at least have padding
 	assert.GreaterOrEqual(t, len(result), len(line))
 }
@@ -213,7 +215,7 @@ func TestProgressCenterLineNoWidth(t *testing.T) {
 	p := NewProgress()
 	// width is 0
 
-	line := "test"
+	line := testString
 	result := p.centerLine(line)
 
 	// Should return as-is when width is not set
@@ -234,10 +236,10 @@ func TestProgressCenterLineWideLine(t *testing.T) {
 func TestProgressPadCenter(t *testing.T) {
 	p := NewProgress()
 
-	text := "test"
+	text := testString
 	padded := p.padCenter(text, 10)
 
-	assert.Contains(t, padded, "test")
+	assert.Contains(t, padded, testString)
 	assert.Equal(t, 10, len(padded))
 }
 
@@ -291,7 +293,7 @@ func TestProgressTruncateVeryShort(t *testing.T) {
 func TestProgressTruncateDots(t *testing.T) {
 	p := NewProgress()
 
-	text := "test"
+	text := testString
 	truncated := p.truncate(text, 2)
 
 	// For maxLen <= 3 and text longer than maxLen, should return dots
@@ -301,7 +303,7 @@ func TestProgressTruncateDots(t *testing.T) {
 func TestProgressTruncateMaxLenZero(t *testing.T) {
 	p := NewProgress()
 
-	text := "test"
+	text := testString
 	truncated := p.truncate(text, 0)
 
 	assert.Equal(t, "", truncated)
@@ -310,7 +312,7 @@ func TestProgressTruncateMaxLenZero(t *testing.T) {
 func TestProgressVisualWidth(t *testing.T) {
 	p := NewProgress()
 
-	width := p.visualWidth("test")
+	width := p.visualWidth(testString)
 
 	assert.Equal(t, 4, width)
 }

@@ -20,18 +20,26 @@ type GenProgress struct {
 }
 
 type ContextGenerator interface {
-	Generate(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) (string, error)
-	GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string)) (string, error)
-	GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress)) (string, error)
+	Generate(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+	) (string, error)
+	GenerateWithProgress(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string),
+	) (string, error)
+	GenerateWithProgressEx(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress),
+	) (string, error)
 }
 
 type GenerateConfig struct {
-	MaxFileSize  int64             `json:"maxFileSize"`  // Maximum size for individual files
-	MaxTotalSize int64             `json:"maxTotalSize"` // Maximum total size of all content
-	MaxFiles     int               `json:"maxFiles"`
-	SkipBinary   bool              `json:"skipBinary"`
-	TemplateVars map[string]string `json:"templateVars"`
-	Template     string            `json:"template,omitempty"`
+	MaxFileSize    int64             `json:"maxFileSize"`  // Maximum size for individual files
+	MaxTotalSize   int64             `json:"maxTotalSize"` // Maximum total size of all content
+	MaxFiles       int               `json:"maxFiles"`
+	SkipBinary     bool              `json:"skipBinary"`
+	TemplateVars   map[string]string `json:"templateVars"`
+	Template       string            `json:"template,omitempty"`
+	IncludeTree    bool              `json:"includeTree"`    // Include directory tree in output
+	IncludeSummary bool              `json:"includeSummary"` // Include file summaries in output
 }
 
 type ContextData struct {
@@ -55,7 +63,9 @@ func NewDefaultContextGenerator() *DefaultContextGenerator {
 	}
 }
 
-func (g *DefaultContextGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config GenerateConfig) (string, error) {
+func (g *DefaultContextGenerator) Generate(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+) (string, error) {
 	return g.GenerateWithProgress(root, selections, config, nil)
 }
 
@@ -79,13 +89,18 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 		return "", fmt.Errorf("invalid config: %w", err)
 	}
 
-	if progress != nil {
-		progress(GenProgress{Stage: "tree_generation", Message: "Generating file structure..."})
-	}
+	// Generate tree structure only if IncludeTree is enabled
+	var fileStructure string
+	if config.IncludeTree {
+		if progress != nil {
+			progress(GenProgress{Stage: "tree_generation", Message: "Generating file structure..."})
+		}
 
-	fileStructure, err := g.treeRenderer.RenderTree(root)
-	if err != nil {
-		return "", fmt.Errorf("failed to render tree: %w", err)
+		var err error
+		fileStructure, err = g.treeRenderer.RenderTree(root)
+		if err != nil {
+			return "", fmt.Errorf("failed to render tree: %w", err)
+		}
 	}
 
 	if progress != nil {
@@ -97,8 +112,14 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 		return "", fmt.Errorf("failed to collect file contents: %w", err)
 	}
 
-	// Combine tree structure with file content blocks
-	fileStructureComplete := g.buildCompleteFileStructure(fileStructure, files)
+	// Combine tree structure with file content blocks (only if tree is included)
+	var fileStructureComplete string
+	if config.IncludeTree {
+		fileStructureComplete = g.buildCompleteFileStructure(fileStructure, files)
+	} else {
+		// Without tree, just include file content blocks
+		fileStructureComplete = renderFileContentBlocks(files)
+	}
 
 	if progress != nil {
 		progress(GenProgress{Stage: "template_rendering", Message: "Rendering template..."})
@@ -155,6 +176,8 @@ func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
 	if config.TemplateVars == nil {
 		config.TemplateVars = make(map[string]string)
 	}
+	// Note: IncludeTree and IncludeSummary default to false (zero value)
+	// They must be explicitly set to true when desired
 	return nil
 }
 

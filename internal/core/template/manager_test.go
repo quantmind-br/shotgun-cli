@@ -432,7 +432,7 @@ func TestCustomTemplateWorkflow(t *testing.T) {
 	userTemplatesDir := filepath.Join(tmpDir, "templates")
 
 	// Create user templates directory
-	if err := os.MkdirAll(userTemplatesDir, 0755); err != nil {
+	if err := os.MkdirAll(userTemplatesDir, 0o750); err != nil {
 		t.Fatalf("Failed to create user templates directory: %v", err)
 	}
 
@@ -443,7 +443,7 @@ Task: {TASK}
 Rules: {RULES}
 `
 	customTemplatePath := filepath.Join(userTemplatesDir, "custom_test.md")
-	if err := os.WriteFile(customTemplatePath, []byte(customTemplateContent), 0644); err != nil {
+	if err := os.WriteFile(customTemplatePath, []byte(customTemplateContent), 0o600); err != nil {
 		t.Fatalf("Failed to write custom template: %v", err)
 	}
 

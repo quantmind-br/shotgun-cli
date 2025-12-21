@@ -20,7 +20,7 @@ func TestCLIContextGenerateProducesFile(t *testing.T) {
 	fixture := filepath.Join(root, "test", "fixtures", "sample-project")
 	output := filepath.Join(t.TempDir(), "context-output.md")
 
-	cmd := exec.Command(
+	cmd := exec.Command( //nolint:gosec // test command with controlled args
 		"go", "run", ".", "context", "generate",
 		"--root", fixture, "--output", output, "--max-size", "5MB",
 	)
@@ -38,7 +38,7 @@ func TestCLIContextGenerateProducesFile(t *testing.T) {
 func TestCLITemplateRenderCreatesFile(t *testing.T) {
 	root := repoRoot()
 	output := filepath.Join(t.TempDir(), "template.md")
-	cmd := exec.Command(
+	cmd := exec.Command( //nolint:gosec // test command with controlled args
 		"go", "run", ".", "template", "render", "makePlan",
 		"--var", "TASK=Document fixture",
 		"--var", "RULES=Keep it short",
@@ -51,7 +51,8 @@ func TestCLITemplateRenderCreatesFile(t *testing.T) {
 		t.Fatalf("template render failed: %v\n%s", err, out)
 	}
 
-	if data, err := os.ReadFile(output); err != nil || len(data) == 0 {
+	data, err := os.ReadFile(output) //nolint:gosec // test reading controlled file
+	if err != nil || len(data) == 0 {
 		t.Fatalf("expected rendered template file, err=%v", err)
 	}
 }

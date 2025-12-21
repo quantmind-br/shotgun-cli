@@ -94,7 +94,10 @@ func (c *Config) FindBinary() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("geminiweb binary not found in PATH or common locations. Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
+	return "", fmt.Errorf(
+		"geminiweb binary not found in PATH or common locations, " +
+			"install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest",
+	)
 }
 
 // IsAvailable checks if geminiweb binary is available.

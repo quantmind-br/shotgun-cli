@@ -32,5 +32,5 @@ func Copy(content string) error {
 
 // IsAvailable checks if clipboard operations are supported on this system.
 func IsAvailable() bool {
-	return clipboard.Unsupported == false
+	return !clipboard.Unsupported
 }

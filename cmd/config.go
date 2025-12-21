@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -168,7 +169,38 @@ func showCurrentConfig() error {
 		}
 	}
 
+	// Show Gemini integration status
+	fmt.Println("[GEMINI STATUS]")
+	status := getGeminiStatusSummary()
+	fmt.Printf("  %-25s = %s\n", "integration", status)
+	fmt.Println()
+
 	return nil
+}
+
+// getGeminiStatusSummary returns a brief status summary for Gemini integration
+func getGeminiStatusSummary() string {
+	if !viper.GetBool("gemini.enabled") {
+		return "disabled"
+	}
+
+	// Lazy import to avoid circular dependency - check directly
+	home, _ := os.UserHomeDir()
+	cookiesPath := filepath.Join(home, ".geminiweb", "cookies.json")
+
+	// Check if geminiweb exists in PATH
+	_, err := exec.LookPath("geminiweb")
+	if err != nil {
+		return "✗ geminiweb not found (run: shotgun-cli gemini doctor)"
+	}
+
+	// Check cookies
+	info, err := os.Stat(cookiesPath)
+	if err != nil || info.Size() <= 2 {
+		return "⚠ needs configuration (run: shotgun-cli gemini doctor)"
+	}
+
+	return "✓ ready"
 }
 
 func setConfigValue(key, value string) error {
@@ -190,7 +222,7 @@ func setConfigValue(key, value string) error {
 
 	// Ensure config directory exists
 	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -213,14 +245,23 @@ func setConfigValue(key, value string) error {
 
 func isValidConfigKey(key string) bool {
 	validKeys := []string{
+		// Scanner keys
 		"scanner.max-files",
 		"scanner.max-file-size",
 		"scanner.respect-gitignore",
 		"scanner.skip-binary",
+		"scanner.workers",
+		"scanner.include-hidden",
+		"scanner.include-ignored",
+		"scanner.respect-shotgunignore",
+		"scanner.max-memory",
+		// Context keys
 		"context.max-size",
 		"context.include-tree",
 		"context.include-summary",
+		// Template keys
 		"template.custom-path",
+		// Output keys
 		"output.format",
 		"output.clipboard",
 		// Gemini integration keys
@@ -245,12 +286,15 @@ func validateConfigValue(key, value string) error {
 	switch key {
 	case "scanner.max-files":
 		return validateMaxFiles(value)
-	case "scanner.max-file-size", "context.max-size":
+	case "scanner.max-file-size", "context.max-size", "scanner.max-memory":
 		return validateSizeFormat(value)
 	case "scanner.respect-gitignore", "scanner.skip-binary",
+		"scanner.include-hidden", "scanner.include-ignored", "scanner.respect-shotgunignore",
 		"context.include-tree", "context.include-summary", "output.clipboard",
 		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
 		return validateBooleanValue(value)
+	case "scanner.workers":
+		return validateWorkers(value)
 	case "output.format":
 		return validateOutputFormat(value)
 	case "template.custom-path", "gemini.binary-path":
@@ -265,11 +309,26 @@ func validateConfigValue(key, value string) error {
 	return nil
 }
 
+func validateWorkers(value string) error {
+	var workers int
+	if _, err := fmt.Sscanf(value, "%d", &workers); err != nil {
+		return fmt.Errorf("expected a positive integer")
+	}
+	if workers < 1 || workers > 32 {
+		return fmt.Errorf("must be between 1 and 32, got %d", workers)
+	}
+	return nil
+}
+
 func validateMaxFiles(value string) error {
 	// Reject size formats (e.g., "10MB", "1KB")
 	upper := strings.ToUpper(strings.TrimSpace(value))
-	if strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") ||
-		strings.HasSuffix(upper, "KB") || (strings.HasSuffix(upper, "B") && len(upper) > 1 && upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9') {
+	isSizeFormat := strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") ||
+		strings.HasSuffix(upper, "KB")
+	if !isSizeFormat && strings.HasSuffix(upper, "B") && len(upper) > 1 {
+		isSizeFormat = upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9'
+	}
+	if isSizeFormat {
 		return fmt.Errorf("expected a number, got size format")
 	}
 
@@ -366,7 +425,7 @@ func validateGeminiBrowserRefresh(value string) error {
 
 func convertConfigValue(key, value string) (interface{}, error) {
 	switch key {
-	case "scanner.max-files", "gemini.timeout":
+	case "scanner.max-files", "scanner.workers", "gemini.timeout":
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, err
@@ -374,6 +433,7 @@ func convertConfigValue(key, value string) (interface{}, error) {
 		return intVal, nil
 
 	case "scanner.respect-gitignore", "scanner.skip-binary",
+		"scanner.include-hidden", "scanner.include-ignored", "scanner.respect-shotgunignore",
 		"context.include-tree", "context.include-summary", "output.clipboard",
 		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
 		return strings.ToLower(value) == "true", nil

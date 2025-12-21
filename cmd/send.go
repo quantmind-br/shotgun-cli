@@ -76,13 +76,18 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no content to send (file or stdin is empty)")
 	}
 
+	// Check if Gemini is enabled
+	if !viper.GetBool("gemini.enabled") {
+		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set gemini.enabled true")
+	}
+
 	// Check availability
 	if !gemini.IsAvailable() {
-		return fmt.Errorf("geminiweb not found. Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
+		return fmt.Errorf("geminiweb not found. Run 'shotgun-cli gemini doctor' for help")
 	}
 
 	if !gemini.IsConfigured() {
-		return fmt.Errorf("geminiweb not configured. Run: geminiweb auto-login")
+		return fmt.Errorf("geminiweb not configured. Run 'shotgun-cli gemini doctor' for help")
 	}
 
 	// Get flags
@@ -140,7 +145,7 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	contextSendCmd.Flags().StringP("output", "o", "", "Output file for Gemini response (prints to stdout if not specified)")
+	contextSendCmd.Flags().StringP("output", "o", "", "Output file for Gemini response")
 	contextSendCmd.Flags().StringP("model", "m", "", "Gemini model to use (default: from config)")
 	contextSendCmd.Flags().Int("timeout", 0, "Timeout in seconds (default: from config)")
 	contextSendCmd.Flags().Bool("raw", false, "Output raw response without processing")

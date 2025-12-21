@@ -80,16 +80,33 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 	}
 
 	configKeys := []string{
+		// Scanner keys
 		"scanner.max-files\tMaximum number of files to scan",
 		"scanner.max-file-size\tMaximum size per file (e.g., 1MB)",
 		"scanner.respect-gitignore\tRespect .gitignore files (true/false)",
 		"scanner.skip-binary\tSkip binary files (true/false)",
+		"scanner.workers\tNumber of parallel workers (1-32)",
+		"scanner.include-hidden\tInclude hidden files (true/false)",
+		"scanner.include-ignored\tInclude ignored files (true/false)",
+		"scanner.respect-shotgunignore\tRespect .shotgunignore files (true/false)",
+		"scanner.max-memory\tMax memory usage (e.g., 500MB)",
+		// Context keys
 		"context.max-size\tMaximum context size (e.g., 10MB)",
 		"context.include-tree\tInclude directory tree (true/false)",
 		"context.include-summary\tInclude file summaries (true/false)",
+		// Template keys
 		configKeyTemplateCustomPath + "\tPath to custom templates",
+		// Output keys
 		"output.format\tOutput format (markdown/text)",
 		"output.clipboard\tCopy to clipboard (true/false)",
+		// Gemini keys
+		"gemini.enabled\tEnable Gemini integration (true/false)",
+		"gemini.binary-path\tPath to geminiweb binary",
+		"gemini.model\tGemini model (gemini-2.5-flash/pro, gemini-3.0-pro)",
+		"gemini.timeout\tTimeout in seconds for Gemini requests",
+		"gemini.browser-refresh\tBrowser for cookie refresh (auto/chrome/firefox)",
+		"gemini.auto-send\tAuto-send to Gemini after generation (true/false)",
+		"gemini.save-response\tSave Gemini response to file (true/false)",
 	}
 
 	return configKeys, cobra.ShellCompDirectiveNoFileComp
@@ -105,9 +122,15 @@ func boolValueCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 	boolKeys := []string{
 		"scanner.respect-gitignore",
 		"scanner.skip-binary",
+		"scanner.include-hidden",
+		"scanner.include-ignored",
+		"scanner.respect-shotgunignore",
 		"context.include-tree",
 		"context.include-summary",
 		"output.clipboard",
+		"gemini.enabled",
+		"gemini.auto-send",
+		"gemini.save-response",
 	}
 
 	for _, boolKey := range boolKeys {

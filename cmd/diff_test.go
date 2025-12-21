@@ -276,7 +276,7 @@ diff --git a/file2.go b/file2.go
  func helper() {}
 `
 	inputPath := filepath.Join(tmpDir, "test.diff")
-	err := os.WriteFile(inputPath, []byte(diffContent), 0644)
+	err := os.WriteFile(inputPath, []byte(diffContent), 0o600)
 	require.NoError(t, err)
 
 	outputDir := filepath.Join(tmpDir, "chunks")
@@ -291,7 +291,8 @@ diff --git a/file2.go b/file2.go
 		assert.NotEmpty(t, entries)
 
 		// Verify first chunk has header
-		firstChunk, err := os.ReadFile(filepath.Join(outputDir, "test-chunk-01.diff"))
+		chunkPath := filepath.Join(outputDir, "test-chunk-01.diff")
+		firstChunk, err := os.ReadFile(chunkPath) //nolint:gosec // test reading controlled file
 		require.NoError(t, err)
 		assert.Contains(t, string(firstChunk), "# Diff Chunk")
 	})
@@ -302,7 +303,8 @@ diff --git a/file2.go b/file2.go
 		require.NoError(t, err)
 
 		// Verify first chunk does NOT have header
-		firstChunk, err := os.ReadFile(filepath.Join(outputDirNoHeader, "test-chunk-01.diff"))
+		chunkPath := filepath.Join(outputDirNoHeader, "test-chunk-01.diff")
+		firstChunk, err := os.ReadFile(chunkPath) //nolint:gosec // test reading controlled file
 		require.NoError(t, err)
 		assert.NotContains(t, string(firstChunk), "# Diff Chunk")
 	})
@@ -313,7 +315,7 @@ func TestSplitDiffFileErrors(t *testing.T) {
 
 	t.Run("empty file", func(t *testing.T) {
 		emptyFile := filepath.Join(tmpDir, "empty.diff")
-		err := os.WriteFile(emptyFile, []byte{}, 0644)
+		err := os.WriteFile(emptyFile, []byte{}, 0o600)
 		require.NoError(t, err)
 
 		err = splitDiffFile(emptyFile, filepath.Join(tmpDir, "out"), 10, false)
@@ -341,7 +343,7 @@ func TestWriteChunk(t *testing.T) {
 		err := writeChunk(path, chunk, 1, 3, false)
 		require.NoError(t, err)
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) //nolint:gosec // test reading controlled file
 		require.NoError(t, err)
 
 		assert.Contains(t, string(content), "# Diff Chunk 1 of 3")
@@ -357,7 +359,7 @@ func TestWriteChunk(t *testing.T) {
 		err := writeChunk(path, chunk, 1, 3, true)
 		require.NoError(t, err)
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) //nolint:gosec // test reading controlled file
 		require.NoError(t, err)
 
 		assert.NotContains(t, string(content), "# Diff Chunk")

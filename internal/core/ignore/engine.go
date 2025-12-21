@@ -247,7 +247,7 @@ func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
 
 	for _, gitignoreFile := range gitignoreFiles {
 		// Read the file content
-		content, err := os.ReadFile(gitignoreFile)
+		content, err := os.ReadFile(gitignoreFile) //nolint:gosec // path comes from controlled directory walk
 		if err != nil {
 			continue // Skip files we can't read
 		}
@@ -407,7 +407,7 @@ func (e *LayeredIgnoreEngine) LoadShotgunignore(rootDir string) error {
 
 	for _, shotgunignoreFile := range shotgunignoreFiles {
 		// Read the file content
-		content, err := os.ReadFile(shotgunignoreFile)
+		content, err := os.ReadFile(shotgunignoreFile) //nolint:gosec // path comes from controlled directory walk
 		if err != nil {
 			continue // Skip files we can't read
 		}

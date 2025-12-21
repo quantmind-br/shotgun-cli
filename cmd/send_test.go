@@ -30,8 +30,8 @@ func TestContextSendCmd_PreRunE(t *testing.T) {
 			setup: func(t *testing.T) {
 				f, err := os.Create("testfile.txt")
 				require.NoError(t, err)
-				f.Close()
-				t.Cleanup(func() { os.Remove("testfile.txt") })
+				_ = f.Close()
+				t.Cleanup(func() { _ = os.Remove("testfile.txt") })
 			},
 			wantErr: false,
 		},
@@ -73,7 +73,7 @@ func TestRunContextSend_FromFile(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := tempDir + "/test-prompt.txt"
 	testContent := "This is a test prompt for Gemini"
-	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Test successful file reading and validation
@@ -96,7 +96,8 @@ func TestRunContextSend_FromFile(t *testing.T) {
 			assert.True(t,
 				strings.Contains(errorMsg, "geminiweb") ||
 					strings.Contains(errorMsg, "gemini request failed") ||
-					strings.Contains(errorMsg, "failed to read file"),
+					strings.Contains(errorMsg, "failed to read file") ||
+					strings.Contains(errorMsg, "gemini integration is disabled"),
 				"Expected gemini-related error, got: %s", errorMsg)
 		}
 		// If err is nil, it means gemini is working and the test succeeded
@@ -105,7 +106,7 @@ func TestRunContextSend_FromFile(t *testing.T) {
 	// Test with empty file
 	t.Run("empty file content", func(t *testing.T) {
 		emptyFile := tempDir + "/empty.txt"
-		err := os.WriteFile(emptyFile, []byte(""), 0644)
+		err := os.WriteFile(emptyFile, []byte(""), 0o600)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
@@ -122,7 +123,7 @@ func TestRunContextSend_FromFile(t *testing.T) {
 	// Test with whitespace-only file
 	t.Run("whitespace-only file content", func(t *testing.T) {
 		whitespaceFile := tempDir + "/whitespace.txt"
-		err := os.WriteFile(whitespaceFile, []byte("   \n\t  \n   "), 0644)
+		err := os.WriteFile(whitespaceFile, []byte("   \n\t  \n   "), 0o600)
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
@@ -153,7 +154,7 @@ func TestRunContextSend_FromFile(t *testing.T) {
 func TestRunContextSend_Flags(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := tempDir + "/test-prompt.txt"
-	err := os.WriteFile(testFile, []byte("Test content"), 0644)
+	err := os.WriteFile(testFile, []byte("Test content"), 0o600)
 	require.NoError(t, err)
 
 	t.Run("custom model flag parsing", func(t *testing.T) {

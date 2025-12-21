@@ -193,7 +193,7 @@ func TestReadFileContent(t *testing.T) {
 	t.Run("read existing file", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "test.txt")
 		expectedContent := "Hello, World!"
-		err := os.WriteFile(filePath, []byte(expectedContent), 0644)
+		err := os.WriteFile(filePath, []byte(expectedContent), 0o600)
 		require.NoError(t, err)
 
 		content, err := readFileContent(filePath)
@@ -208,7 +208,7 @@ func TestReadFileContent(t *testing.T) {
 
 	t.Run("read empty file", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "empty.txt")
-		err := os.WriteFile(filePath, []byte{}, 0644)
+		err := os.WriteFile(filePath, []byte{}, 0o600)
 		require.NoError(t, err)
 
 		content, err := readFileContent(filePath)
@@ -223,10 +223,10 @@ func TestPeekFileHeader(t *testing.T) {
 	t.Run("peek small file", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "small.txt")
 		content := "Small content"
-		err := os.WriteFile(filePath, []byte(content), 0644)
+		err := os.WriteFile(filePath, []byte(content), 0o600)
 		require.NoError(t, err)
 
-		header, err := peekFileHeader(filePath, 1024)
+		header, err := peekFileHeader(filePath)
 		require.NoError(t, err)
 		assert.Equal(t, content, string(header))
 	})
@@ -237,25 +237,25 @@ func TestPeekFileHeader(t *testing.T) {
 		for i := range content {
 			content[i] = byte('A' + (i % 26))
 		}
-		err := os.WriteFile(filePath, content, 0644)
+		err := os.WriteFile(filePath, content, 0o600)
 		require.NoError(t, err)
 
-		header, err := peekFileHeader(filePath, 1024)
+		header, err := peekFileHeader(filePath)
 		require.NoError(t, err)
 		assert.Len(t, header, 1024)
 	})
 
 	t.Run("peek non-existent file", func(t *testing.T) {
-		_, err := peekFileHeader(filepath.Join(tmpDir, "nonexistent.txt"), 1024)
+		_, err := peekFileHeader(filepath.Join(tmpDir, "nonexistent.txt"))
 		assert.Error(t, err)
 	})
 
 	t.Run("peek empty file", func(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "empty.txt")
-		err := os.WriteFile(filePath, []byte{}, 0644)
+		err := os.WriteFile(filePath, []byte{}, 0o600)
 		require.NoError(t, err)
 
-		header, err := peekFileHeader(filePath, 1024)
+		header, err := peekFileHeader(filePath)
 		require.NoError(t, err)
 		assert.Len(t, header, 0)
 	})

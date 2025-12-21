@@ -49,14 +49,27 @@ func (fs *FileSystemScanner) ScanWithProgress(
 		config = DefaultScanConfig()
 	}
 
-	// Load .gitignore and configure ignore engine with custom patterns
-	if err := fs.ignoreEngine.LoadGitignore(rootPath); err != nil {
-		return nil, fmt.Errorf("failed to load gitignore rules: %w", err)
+	// Validate rootPath exists and is a directory
+	info, err := os.Stat(rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid root path: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("root path is not a directory: %s", rootPath)
 	}
 
-	// Load .shotgunignore rules (project-specific ignore patterns)
-	if err := fs.ignoreEngine.LoadShotgunignore(rootPath); err != nil {
-		return nil, fmt.Errorf("failed to load shotgunignore rules: %w", err)
+	// Load .gitignore rules if configured (default: true)
+	if config.RespectGitignore {
+		if err := fs.ignoreEngine.LoadGitignore(rootPath); err != nil {
+			return nil, fmt.Errorf("failed to load gitignore rules: %w", err)
+		}
+	}
+
+	// Load .shotgunignore rules if configured (default: true)
+	if config.RespectShotgunignore {
+		if err := fs.ignoreEngine.LoadShotgunignore(rootPath); err != nil {
+			return nil, fmt.Errorf("failed to load shotgunignore rules: %w", err)
+		}
 	}
 
 	// Add custom patterns from config
@@ -393,7 +406,7 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 }
 
 // getIgnoreStatus returns the ignore status for both gitignore and custom rules
-func (fs *FileSystemScanner) getIgnoreStatus(relPath string, isDir bool, config *ScanConfig) (bool, bool) {
+func (fs *FileSystemScanner) getIgnoreStatus(relPath string, _ bool, config *ScanConfig) (bool, bool) {
 	return fs.getIgnoreStatusWithEngine(relPath, config)
 }
 

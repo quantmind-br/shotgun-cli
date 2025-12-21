@@ -716,9 +716,6 @@ func TestWizardHandleRescanRequest(t *testing.T) {
 	wizard.selectedFiles["main.go"] = true
 	wizard.step = StepFileSelection
 
-	// Create a rescan message type (internal)
-	type rescanMsg struct{}
-
 	// The wizard should handle rescan by restarting the scan
 	// This tests the conceptual flow - actual rescan may use different mechanism
 	initialTree := wizard.fileTree

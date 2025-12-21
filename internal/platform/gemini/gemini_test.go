@@ -675,6 +675,7 @@ func TestExecutor_Send_Success(t *testing.T) {
 
 	if result == nil {
 		t.Error("expected non-nil result")
+		return
 	}
 
 	if result.Response == "" {
@@ -818,27 +819,27 @@ func TestConfig_FindBinary_CommonPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	commonPath := filepath.Join(tmpDir, "bin", "geminiweb")
 
-	err := os.MkdirAll(filepath.Dir(commonPath), 0755)
+	err := os.MkdirAll(filepath.Dir(commonPath), 0o750)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a fake geminiweb binary
-	file, err := os.Create(commonPath)
+	file, err := os.Create(commonPath) //nolint:gosec // test file creation
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.WriteString("#!/bin/bash\necho fake geminiweb")
-	file.Close()
-	os.Chmod(commonPath, 0755)
+	_, _ = file.WriteString("#!/bin/bash\necho fake geminiweb")
+	_ = file.Close()
+	_ = os.Chmod(commonPath, 0o700) //nolint:gosec // test executable needs exec permission
 
 	// Test with GOPATH set to temp dir and clear PATH to avoid finding real geminiweb
 	oldGopath := os.Getenv("GOPATH")
 	oldPath := os.Getenv("PATH")
-	os.Setenv("GOPATH", tmpDir)
-	os.Setenv("PATH", tmpDir+":/bin:/usr/bin") // Minimal PATH without real geminiweb
-	defer os.Setenv("GOPATH", oldGopath)
-	defer os.Setenv("PATH", oldPath)
+	_ = os.Setenv("GOPATH", tmpDir)
+	_ = os.Setenv("PATH", tmpDir+":/bin:/usr/bin") // Minimal PATH without real geminiweb
+	defer func() { _ = os.Setenv("GOPATH", oldGopath) }()
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	cfg := Config{} // Empty config should search common paths
 	path, err := cfg.FindBinary()

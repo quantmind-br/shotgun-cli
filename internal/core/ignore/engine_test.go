@@ -121,7 +121,7 @@ func TestLayeredIgnoreEngine_LoadGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	engine := NewIgnoreEngine()
 
@@ -146,7 +146,7 @@ func TestLayeredIgnoreEngine_LoadGitignore(t *testing.T) {
 unique-folder/
 !important.tmp
 `
-		err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644)
+		err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +185,7 @@ unique-folder/
 	t.Run("invalid gitignore file", func(t *testing.T) {
 		// Create invalid .gitignore file (should still work, gitignore is forgiving)
 		gitignorePath := filepath.Join(tmpDir, ".gitignore")
-		err := os.WriteFile(gitignorePath, []byte(""), 0644)
+		err := os.WriteFile(gitignorePath, []byte(""), 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -383,14 +383,14 @@ func TestLayeredIgnoreEngine_IsGitignored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create .gitignore file
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 	gitignoreContent := `*.tmp
 /gitignore-test/
 `
-	err = os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644)
+	err = os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +484,7 @@ func TestLayeredIgnoreEngine_LoadShotgunignore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	t.Run("missing shotgunignore file", func(t *testing.T) {
 		engine := NewIgnoreEngine()
@@ -511,7 +511,7 @@ test/**
 *.spec.js
 !important_test.go
 `
-		err := os.WriteFile(shotgunignorePath, []byte(shotgunignoreContent), 0644)
+		err := os.WriteFile(shotgunignorePath, []byte(shotgunignoreContent), 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -552,7 +552,7 @@ test/**
 
 		// Create nested directory structure
 		nestedDir := filepath.Join(tmpDir, "nested")
-		err := os.MkdirAll(nestedDir, 0755)
+		err := os.MkdirAll(nestedDir, 0o750)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -562,7 +562,7 @@ test/**
 		nestedShotgunignoreContent := `*.local
 temp/
 `
-		err = os.WriteFile(nestedShotgunignorePath, []byte(nestedShotgunignoreContent), 0644)
+		err = os.WriteFile(nestedShotgunignorePath, []byte(nestedShotgunignoreContent), 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -597,7 +597,7 @@ temp/
 
 		// Create empty .shotgunignore file
 		shotgunignorePath := filepath.Join(tmpDir, ".shotgunignore")
-		err := os.WriteFile(shotgunignorePath, []byte(""), 0644)
+		err := os.WriteFile(shotgunignorePath, []byte(""), 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}

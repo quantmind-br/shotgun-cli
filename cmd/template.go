@@ -244,8 +244,8 @@ Examples:
 			templateName = args[1]
 		}
 
-		// Read template file
-		content, err := os.ReadFile(filePath)
+		// Read template file - path is user-provided for template import
+		content, err := os.ReadFile(filePath) //nolint:gosec // user-provided path for template import
 		if err != nil {
 			return fmt.Errorf("failed to read template file: %w", err)
 		}
@@ -268,7 +268,7 @@ Examples:
 
 		// Get user templates directory
 		userTemplatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
-		if err := os.MkdirAll(userTemplatesDir, 0755); err != nil {
+		if err := os.MkdirAll(userTemplatesDir, 0o750); err != nil {
 			return fmt.Errorf("failed to create user templates directory: %w", err)
 		}
 
@@ -353,7 +353,7 @@ Examples:
 
 		// Create directory if it doesn't exist
 		dir := filepath.Dir(outputPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 

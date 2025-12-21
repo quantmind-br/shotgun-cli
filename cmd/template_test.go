@@ -43,7 +43,8 @@ func TestRenderTemplateWritesFile(t *testing.T) {
 		t.Fatalf("renderTemplate error: %v", err)
 	}
 
-	if data, err := os.ReadFile(tmp); err != nil || len(data) == 0 {
+	data, err := os.ReadFile(tmp) //nolint:gosec // test reading controlled file
+	if err != nil || len(data) == 0 {
 		t.Fatalf("expected file to be written, err=%v", err)
 	}
 }
