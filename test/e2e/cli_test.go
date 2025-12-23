@@ -1,10 +1,12 @@
 package e2e
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func repoRoot() string {
@@ -20,7 +22,10 @@ func TestCLIContextGenerateProducesFile(t *testing.T) {
 	fixture := filepath.Join(root, "test", "fixtures", "sample-project")
 	output := filepath.Join(t.TempDir(), "context-output.md")
 
-	cmd := exec.Command( //nolint:gosec // test command with controlled args
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
 		"go", "run", ".", "context", "generate",
 		"--root", fixture, "--output", output, "--max-size", "5MB",
 	)
@@ -38,7 +43,11 @@ func TestCLIContextGenerateProducesFile(t *testing.T) {
 func TestCLITemplateRenderCreatesFile(t *testing.T) {
 	root := repoRoot()
 	output := filepath.Join(t.TempDir(), "template.md")
-	cmd := exec.Command( //nolint:gosec // test command with controlled args
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
 		"go", "run", ".", "template", "render", "makePlan",
 		"--var", "TASK=Document fixture",
 		"--var", "RULES=Keep it short",

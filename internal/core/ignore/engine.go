@@ -1,3 +1,4 @@
+// Package ignore provides file and directory ignore pattern matching.
 package ignore
 
 import (
@@ -8,7 +9,11 @@ import (
 	gitignore "github.com/sabhiram/go-gitignore"
 )
 
-// IgnoreReason represents the reason why a path was ignored
+// Reason represents the reason why a path was ignored.
+// Deprecated: Use Reason instead of IgnoreReason.
+type Reason = IgnoreReason //nolint:revive // keeping IgnoreReason for backward compatibility
+
+// IgnoreReason represents the reason why a path was ignored.
 type IgnoreReason int
 
 const (

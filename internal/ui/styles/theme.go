@@ -1,3 +1,4 @@
+// Package styles provides visual styling and theming for the TUI components.
 package styles
 
 import (

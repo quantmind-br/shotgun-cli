@@ -1,3 +1,4 @@
+// Package assets provides embedded static files for the application.
 package assets
 
 import "embed"

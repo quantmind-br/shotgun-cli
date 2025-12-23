@@ -1,11 +1,13 @@
 package e2e
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFileStructureWithContentBlocks(t *testing.T) {
@@ -38,7 +40,11 @@ This is a test.`,
 
 	// Generate context
 	outputFile := filepath.Join(tmpDir, "output.md")
-	cmd := exec.Command(binaryPath, //nolint:gosec // test command with controlled args
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, binaryPath, //nolint:gosec // test command with controlled args
 		"context", "generate",
 		"--root", tmpDir,
 		"--include", "*.go,*.md,*.yaml",
