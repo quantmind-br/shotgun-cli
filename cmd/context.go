@@ -471,7 +471,7 @@ func sendToGemini(config GenerateConfig, content string) error {
 	ctx := context.Background()
 	result, err := executor.Send(ctx, content)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send to Gemini: %w", err)
 	}
 
 	// Determine output file

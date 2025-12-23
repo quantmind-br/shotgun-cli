@@ -146,7 +146,11 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 		return nil
 	})
 
-	return count, err
+	if err != nil {
+		return count, fmt.Errorf("failed to walk directory for counting: %w", err)
+	}
+
+	return count, nil
 }
 
 func (fs *FileSystemScanner) handleCountError(d os.DirEntry) error {
@@ -233,7 +237,11 @@ func (fs *FileSystemScanner) walkAndBuild(
 		return nil
 	})
 
-	return root, current, err
+	if err != nil {
+		return root, current, fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	return root, current, nil
 }
 
 func (fs *FileSystemScanner) handleWalkError(d os.DirEntry) error {

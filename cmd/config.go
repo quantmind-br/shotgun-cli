@@ -431,7 +431,7 @@ func convertConfigValue(key, value string) (interface{}, error) {
 	case "scanner.max-files", "scanner.workers", "gemini.timeout":
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse integer value: %w", err)
 		}
 		return intVal, nil
 

@@ -485,7 +485,7 @@ func parseSize(sizeStr string) (int64, error) {
 	var size int64
 	_, err := fmt.Sscanf(sizeStr, "%d", &size)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to parse size value: %w", err)
 	}
 
 	return size * multiplier, nil

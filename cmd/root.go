@@ -99,7 +99,11 @@ func launchTUIWizard() {
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		return fmt.Errorf("command execution failed: %w", err)
+	}
+
+	return nil
 }
 
 func init() {

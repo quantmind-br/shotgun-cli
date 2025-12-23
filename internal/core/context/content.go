@@ -121,7 +121,7 @@ func walkSelectedNodes(node *scanner.FileNode, fn func(*scanner.FileNode) error)
 func peekFileHeader(path string) ([]byte, error) {
 	file, err := os.Open(path) //nolint:gosec // path is validated by caller
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open file for header peek: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
@@ -129,7 +129,7 @@ func peekFileHeader(path string) ([]byte, error) {
 	header := make([]byte, headerSize)
 	bytesRead, err := file.Read(header)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file header: %w", err)
 	}
 
 	return header[:bytesRead], nil
@@ -138,13 +138,13 @@ func peekFileHeader(path string) ([]byte, error) {
 func readFileContent(path string) (string, error) {
 	file, err := os.Open(path) //nolint:gosec // path is validated by caller
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
 	content, err := io.ReadAll(file)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read file content: %w", err)
 	}
 
 	return string(content), nil

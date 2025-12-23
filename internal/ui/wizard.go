@@ -834,7 +834,11 @@ func generateContextCmd(
 
 func writeFile(path, content string) error {
 	// #nosec G306 - Generated context files are meant to be world-readable (contain code/docs, not secrets)
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
 }
 
 func (m *WizardModel) clipboardCopyCmd(content string) tea.Cmd {
@@ -869,7 +873,7 @@ func parseSize(sizeStr string) (int64, error) {
 
 	size, err := strconv.ParseInt(sizeStr, 10, 64)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to parse size integer: %w", err)
 	}
 
 	return size * multiplier, nil

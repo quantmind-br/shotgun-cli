@@ -254,7 +254,7 @@ func countFiles(lines []string) int {
 func writeChunk(path string, chunk DiffChunk, chunkNum, totalChunks int, noHeader bool) error {
 	file, err := os.Create(path) //nolint:gosec // path is constructed by the tool
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create chunk file: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 

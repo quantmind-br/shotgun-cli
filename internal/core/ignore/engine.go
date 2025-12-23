@@ -2,6 +2,7 @@
 package ignore
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,7 +239,7 @@ func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
 	})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to walk directory for gitignore files: %w", err)
 	}
 
 	// If no .gitignore files found, use empty matcher
@@ -402,7 +403,7 @@ func (e *LayeredIgnoreEngine) LoadShotgunignore(rootDir string) error {
 	})
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to walk directory for shotgunignore files: %w", err)
 	}
 
 	// If no .shotgunignore files found, return early
