@@ -128,7 +128,7 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 
 		relPath, err := filepath.Rel(rootPath, path)
 		if err != nil || relPath == "." {
-			return nil
+			return nil //nolint:nilerr // intentional: continue walking on relative path error
 		}
 
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
@@ -209,7 +209,7 @@ func (fs *FileSystemScanner) walkAndBuild(
 
 		relPath, err := filepath.Rel(rootPath, path)
 		if err != nil || relPath == "." {
-			return nil
+			return nil //nolint:nilerr // intentional: continue walking on relative path error
 		}
 
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
@@ -455,5 +455,5 @@ func normRel(relPath string) string {
 	return filepath.ToSlash(relPath)
 }
 
-// SkipDir is a sentinel error used with filepath.WalkDir to skip directories
-var SkipDir = filepath.SkipDir
+// ErrSkipDir is a sentinel error used with filepath.WalkDir to skip directories.
+var ErrSkipDir = filepath.SkipDir

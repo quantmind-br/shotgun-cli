@@ -315,6 +315,7 @@ func TestNewExecutor(t *testing.T) {
 
 	if executor == nil {
 		t.Fatal("expected non-nil executor")
+		return // unreachable but satisfies staticcheck
 	}
 
 	if executor.config.Model != cfg.Model {

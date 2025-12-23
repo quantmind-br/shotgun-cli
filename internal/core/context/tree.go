@@ -142,12 +142,14 @@ func formatFileSize(bytes int64) string {
 		GB = 1024 * MB
 	)
 
-	if bytes >= GB {
+	switch {
+	case bytes >= GB:
 		return fmt.Sprintf("%.1fGB", float64(bytes)/float64(GB))
-	} else if bytes >= MB {
+	case bytes >= MB:
 		return fmt.Sprintf("%.1fMB", float64(bytes)/float64(MB))
-	} else if bytes >= KB {
+	case bytes >= KB:
 		return fmt.Sprintf("%.1fKB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%dB", bytes)
 	}
-	return fmt.Sprintf("%dB", bytes)
 }

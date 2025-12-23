@@ -358,7 +358,7 @@ func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, _ string, dept
 
 		for i, child := range children {
 			childIsLast := i == len(children)-1
-			childHasNext := append(currentHasNext, !isLast)
+			childHasNext := append(currentHasNext[:len(currentHasNext):len(currentHasNext)], !isLast)
 			m.buildVisibleItems(child, child.Path, depth+1, childIsLast, childHasNext)
 		}
 	}

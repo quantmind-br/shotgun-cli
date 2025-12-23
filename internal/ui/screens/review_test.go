@@ -625,7 +625,7 @@ func TestReview_SetGeminiStates(t *testing.T) {
 	if m.geminiComplete {
 		t.Fatalf("expected geminiComplete to be false after SetGeminiError")
 	}
-	if m.geminiError != testErr {
+	if m.geminiError != testErr { //nolint:errorlint // testing exact error identity
 		t.Fatalf("expected geminiError to be testErr")
 	}
 }

@@ -366,6 +366,7 @@ func TestFileSystemScanner(t *testing.T) {
 
 		if root == nil {
 			t.Fatal("Expected non-nil root node")
+			return // unreachable but satisfies staticcheck
 		}
 
 		if !root.IsDir {

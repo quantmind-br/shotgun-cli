@@ -21,7 +21,7 @@ func TestClipboardErrorUnwrap(t *testing.T) {
 	wrapped := &ClipboardError{Err: originalErr}
 
 	unwrapped := wrapped.Unwrap()
-	if unwrapped != originalErr {
+	if unwrapped != originalErr { //nolint:errorlint // testing exact error identity
 		t.Fatalf("Unwrap should return the original error")
 	}
 }

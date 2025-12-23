@@ -178,7 +178,7 @@ func showCurrentConfig() error {
 	return nil
 }
 
-// getGeminiStatusSummary returns a brief status summary for Gemini integration
+// getGeminiStatusSummary returns a brief status summary for Gemini integration.
 func getGeminiStatusSummary() string {
 	if !viper.GetBool("gemini.enabled") {
 		return "disabled"

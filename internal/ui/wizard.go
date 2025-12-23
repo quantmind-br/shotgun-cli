@@ -852,16 +852,18 @@ func parseSize(sizeStr string) (int64, error) {
 	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
 
 	var multiplier int64 = 1
-	if strings.HasSuffix(sizeStr, "KB") {
+
+	switch {
+	case strings.HasSuffix(sizeStr, "KB"):
 		multiplier = 1024
 		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	} else if strings.HasSuffix(sizeStr, "MB") {
+	case strings.HasSuffix(sizeStr, "MB"):
 		multiplier = 1024 * 1024
 		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	} else if strings.HasSuffix(sizeStr, "GB") {
+	case strings.HasSuffix(sizeStr, "GB"):
 		multiplier = 1024 * 1024 * 1024
 		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	} else if strings.HasSuffix(sizeStr, "B") {
+	case strings.HasSuffix(sizeStr, "B"):
 		sizeStr = strings.TrimSuffix(sizeStr, "B")
 	}
 
@@ -1030,7 +1032,7 @@ func (m *WizardModel) validateContentSize(content string) error {
 
 	maxSize, err := parseSize(maxSizeStr)
 	if err != nil {
-		return fmt.Errorf("invalid max-size configuration: %v", err)
+		return fmt.Errorf("invalid max-size configuration: %w", err)
 	}
 
 	contentSize := int64(len(content))

@@ -120,13 +120,15 @@ func printGeminiStatusHuman(status gemini.Status) error {
 
 	// Status summary and next steps
 	fmt.Println()
-	if status.Error != "" {
+
+	switch {
+	case status.Error != "":
 		fmt.Println("⚠️  Issue detected:", status.Error)
 		printGeminiNextSteps(status)
-	} else if !enabled {
+	case !enabled:
 		fmt.Println("💡 Gemini is configured but disabled.")
 		fmt.Println("   To enable: shotgun-cli config set gemini.enabled true")
-	} else {
+	default:
 		fmt.Println("✅ Gemini is ready to use!")
 	}
 

@@ -78,10 +78,10 @@ func (m *ReviewModel) SetSize(width, height int) {
 }
 
 func (m *ReviewModel) Update(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
-	case "ctrl+c":
+	if msg.String() == "ctrl+c" {
 		return tea.Quit
 	}
+
 	return nil
 }
 

@@ -22,7 +22,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
-// ProgressMode defines how progress is reported
+// ProgressMode defines how progress is reported.
 type ProgressMode string
 
 const (

@@ -1,6 +1,7 @@
 package context
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -127,7 +128,7 @@ func peekFileHeader(path string) ([]byte, error) {
 	const headerSize = 1024
 	header := make([]byte, headerSize)
 	bytesRead, err := file.Read(header)
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 

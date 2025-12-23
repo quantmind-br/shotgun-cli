@@ -72,7 +72,7 @@ After installing completion, restart your shell or source the completion file.`,
 	},
 }
 
-// Custom completion functions for dynamic values
+// Custom completion functions for dynamic values.
 func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the first argument (config key)
 	if len(args) > 0 {
