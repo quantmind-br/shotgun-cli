@@ -38,4 +38,5 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: ./...
+          args: --config .golangci.yml ./...
+          verify: false
