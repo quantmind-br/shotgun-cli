@@ -138,6 +138,7 @@ Examples:
 		}
 
 		log.Info().Msg("Context generated successfully")
+
 		return nil
 	},
 }
@@ -503,6 +504,7 @@ func countFilesInTree(node *scanner.FileNode) int {
 	for _, child := range node.Children {
 		count += countFilesInTree(child)
 	}
+
 	return count
 }
 

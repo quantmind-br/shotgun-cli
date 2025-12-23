@@ -60,6 +60,7 @@ func NewFileTree(tree *scanner.FileNode, selections map[string]bool) *FileTreeMo
 
 	model.rebuildVisibleItems()
 	model.recomputeSelectionStates()
+
 	return model
 }
 
@@ -154,6 +155,7 @@ func (m *FileTreeModel) computeFilterMatches() {
 	if m.filter == "" || m.tree == nil {
 		m.lastFilter = m.filter
 		m.filterCacheValid = true
+
 		return
 	}
 
@@ -275,6 +277,7 @@ func (m *FileTreeModel) renderCheckbox(item treeItem, selectionState styles.Sele
 	if m.selections[item.path] {
 		checkboxText = "[✓] "
 	}
+
 	return styles.RenderFileName(checkboxText, selectionState)
 }
 
@@ -286,6 +289,7 @@ func (m *FileTreeModel) renderDirIndicator(item treeItem) string {
 	if m.expanded[item.path] {
 		return "📂 "
 	}
+
 	return "📁 "
 }
 
@@ -294,6 +298,7 @@ func (m *FileTreeModel) renderItemName(item treeItem, selectionState styles.Sele
 	if item.node.IsDir {
 		baseName += "/"
 	}
+
 	return styles.RenderFileName(baseName, selectionState)
 }
 
@@ -305,6 +310,7 @@ func (m *FileTreeModel) renderSizeInfo(item treeItem) string {
 	if item.node.IsDir || item.node.Size == 0 {
 		return ""
 	}
+
 	return fmt.Sprintf(" (%s)", formatFileSize(item.node.Size))
 }
 
@@ -353,6 +359,7 @@ func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, _ string, dept
 			if children[i].IsDir != children[j].IsDir {
 				return children[i].IsDir
 			}
+
 			return children[i].Name < children[j].Name
 		})
 
@@ -469,6 +476,7 @@ func (m *FileTreeModel) recomputeSelectionStates() {
 				state = styles.SelectionSelected
 			}
 			m.selectionStates[node.Path] = state
+
 			return state
 		}
 
@@ -500,6 +508,7 @@ func (m *FileTreeModel) recomputeSelectionStates() {
 		}
 
 		m.selectionStates[node.Path] = state
+
 		return state
 	}
 
@@ -511,6 +520,7 @@ func (m *FileTreeModel) selectionStateFor(path string) styles.SelectionState {
 	if state, ok := m.selectionStates[path]; ok {
 		return state
 	}
+
 	return styles.SelectionUnselected
 }
 
@@ -524,6 +534,7 @@ func formatFileSize(bytes int64) string {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 

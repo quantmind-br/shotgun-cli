@@ -84,6 +84,7 @@ func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
 		if stderrStr != "" {
 			return nil, fmt.Errorf("geminiweb execution failed: %w\nstderr: %s", err, stderrStr)
 		}
+
 		return nil, fmt.Errorf("geminiweb execution failed: %w", err)
 	}
 
@@ -146,6 +147,7 @@ func (e *Executor) SendWithProgress(ctx context.Context, content string, progres
 		if stderrStr != "" {
 			return nil, fmt.Errorf("failed: %s", stderrStr)
 		}
+
 		return nil, fmt.Errorf("failed: %w", err)
 	}
 
@@ -199,6 +201,7 @@ func StripANSI(s string) string {
 			i++
 		}
 	}
+
 	return result.String()
 }
 

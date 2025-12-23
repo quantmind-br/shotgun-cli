@@ -178,6 +178,7 @@ func printGeminiStatusJSON(status gemini.Status) error {
 	}
 
 	fmt.Println(string(data))
+
 	return nil
 }
 

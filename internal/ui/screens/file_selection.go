@@ -74,6 +74,7 @@ func (m *FileSelectionModel) handleFilterMode(msg tea.KeyMsg) tea.Cmd {
 			m.filterBuffer += msg.String()
 		}
 	}
+
 	return nil
 }
 
@@ -102,6 +103,7 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[str
 	case "ctrl+c":
 		m.tree.ClearFilter()
 	}
+
 	return nil
 }
 
@@ -226,5 +228,6 @@ func formatSize(bytes int64) string {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

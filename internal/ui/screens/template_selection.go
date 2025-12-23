@@ -55,6 +55,7 @@ func (m *TemplateSelectionModel) LoadTemplates() tea.Cmd {
 		for i := range templateList {
 			templates[i] = &templateList[i]
 		}
+
 		return TemplatesLoadedMsg{Templates: templates}
 	}
 }
@@ -76,6 +77,7 @@ func (m *TemplateSelectionModel) Update(msg tea.KeyMsg) (*template.Template, tea
 	case "enter", " ":
 		if m.cursor >= 0 && m.cursor < len(m.templates) {
 			m.selectedTemplate = m.templates[m.cursor]
+
 			return m.templates[m.cursor], nil
 		}
 	case "home":
@@ -100,6 +102,7 @@ func (m *TemplateSelectionModel) HandleMessage(msg tea.Msg) tea.Cmd {
 		m.err = msg.Err
 		m.loading = false
 	}
+
 	return nil
 }
 
@@ -155,6 +158,7 @@ func (m *TemplateSelectionModel) View() string {
 func (m *TemplateSelectionModel) checkEarlyReturns(header string) string {
 	if m.loading {
 		loadingStyle := lipgloss.NewStyle().Foreground(styles.PrimaryColor)
+
 		return header + "\n\n" + loadingStyle.Render("⏳ Loading templates...")
 	}
 	if m.err != nil {
@@ -163,6 +167,7 @@ func (m *TemplateSelectionModel) checkEarlyReturns(header string) string {
 	if len(m.templates) == 0 {
 		return header + "\n\n" + styles.RenderWarning("No templates found.")
 	}
+
 	return ""
 }
 

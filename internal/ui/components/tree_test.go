@@ -20,6 +20,7 @@ func createTestNode(name, path string, isDir bool, children ...*scanner.FileNode
 	for _, child := range children {
 		child.Parent = node
 	}
+
 	return node
 }
 
@@ -174,6 +175,7 @@ func TestFileTreeToggleSelection(t *testing.T) {
 	for i, item := range model.visibleItems {
 		if item.node == file {
 			fileIdx = i
+
 			break
 		}
 	}
@@ -215,6 +217,7 @@ func TestFileTreeToggleSelectionOnDirectory(t *testing.T) {
 	for i, item := range model.visibleItems {
 		if item.node == dir {
 			dirIdx = i
+
 			break
 		}
 	}

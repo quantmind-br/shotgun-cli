@@ -33,6 +33,7 @@ func EstimateFromBytes(size int64) int {
 	if size <= 0 {
 		return 0
 	}
+
 	return int((size + BytesPerToken - 1) / BytesPerToken) // Round up
 }
 
@@ -101,6 +102,7 @@ func CheckContextFit(tokens, windowSize int) ContextFit {
 	if windowSize > 0 {
 		percentage = float64(tokens) / float64(windowSize) * 100
 	}
+
 	return ContextFit{
 		WindowSize: windowSize,
 		UsedTokens: tokens,

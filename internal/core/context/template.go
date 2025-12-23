@@ -54,6 +54,7 @@ func getTemplateFunctions() template.FuncMap {
 			if length <= 3 {
 				return s[:length]
 			}
+
 			return s[:length-3] + "..."
 		},
 		"formatSize": formatFileSize,
@@ -77,6 +78,7 @@ func (tr *TemplateRenderer) validateRequiredVars(data ContextData) error {
 			return fmt.Errorf("required template variable '%s' is missing or empty", varName)
 		}
 	}
+
 	return nil
 }
 

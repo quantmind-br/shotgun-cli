@@ -143,6 +143,7 @@ func (fs *FileSystemScanner) countItems(rootPath string, config *ScanConfig) (in
 		if !d.IsDir() {
 			fileCount++
 		}
+
 		return nil
 	})
 
@@ -157,6 +158,7 @@ func (fs *FileSystemScanner) handleCountError(d os.DirEntry) error {
 	if d != nil && d.IsDir() {
 		return filepath.SkipDir
 	}
+
 	return nil
 }
 
@@ -168,6 +170,7 @@ func (fs *FileSystemScanner) skipIfDirectory(d os.DirEntry) error {
 	if d.IsDir() {
 		return filepath.SkipDir
 	}
+
 	return nil
 }
 
@@ -178,6 +181,7 @@ func (fs *FileSystemScanner) shouldSkipLargeFile(d os.DirEntry, config *ScanConf
 	if info, err := d.Info(); err == nil {
 		return info.Size() > config.MaxFileSize
 	}
+
 	return false
 }
 
@@ -234,6 +238,7 @@ func (fs *FileSystemScanner) walkAndBuild(
 		}
 
 		fs.reportProgress(progress, current, total, relPath)
+
 		return nil
 	})
 
@@ -248,6 +253,7 @@ func (fs *FileSystemScanner) handleWalkError(d os.DirEntry) error {
 	if d != nil && d.IsDir() {
 		return filepath.SkipDir
 	}
+
 	return nil
 }
 
@@ -264,8 +270,10 @@ func (fs *FileSystemScanner) getFileSize(d os.DirEntry, config *ScanConfig) (int
 		if config.MaxFileSize > 0 && size > config.MaxFileSize {
 			return 0, true
 		}
+
 		return size, false
 	}
+
 	return 0, false
 }
 
@@ -410,6 +418,7 @@ func (fs *FileSystemScanner) shouldIgnore(relPath string, isDir bool, config *Sc
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -442,6 +451,7 @@ func (fs *FileSystemScanner) classifyIgnoreReason(reason ignore.IgnoreReason) (b
 	case ignore.IgnoreReasonBuiltIn, ignore.IgnoreReasonCustom, ignore.IgnoreReasonExplicit:
 		return false, true
 	}
+
 	return false, false
 }
 
@@ -449,7 +459,9 @@ func (fs *FileSystemScanner) isHiddenFile(relPath string, config *ScanConfig) bo
 	if config.IncludeHidden {
 		return false
 	}
+
 	baseName := filepath.Base(relPath)
+
 	return strings.HasPrefix(baseName, ".") && baseName != "." && baseName != ".."
 }
 

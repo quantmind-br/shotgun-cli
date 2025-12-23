@@ -27,6 +27,7 @@ func Copy(content string) error {
 	if err := clipboard.WriteAll(content); err != nil {
 		return &ClipboardError{Err: err}
 	}
+
 	return nil
 }
 

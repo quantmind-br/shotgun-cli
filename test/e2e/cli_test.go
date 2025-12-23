@@ -14,6 +14,7 @@ func repoRoot() string {
 	if err != nil {
 		panic(err)
 	}
+
 	return root
 }
 

@@ -55,6 +55,7 @@ func IsValidModel(model string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -65,6 +66,7 @@ func (c *Config) FindBinary() (string, error) {
 		if _, err := os.Stat(c.BinaryPath); err == nil {
 			return c.BinaryPath, nil
 		}
+
 		return "", fmt.Errorf("geminiweb binary not found at specified path: %s", c.BinaryPath)
 	}
 
@@ -104,6 +106,7 @@ func (c *Config) FindBinary() (string, error) {
 func IsAvailable() bool {
 	cfg := DefaultConfig()
 	_, err := cfg.FindBinary()
+
 	return err == nil
 }
 
@@ -125,6 +128,7 @@ func IsConfigured() bool {
 // GetCookiesPath returns the path to the geminiweb cookies file.
 func GetCookiesPath() string {
 	home, _ := os.UserHomeDir()
+
 	return filepath.Join(home, ".geminiweb", "cookies.json")
 }
 
@@ -147,6 +151,7 @@ func GetStatus() Status {
 	binaryPath, err := cfg.FindBinary()
 	if err != nil {
 		status.Error = err.Error()
+
 		return status
 	}
 

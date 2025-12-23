@@ -138,6 +138,7 @@ func (f *FileNode) GetIgnoreReason() string {
 	if f.IsCustomIgnored {
 		return "custom ignored"
 	}
+
 	return "not ignored"
 }
 
@@ -151,10 +152,11 @@ func (f *FileNode) CountChildren() int {
 	for _, child := range f.Children {
 		count += child.CountChildren()
 	}
+
 	return count
 }
 
-// CountFiles returns the total number of files (non-directories) recursively
+// CountFiles returns the total number of files (non-directories) recursively.
 func (f *FileNode) CountFiles() int {
 	if !f.IsDir {
 		return 1
@@ -164,10 +166,11 @@ func (f *FileNode) CountFiles() int {
 	for _, child := range f.Children {
 		count += child.CountFiles()
 	}
+
 	return count
 }
 
-// CountDirectories returns the total number of directories recursively
+// CountDirectories returns the total number of directories recursively.
 func (f *FileNode) CountDirectories() int {
 	if !f.IsDir {
 		return 0
@@ -177,6 +180,7 @@ func (f *FileNode) CountDirectories() int {
 	for _, child := range f.Children {
 		count += child.CountDirectories()
 	}
+
 	return count
 }
 
@@ -190,20 +194,23 @@ func (f *FileNode) TotalSize() int64 {
 	for _, child := range f.Children {
 		total += child.TotalSize()
 	}
+
 	return total
 }
 
-// FormatSize returns a human-readable size string
+// FormatSize returns a human-readable size string.
 func FormatSize(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
+
 	div, exp := int64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
@@ -216,6 +223,7 @@ func (p *Progress) Percentage() float64 {
 	if p.Total == 0 {
 		return 0.0
 	}
+
 	return float64(p.Current) / float64(p.Total) * 100.0
 }
 
@@ -230,12 +238,15 @@ func (p *Progress) String() string {
 		if p.Message != "" {
 			return fmt.Sprintf("%d items - %s: %s", p.Current, p.Stage, p.Message)
 		}
+
 		return fmt.Sprintf("%d items - %s", p.Current, p.Stage)
 	}
+
 	percentage := p.Percentage()
 	if p.Message != "" {
 		return fmt.Sprintf("%.1f%% (%d/%d) - %s: %s", percentage, p.Current, p.Total, p.Stage, p.Message)
 	}
+
 	return fmt.Sprintf("%.1f%% (%d/%d) - %s", percentage, p.Current, p.Total, p.Stage)
 }
 

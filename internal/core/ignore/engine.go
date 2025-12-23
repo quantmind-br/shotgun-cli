@@ -373,15 +373,17 @@ func (e *LayeredIgnoreEngine) AddExplicitInclude(pattern string) error {
 	return nil
 }
 
-// IsGitignored returns true if the path would be ignored by .gitignore rules specifically
+// IsGitignored returns true if the path would be ignored by .gitignore rules specifically.
 func (e *LayeredIgnoreEngine) IsGitignored(relPath string) bool {
 	normalizedPath := filepath.ToSlash(relPath)
+
 	return e.gitignoreMatcher.MatchesPath(normalizedPath)
 }
 
-// IsCustomIgnored returns true if the path would be ignored by custom rules specifically
+// IsCustomIgnored returns true if the path would be ignored by custom rules specifically.
 func (e *LayeredIgnoreEngine) IsCustomIgnored(relPath string) bool {
 	normalizedPath := filepath.ToSlash(relPath)
+
 	return e.customMatcher.MatchesPath(normalizedPath)
 }
 

@@ -22,11 +22,13 @@ func NewTreeRenderer() *TreeRenderer {
 
 func (tr *TreeRenderer) WithShowIgnored(show bool) *TreeRenderer {
 	tr.showIgnored = show
+
 	return tr
 }
 
 func (tr *TreeRenderer) WithMaxDepth(depth int) *TreeRenderer {
 	tr.maxDepth = depth
+
 	return tr
 }
 
@@ -37,6 +39,7 @@ func (tr *TreeRenderer) RenderTree(root *scanner.FileNode) (string, error) {
 
 	var result strings.Builder
 	tr.renderNode(root, "", true, 0, &result)
+
 	return result.String(), nil
 }
 
@@ -59,6 +62,7 @@ func (tr *TreeRenderer) shouldSkipNode(node *scanner.FileNode, depth int) bool {
 	if tr.maxDepth >= 0 && depth > tr.maxDepth {
 		return true
 	}
+
 	return !tr.showIgnored && node.IsIgnored()
 }
 
@@ -86,6 +90,7 @@ func (tr *TreeRenderer) getIgnoreIndicator(node *scanner.FileNode) string {
 	if node.IsGitignored {
 		return " (g)"
 	}
+
 	return " (c)"
 }
 
@@ -93,6 +98,7 @@ func (tr *TreeRenderer) getSizeInfo(node *scanner.FileNode) string {
 	if node.IsDir || node.Size == 0 {
 		return ""
 	}
+
 	return fmt.Sprintf(" [%s]", formatFileSize(node.Size))
 }
 
@@ -122,6 +128,7 @@ func (tr *TreeRenderer) getVisibleChildren(node *scanner.FileNode) []*scanner.Fi
 			children = append(children, child)
 		}
 	}
+
 	return children
 }
 
@@ -130,6 +137,7 @@ func (tr *TreeRenderer) sortChildren(children []*scanner.FileNode) {
 		if children[i].IsDir != children[j].IsDir {
 			return children[i].IsDir
 		}
+
 		return children[i].Name < children[j].Name
 	})
 }

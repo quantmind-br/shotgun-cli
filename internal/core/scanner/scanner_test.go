@@ -366,6 +366,7 @@ func TestFileSystemScanner(t *testing.T) {
 
 		if root == nil {
 			t.Fatal("Expected non-nil root node")
+
 			return // unreachable but satisfies staticcheck
 		}
 
@@ -558,6 +559,7 @@ func TestNewFileSystemScannerWithIgnore(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
+
 				return
 			}
 
@@ -639,6 +641,7 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 				}
 				hiddenFiles = append(hiddenFiles, checkHiddenFiles(child)...)
 			}
+
 			return hiddenFiles
 		}
 
@@ -747,6 +750,7 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 				}
 				hiddenFiles = append(hiddenFiles, checkHiddenFiles(child)...)
 			}
+
 			return hiddenFiles
 		}
 
@@ -895,6 +899,7 @@ func TestShotgunignoreIntegration(t *testing.T) {
 			for _, child := range node.Children {
 				count += countFiles(child)
 			}
+
 			return count
 		}
 
@@ -934,6 +939,7 @@ test/**
 			for _, child := range node.Children {
 				files = append(files, collectFiles(child)...)
 			}
+
 			return files
 		}
 
@@ -977,6 +983,7 @@ test/**
 			for _, child := range node.Children {
 				nodes = append(nodes, collectFileNodes(child)...)
 			}
+
 			return nodes
 		}
 
@@ -1126,6 +1133,7 @@ func TestIncludePatterns(t *testing.T) {
 				for _, child := range node.Children {
 					files = append(files, collectFiles(child)...)
 				}
+
 				return files
 			}
 
@@ -1206,6 +1214,7 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 			for _, child := range node.Children {
 				files = append(files, collectFiles(child)...)
 			}
+
 			return files
 		}
 

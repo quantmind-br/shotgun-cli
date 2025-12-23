@@ -210,6 +210,7 @@ func RenderFooter(shortcuts []string) string {
 		parts = append(parts, style.Render(shortcut))
 	}
 	separator := lipgloss.NewStyle().Foreground(MutedColor).Render(" │ ")
+
 	return strings.Join(parts, separator)
 }
 
@@ -220,24 +221,28 @@ func RenderModal(content string) string {
 func RenderError(message string) string {
 	icon := lipgloss.NewStyle().Foreground(ErrorColor).Render("✖")
 	text := ErrorStyle.Render(message)
+
 	return icon + " " + text
 }
 
 func RenderSuccess(message string) string {
 	icon := lipgloss.NewStyle().Foreground(SuccessColor).Render("✔")
 	text := SuccessStyle.Render(message)
+
 	return icon + " " + text
 }
 
 func RenderWarning(message string) string {
 	icon := lipgloss.NewStyle().Foreground(WarningColor).Render("⚠")
 	text := WarningStyle.Render(message)
+
 	return icon + " " + text
 }
 
 func RenderInfo(message string) string {
 	icon := lipgloss.NewStyle().Foreground(PrimaryColor).Render("ℹ")
 	text := lipgloss.NewStyle().Foreground(TextColor).Render(message)
+
 	return icon + " " + text
 }
 
@@ -256,6 +261,7 @@ func RenderProgressBar(current, total int64, width int) string {
 
 	bar := filledStyle.Render(strings.Repeat("█", filled)) +
 		emptyStyle.Render(strings.Repeat("░", width-filled))
+
 	return bar
 }
 
@@ -376,6 +382,7 @@ func renderTableRows(content *strings.Builder, rows [][]string, colWidths []int)
 func RenderKeyValue(key, value string) string {
 	keyStyled := StatsLabelStyle.Render(key + ":")
 	valueStyled := StatsValueStyle.Render(value)
+
 	return keyStyled + " " + valueStyled
 }
 
@@ -383,6 +390,7 @@ func RenderSeparator(width int) string {
 	if width <= 0 {
 		width = 50
 	}
+
 	return lipgloss.NewStyle().Foreground(MutedColor).Render(strings.Repeat("─", width))
 }
 
@@ -392,6 +400,7 @@ func RenderCenter(text string, width int) string {
 	}
 
 	padding := (width - len(text)) / 2
+
 	return strings.Repeat(" ", padding) + text
 }
 
@@ -441,6 +450,7 @@ func RenderIgnoreIndicator(isGitignored, isCustomIgnored bool) string {
 	if isCustomIgnored {
 		return CustomIgnoredStyle.Render(" (custom)")
 	}
+
 	return ""
 }
 
@@ -468,6 +478,7 @@ func RenderStepIndicator(current, total int) string {
 			parts = append(parts, lipgloss.NewStyle().Foreground(MutedColor).Render("○"))
 		}
 	}
+
 	return strings.Join(parts, " ")
 }
 

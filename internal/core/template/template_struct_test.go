@@ -225,6 +225,7 @@ func TestParseTemplate(t *testing.T) {
 
 			if tt.expectError {
 				assert.Error(t, err)
+
 				return
 			}
 

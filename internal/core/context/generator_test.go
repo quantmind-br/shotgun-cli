@@ -171,6 +171,7 @@ func ensureDirNode(tb testing.TB, nodes map[string]*scanner.FileNode, rootDir, p
 	}
 	parent.Children = append(parent.Children, node)
 	nodes[path] = node
+
 	return node
 }
 
@@ -324,6 +325,7 @@ func TestDefaultContextGenerator_GenerateScenarios(t *testing.T) {
 			output, err := gen.Generate(root, selections, tc.config)
 			if tc.expectError {
 				tc.verify(t, output, err)
+
 				return
 			}
 			if err != nil {
@@ -344,6 +346,7 @@ func ensureTemplateVars(vars map[string]string) map[string]string {
 	if _, ok := vars["TASK"]; !ok {
 		vars["TASK"] = "default task"
 	}
+
 	return vars
 }
 
@@ -351,6 +354,7 @@ func normalizeLimit(v int64) int64 {
 	if v == 0 {
 		return DefaultMaxSize
 	}
+
 	return v
 }
 
@@ -358,6 +362,7 @@ func normalizeFiles(v int) int {
 	if v == 0 {
 		return DefaultMaxFiles
 	}
+
 	return v
 }
 
@@ -366,6 +371,7 @@ func section(content, heading string) string {
 	if idx == -1 {
 		return ""
 	}
+
 	return content[idx:]
 }
 

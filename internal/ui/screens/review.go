@@ -110,6 +110,7 @@ func (m *ReviewModel) View() string {
 				Render(fmt.Sprintf("  ... and %d more files", remaining))
 			content.WriteString(moreText)
 			content.WriteString("\n")
+
 			break
 		}
 		bullet := lipgloss.NewStyle().Foreground(styles.MutedColor).Render("  • ")
@@ -411,6 +412,7 @@ func (m *ReviewModel) formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
+
 	return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
 }
 
@@ -461,6 +463,7 @@ func formatSizeHelper(bytes int64) string {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 

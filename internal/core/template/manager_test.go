@@ -21,6 +21,7 @@ func newTestManager(tb testing.TB) *Manager {
 	if err != nil {
 		tb.Fatalf("NewManager failed: %v", err)
 	}
+
 	return mgr
 }
 
@@ -63,6 +64,7 @@ func equalSlices[T comparable](a, b []T) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -92,6 +94,7 @@ func TestManager_GetTemplate_Scenarios(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error for template %s", tc.template)
 				}
+
 				return
 			}
 			if err != nil {
@@ -151,6 +154,7 @@ func TestManager_RenderTemplate_Table(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error for %+v", tc.vars)
 				}
+
 				return
 			}
 			if err != nil {
@@ -416,6 +420,7 @@ func (m *mockTemplateSource) LoadTemplates() (map[string]*Template, error) {
 	if m.shouldError {
 		return nil, errors.New("mock error")
 	}
+
 	return m.templates, nil
 }
 

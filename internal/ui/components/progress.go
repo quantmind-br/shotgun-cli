@@ -43,6 +43,7 @@ func (m *ProgressModel) Init() tea.Cmd {
 func (m *ProgressModel) UpdateSpinner(msg tea.Msg) (*ProgressModel, tea.Cmd) {
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
+
 	return m, cmd
 }
 
@@ -218,6 +219,7 @@ func (m *ProgressModel) renderProgressBar(width int) string {
 
 	bar := filledStyle.Render(strings.Repeat("█", filled)) +
 		emptyStyle.Render(strings.Repeat("░", width-filled))
+
 	return bar
 }
 
@@ -232,6 +234,7 @@ func (m *ProgressModel) centerLine(line string) string {
 	}
 
 	padding := (m.width - lineWidth) / 2
+
 	return strings.Repeat(" ", padding) + line
 }
 
@@ -243,6 +246,7 @@ func (m *ProgressModel) padCenter(text string, width int) string {
 
 	leftPad := (width - textLen) / 2
 	rightPad := width - textLen - leftPad
+
 	return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
 }
 
@@ -253,6 +257,7 @@ func (m *ProgressModel) truncate(text string, maxLen int) string {
 	if maxLen <= 3 {
 		return strings.Repeat(".", maxLen)
 	}
+
 	return text[:maxLen-3] + "..."
 }
 

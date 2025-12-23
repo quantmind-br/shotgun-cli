@@ -33,6 +33,7 @@ func TestNewIgnoreEngine(t *testing.T) {
 
 	if engine == nil {
 		t.Fatal("NewIgnoreEngine() returned nil")
+
 		return // unreachable but satisfies staticcheck
 	}
 

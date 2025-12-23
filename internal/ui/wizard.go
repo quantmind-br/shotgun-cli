@@ -189,6 +189,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		cmd = m.handleWindowResize(msg)
+
 		return m, cmd
 
 	case tea.KeyMsg:
@@ -250,6 +251,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(cmds) > 0 {
 		return m, tea.Batch(cmds...)
 	}
+
 	return m, cmd
 }
 
@@ -385,6 +387,7 @@ func (m *WizardModel) handleWindowResize(msg tea.WindowSizeMsg) tea.Cmd {
 	if m.review != nil {
 		m.review.SetSize(m.width, m.height)
 	}
+
 	return nil
 }
 
@@ -424,6 +427,7 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(cmds) > 0 {
 		return m, tea.Batch(cmds...)
 	}
+
 	return m, cmd
 }
 
@@ -431,19 +435,23 @@ func (m *WizardModel) handleNextStep() tea.Cmd {
 	if m.step < StepReview {
 		if m.canAdvanceStep() {
 			m.step = m.getNextStep()
+
 			return m.initStep()
 		}
 	} else if m.step == StepReview {
 		return m.generateContext()
 	}
+
 	return nil
 }
 
 func (m *WizardModel) handlePrevStep() tea.Cmd {
 	if m.step > StepFileSelection {
 		m.step = m.getPrevStep()
+
 		return m.initStep()
 	}
+
 	return nil
 }
 
@@ -458,6 +466,7 @@ func (m *WizardModel) handleScanProgress(msg ScanProgressMsg) tea.Cmd {
 	if m.scanState != nil {
 		return m.iterativeScanCmd()
 	}
+
 	return nil
 }
 
@@ -483,6 +492,7 @@ func (m *WizardModel) handleGenerationProgress(msg GenerationProgressMsg) tea.Cm
 	if m.generateState != nil {
 		return m.iterativeGenerateCmd()
 	}
+
 	return nil
 }
 
@@ -490,6 +500,7 @@ func (m *WizardModel) handleGenerationComplete(msg GenerationCompleteMsg) tea.Cm
 	m.progress.Visible = false
 	m.generatedFilePath = msg.FilePath
 	m.generatedContent = msg.Content
+
 	return m.clipboardCopyCmd(msg.Content)
 }
 
@@ -520,6 +531,7 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 		if m.review != nil {
 			m.review.SetGeminiError(fmt.Errorf("geminiweb not found"))
 		}
+
 		return nil
 	}
 
@@ -527,6 +539,7 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 		if m.review != nil {
 			m.review.SetGeminiError(fmt.Errorf("geminiweb not configured - run: geminiweb auto-login"))
 		}
+
 		return nil
 	}
 
@@ -605,6 +618,7 @@ func (m *WizardModel) handleTemplateMessage(msg tea.Msg) tea.Cmd {
 	if m.step == StepTemplateSelection && m.templateSelection != nil {
 		return m.templateSelection.HandleMessage(msg)
 	}
+
 	return nil
 }
 
@@ -617,6 +631,7 @@ func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
 		done:       make(chan bool),
 		started:    false,
 	}
+
 	return m.iterativeScanCmd()
 }
 
@@ -641,6 +656,7 @@ func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
 		done:       make(chan bool),
 		started:    false,
 	}
+
 	return m.iterativeGenerateCmd()
 }
 
@@ -648,6 +664,7 @@ func (m *WizardModel) handleRescanRequest() tea.Cmd {
 	if m.step == StepFileSelection {
 		return scanDirectoryCmd(m.rootPath, m.config)
 	}
+
 	return nil
 }
 

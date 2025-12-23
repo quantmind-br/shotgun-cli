@@ -86,6 +86,7 @@ func ExtractThoughts(response string) (thoughts string, content string) {
 					endIdx += idx + len("</thinking>")
 					thoughts = response[idx:endIdx]
 					content = strings.TrimSpace(response[:idx] + response[endIdx:])
+
 					return
 				}
 			default:
@@ -95,6 +96,7 @@ func ExtractThoughts(response string) (thoughts string, content string) {
 					endIdx += idx
 					thoughts = strings.TrimSpace(response[idx:endIdx])
 					content = strings.TrimSpace(response[:idx] + response[endIdx:])
+
 					return
 				}
 			}
@@ -150,6 +152,7 @@ func ContainsError(response string) (bool, string) {
 					return true, strings.TrimSpace(line)
 				}
 			}
+
 			return true, indicator
 		}
 	}
@@ -165,5 +168,6 @@ func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
+
 	return fmt.Sprintf("%dm%ds", int(d.Minutes()), int(d.Seconds())%60)
 }

@@ -315,6 +315,7 @@ func TestNewExecutor(t *testing.T) {
 
 	if executor == nil {
 		t.Fatal("expected non-nil executor")
+
 		return // unreachable but satisfies staticcheck
 	}
 
@@ -358,6 +359,7 @@ func TestExecutor_buildArgs(t *testing.T) {
 
 			if len(args) != len(tt.expected) {
 				t.Errorf("expected %d args, got %d: %v", len(tt.expected), len(args), args)
+
 				return
 			}
 
@@ -676,6 +678,7 @@ func TestExecutor_Send_Success(t *testing.T) {
 
 	if result == nil {
 		t.Error("expected non-nil result")
+
 		return
 	}
 
@@ -805,6 +808,7 @@ func TestConfig_FindBinary_SearchPath(t *testing.T) {
 	if err != nil {
 		// This is OK - geminiweb might not be installed
 		t.Logf("geminiweb not found in PATH (this is expected if not installed): %v", err)
+
 		return
 	}
 
@@ -1086,5 +1090,6 @@ func containsHelper(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }

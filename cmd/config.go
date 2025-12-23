@@ -320,6 +320,7 @@ func validateWorkers(value string) error {
 	if workers < 1 || workers > 32 {
 		return fmt.Errorf("must be between 1 and 32, got %d", workers)
 	}
+
 	return nil
 }
 
@@ -342,6 +343,7 @@ func validateMaxFiles(value string) error {
 	if dummy <= 0 {
 		return fmt.Errorf("must be positive, got %d", dummy)
 	}
+
 	return nil
 }
 
@@ -349,6 +351,7 @@ func validateSizeFormat(value string) error {
 	if _, err := utils.ParseSize(value); err != nil {
 		return fmt.Errorf("expected size format (e.g., 1MB, 500KB): %w", err)
 	}
+
 	return nil
 }
 
@@ -357,6 +360,7 @@ func validateBooleanValue(value string) error {
 	if lower != "true" && lower != "false" {
 		return fmt.Errorf("expected 'true' or 'false', got '%s'", value)
 	}
+
 	return nil
 }
 
@@ -364,6 +368,7 @@ func validateOutputFormat(value string) error {
 	if value != "markdown" && value != "text" {
 		return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
 	}
+
 	return nil
 }
 
@@ -389,6 +394,7 @@ func validateTemplatePath(value string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -399,6 +405,7 @@ func validateGeminiModel(value string) error {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("expected one of: %s", strings.Join(validModels, ", "))
 }
 
@@ -413,6 +420,7 @@ func validateGeminiTimeout(value string) error {
 	if timeout > 3600 {
 		return fmt.Errorf("timeout too large (max 3600 seconds), got %d", timeout)
 	}
+
 	return nil
 }
 
@@ -423,6 +431,7 @@ func validateGeminiBrowserRefresh(value string) error {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)")
 }
 
@@ -433,6 +442,7 @@ func convertConfigValue(key, value string) (interface{}, error) {
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, fmt.Errorf("failed to parse integer value: %w", err)
 		}
+
 		return intVal, nil
 
 	case "scanner.respect-gitignore", "scanner.skip-binary",
@@ -480,6 +490,7 @@ func formatValue(value interface{}) string {
 		if v == "" {
 			return `""`
 		}
+
 		return fmt.Sprintf(`"%s"`, v)
 	case bool:
 		return fmt.Sprintf("%t", v)

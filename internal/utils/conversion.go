@@ -52,6 +52,7 @@ func ParseSizeWithDefault(sizeStr string, defaultSize int64) int64 {
 	if err != nil {
 		return defaultSize
 	}
+
 	return size
 }
 
@@ -66,5 +67,6 @@ func FormatBytes(bytes int64) string {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

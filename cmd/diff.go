@@ -248,6 +248,7 @@ func countFiles(lines []string) int {
 			count++
 		}
 	}
+
 	return count
 }
 
