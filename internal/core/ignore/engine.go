@@ -239,6 +239,7 @@ func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
 	// If no .gitignore files found, use empty matcher
 	if len(gitignoreFiles) == 0 {
 		e.gitignoreMatcher = gitignore.CompileIgnoreLines()
+
 		return nil
 	}
 
@@ -283,6 +284,7 @@ func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
 
 	// Compile all patterns into a single matcher
 	e.gitignoreMatcher = gitignore.CompileIgnoreLines(allPatterns...)
+
 	return nil
 }
 
@@ -327,6 +329,7 @@ func (e *LayeredIgnoreEngine) AddCustomRules(patterns []string) error {
 
 	// Recompile matcher with all accumulated patterns
 	e.customMatcher = gitignore.CompileIgnoreLines(e.customPatterns...)
+
 	return nil
 }
 

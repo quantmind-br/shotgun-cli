@@ -79,6 +79,7 @@ func (g *DefaultContextGenerator) GenerateWithProgress(
 			progress(p.Message)
 		}
 	}
+
 	return g.GenerateWithProgressEx(root, selections, config, adaptedProgress)
 }
 

@@ -178,6 +178,7 @@ func (m *Manager) HasTemplate(name string) bool {
 	defer m.mu.RUnlock()
 
 	_, exists := m.templates[name]
+
 	return exists
 }
 

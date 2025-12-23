@@ -132,6 +132,7 @@ Examples:
 		for _, tmpl := range templates {
 			if tmpl.Name == templateName {
 				templateExists = true
+
 				break
 			}
 		}

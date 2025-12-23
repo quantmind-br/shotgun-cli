@@ -22,12 +22,14 @@ func ParseResponse(raw string) string {
 		// Skip the Gemini header line (contains "✦ Gemini" or similar)
 		if strings.Contains(line, "Gemini") && i < 3 {
 			skipNext = true
+
 			continue
 		}
 
 		// Skip empty line after header
 		if skipNext && strings.TrimSpace(line) == "" {
 			skipNext = false
+
 			continue
 		}
 

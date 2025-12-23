@@ -155,6 +155,7 @@ func showCurrentConfig() error {
 		for _, predefined := range categoryOrder {
 			if category == predefined {
 				found = true
+
 				break
 			}
 		}
@@ -279,6 +280,7 @@ func isValidConfigKey(key string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -306,6 +308,7 @@ func validateConfigValue(key, value string) error {
 	case "gemini.browser-refresh":
 		return validateGeminiBrowserRefresh(value)
 	}
+
 	return nil
 }
 

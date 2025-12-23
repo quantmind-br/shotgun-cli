@@ -205,6 +205,7 @@ func detectLanguageByBasename(base string) string {
 	case "requirements.txt", "setup.py", "setup.cfg":
 		return "python"
 	}
+
 	return ""
 }
 
@@ -270,6 +271,7 @@ func detectLanguageByExtension(ext string) string {
 	if lang, ok := extensionToLanguage[ext]; ok {
 		return lang
 	}
+
 	return "text"
 }
 

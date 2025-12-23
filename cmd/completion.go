@@ -167,6 +167,7 @@ func init() {
 			if len(args) == 1 {
 				return boolValueCompletion(cmd, args, toComplete)
 			}
+
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 	}

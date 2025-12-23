@@ -435,6 +435,7 @@ func TestFileSystemScanner(t *testing.T) {
 		for _, child := range root.Children {
 			if strings.HasPrefix(child.Name, ".") {
 				hiddenFound = true
+
 				break
 			}
 		}
@@ -695,6 +696,7 @@ func TestHiddenFileConsistencyWithIgnoreEngine(t *testing.T) {
 		for _, path := range hiddenFiles {
 			if strings.Contains(path, ".hidden.txt") {
 				foundHiddenTxt = true
+
 				break
 			}
 		}
@@ -1135,6 +1137,7 @@ func TestIncludePatterns(t *testing.T) {
 				for _, scanned := range scannedFiles {
 					if scanned == expectedFile {
 						found = true
+
 						break
 					}
 				}
@@ -1220,6 +1223,7 @@ func TestIncludePatternsWithIgnoreRules(t *testing.T) {
 			for _, scanned := range scannedFiles {
 				if scanned == expected {
 					found = true
+
 					break
 				}
 			}

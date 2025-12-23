@@ -33,6 +33,7 @@ func NewEmbeddedSource(fsys fs.FS) *EmbeddedSource {
 
 // LoadTemplates loads all templates from the embedded filesystem
 func (s *EmbeddedSource) LoadTemplates() (map[string]*Template, error) {
+	
 	return loadTemplatesFromFS(s.fsys, ".", true, sourceEmbedded)
 }
 
@@ -59,6 +60,7 @@ func NewFilesystemSource(path string, sourceName string) *FilesystemSource {
 // LoadTemplates loads all templates from the filesystem directory
 func (s *FilesystemSource) LoadTemplates() (map[string]*Template, error) {
 	fsys := os.DirFS(s.path)
+	
 	return loadTemplatesFromFS(fsys, ".", false, s.sourceName)
 }
 

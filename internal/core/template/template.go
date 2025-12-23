@@ -135,6 +135,7 @@ func validateTemplateContent(content string) error {
 		// Track if we're inside a code block (handles both ``` and ```language)
 		if strings.HasPrefix(trimmed, "```") {
 			inCodeBlock = !inCodeBlock
+
 			continue
 		}
 
@@ -168,9 +169,10 @@ func validateTemplateContent(content string) error {
 	return nil
 }
 
-// GetVariableNames returns all variable names found in the template content
+// GetVariableNames returns all variable names found in the template content.
 func (t *Template) GetVariableNames() []string {
 	vars, _ := extractRequiredVars(t.Content)
+
 	return vars
 }
 

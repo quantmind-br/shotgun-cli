@@ -111,6 +111,7 @@ func TestFileTreeExpandCollapse(t *testing.T) {
 	for i, item := range model.visibleItems {
 		if item.node == subDir {
 			subdirIdx = i
+
 			break
 		}
 	}
@@ -134,6 +135,7 @@ func TestFileTreeExpandCollapse(t *testing.T) {
 		for i, item := range model.visibleItems {
 			if item.node == subDir {
 				subdirIdx = i
+
 				break
 			}
 		}
@@ -149,6 +151,7 @@ func TestFileTreeExpandCollapse(t *testing.T) {
 		for i, item := range model.visibleItems {
 			if item.node == file {
 				fileIdx = i
+
 				break
 			}
 		}

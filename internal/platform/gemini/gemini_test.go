@@ -907,6 +907,7 @@ func TestExecutor_SendWithProgress_Success(t *testing.T) {
 		for _, actual := range progressStages {
 			if strings.Contains(actual, expected) {
 				found = true
+
 				break
 			}
 		}
@@ -1052,6 +1053,7 @@ func TestConfigWithAllOptions(t *testing.T) {
 	for i, arg := range args {
 		if arg == "-m" && i+1 < len(args) && args[i+1] == "gemini-3.0-pro" {
 			foundModel = true
+
 			break
 		}
 	}
@@ -1064,6 +1066,7 @@ func TestConfigWithAllOptions(t *testing.T) {
 	for i, arg := range args {
 		if arg == "--browser-refresh" && i+1 < len(args) && args[i+1] == "never" {
 			foundBrowser = true
+
 			break
 		}
 	}
