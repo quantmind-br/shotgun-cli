@@ -729,10 +729,10 @@ func TestExecutor_Send_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err := executor.Send(ctx, "Test with cancelled context")
+	_, err := executor.Send(ctx, "Test with canceled context")
 
 	if err == nil {
-		t.Error("expected error for cancelled context")
+		t.Error("expected error for canceled context")
 	}
 
 	if !strings.Contains(err.Error(), "context") && !strings.Contains(err.Error(), "cancel") {
@@ -1028,7 +1028,7 @@ func TestSendWithProgress_ContextCancelled(t *testing.T) {
 	_, err := executor.SendWithProgress(ctx, "test", func(stage string) {})
 
 	if err == nil {
-		t.Error("expected error on cancelled context")
+		t.Error("expected error on canceled context")
 	}
 }
 
