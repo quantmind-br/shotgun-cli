@@ -18,7 +18,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
-	"github.com/spf13/viper"
 )
 
 const (
@@ -28,6 +27,25 @@ const (
 	StepRulesInput        = 4
 	StepReview            = 5
 )
+
+type GeminiConfig struct {
+	BinaryPath     string
+	Model          string
+	Timeout        int
+	BrowserRefresh string
+	SaveResponse   bool
+}
+
+type ContextConfig struct {
+	IncludeTree    bool
+	IncludeSummary bool
+	MaxSize        string
+}
+
+type WizardConfig struct {
+	Gemini  GeminiConfig
+	Context ContextConfig
+}
 
 type Progress struct {
 	Current int64
@@ -50,8 +68,9 @@ type WizardModel struct {
 	height        int
 	showHelp      bool
 
-	rootPath string
-	config   *scanner.ScanConfig
+	rootPath     string
+	scanConfig   *scanner.ScanConfig
+	wizardConfig *WizardConfig
 
 	fileSelection     *screens.FileSelectionModel
 	templateSelection *screens.TemplateSelectionModel
@@ -61,15 +80,12 @@ type WizardModel struct {
 
 	progressComponent *components.ProgressModel
 
-	// State for iterative commands
 	scanState     *scanState
 	generateState *generateState
 
-	// Generation result storage
 	generatedFilePath string
 	generatedContent  string
 
-	// Gemini state
 	geminiSending      bool
 	geminiResponseFile string
 }
@@ -152,7 +168,9 @@ type generateState struct {
 	content    string
 }
 
-// New message types for iterative commands
+type pollScanMsg struct{}
+type pollGenerateMsg struct{}
+
 type startScanMsg struct {
 	rootPath string
 	config   *scanner.ScanConfig
@@ -167,18 +185,25 @@ type startGenerationMsg struct {
 	rootPath      string
 }
 
-func NewWizard(rootPath string, config *scanner.ScanConfig) *WizardModel {
+func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *WizardConfig) *WizardModel {
+	if wizardConfig == nil {
+		wizardConfig = &WizardConfig{}
+	}
 	return &WizardModel{
 		step:              StepFileSelection,
 		selectedFiles:     make(map[string]bool),
 		rootPath:          rootPath,
-		config:            config,
+		scanConfig:        scanConfig,
+		wizardConfig:      wizardConfig,
 		progressComponent: components.NewProgress(),
 	}
 }
 
 func (m *WizardModel) Init() tea.Cmd {
-	return scanDirectoryCmd(m.rootPath, m.config)
+	return tea.Batch(
+		scanDirectoryCmd(m.rootPath, m.scanConfig),
+		m.progressComponent.Init(),
+	)
 }
 
 //nolint:gocyclo // type switch pattern required by Bubble Tea framework
@@ -243,9 +268,35 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.handleStartGeneration(msg)
 		cmds = append(cmds, cmd)
 
+	case pollScanMsg:
+		cmd = m.pollScan()
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+	case pollGenerateMsg:
+		cmd = m.pollGenerate()
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 	case screens.RescanRequestMsg:
 		cmd = m.handleRescanRequest()
 		cmds = append(cmds, cmd)
+
+	case screens.ClipboardCopyRequestMsg:
+		if m.generatedContent != "" {
+			cmds = append(cmds, m.clipboardCopyCmd(m.generatedContent))
+		}
+
+	default:
+		if m.progress.Visible {
+			var spinnerCmd tea.Cmd
+			m.progressComponent, spinnerCmd = m.progressComponent.UpdateSpinner(msg)
+			if spinnerCmd != nil {
+				cmds = append(cmds, spinnerCmd)
+			}
+		}
 	}
 
 	if len(cmds) > 0 {
@@ -582,10 +633,10 @@ func (m *WizardModel) handleGeminiError(msg GeminiErrorMsg) {
 func (m *WizardModel) sendToGeminiCmd() tea.Cmd {
 	return func() tea.Msg {
 		cfg := gemini.Config{
-			BinaryPath:     viper.GetString("gemini.binary-path"),
-			Model:          viper.GetString("gemini.model"),
-			Timeout:        viper.GetInt("gemini.timeout"),
-			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+			BinaryPath:     m.wizardConfig.Gemini.BinaryPath,
+			Model:          m.wizardConfig.Gemini.Model,
+			Timeout:        m.wizardConfig.Gemini.Timeout,
+			BrowserRefresh: m.wizardConfig.Gemini.BrowserRefresh,
 		}
 
 		executor := gemini.NewExecutor(cfg)
@@ -596,11 +647,9 @@ func (m *WizardModel) sendToGeminiCmd() tea.Cmd {
 			return GeminiErrorMsg{Err: err}
 		}
 
-		// Determine output file
 		outputFile := strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
 
-		// Save response if configured
-		if viper.GetBool("gemini.save-response") {
+		if m.wizardConfig.Gemini.SaveResponse {
 			if err := os.WriteFile(outputFile, []byte(result.Response), 0600); err != nil {
 				return GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
 			}
@@ -648,8 +697,8 @@ func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
 				"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 			},
 			Template:       msg.template.Content,
-			IncludeTree:    viper.GetBool("context.include-tree"),
-			IncludeSummary: viper.GetBool("context.include-summary"),
+			IncludeTree:    m.wizardConfig.Context.IncludeTree,
+			IncludeSummary: m.wizardConfig.Context.IncludeSummary,
 		},
 		rootPath:   msg.rootPath,
 		progressCh: make(chan context.GenProgress, 100),
@@ -662,7 +711,7 @@ func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
 
 func (m *WizardModel) handleRescanRequest() tea.Cmd {
 	if m.step == StepFileSelection {
-		return scanDirectoryCmd(m.rootPath, m.config)
+		return scanDirectoryCmd(m.rootPath, m.scanConfig)
 	}
 
 	return nil
@@ -769,7 +818,7 @@ func (m *WizardModel) initStep() tea.Cmd {
 		m.rulesInput = screens.NewRulesInput(m.rules)
 		m.rulesInput.SetSize(m.width, m.height)
 	case StepReview:
-		m.review = screens.NewReview(m.selectedFiles, m.fileTree, m.template, m.taskDesc, m.rules)
+		m.review = screens.NewReview(m.selectedFiles, m.fileTree, m.template, m.taskDesc, m.rules, m.wizardConfig.Context.MaxSize)
 		m.review.SetSize(m.width, m.height)
 	}
 	return nil
@@ -781,27 +830,24 @@ func (m *WizardModel) handleStepInput(msg tea.KeyMsg) tea.Cmd {
 	switch m.step {
 	case StepFileSelection:
 		if m.fileSelection != nil {
-			cmd = m.fileSelection.Update(msg, m.selectedFiles)
+			cmd = m.fileSelection.Update(msg)
 		}
 	case StepTemplateSelection:
 		if m.templateSelection != nil {
-			template, updateCmd := m.templateSelection.Update(msg)
-			if template != nil {
-				m.template = template
+			cmd = m.templateSelection.Update(msg)
+			if tmpl := m.templateSelection.GetSelected(); tmpl != nil {
+				m.template = tmpl
 			}
-			cmd = updateCmd
 		}
 	case StepTaskInput:
 		if m.taskInput != nil {
-			task, updateCmd := m.taskInput.Update(msg)
-			m.taskDesc = task
-			cmd = updateCmd
+			cmd = m.taskInput.Update(msg)
+			m.taskDesc = m.taskInput.GetValue()
 		}
 	case StepRulesInput:
 		if m.rulesInput != nil {
-			rules, updateCmd := m.rulesInput.Update(msg)
-			m.rules = rules
-			cmd = updateCmd
+			cmd = m.rulesInput.Update(msg)
+			m.rules = m.rulesInput.GetValue()
 		}
 	case StepReview:
 		if m.review != nil {
@@ -822,11 +868,11 @@ func (m *WizardModel) generateContext() tea.Cmd {
 	return generateContextCmd(m.fileTree, m.selectedFiles, m.template, m.taskDesc, m.rules, m.rootPath)
 }
 
-func scanDirectoryCmd(rootPath string, config *scanner.ScanConfig) tea.Cmd {
+func scanDirectoryCmd(rootPath string, scanConfig *scanner.ScanConfig) tea.Cmd {
 	return func() tea.Msg {
 		return startScanMsg{
 			rootPath: rootPath,
-			config:   config,
+			config:   scanConfig,
 		}
 	}
 }
@@ -847,15 +893,6 @@ func generateContextCmd(
 			rootPath:      rootPath,
 		}
 	}
-}
-
-func writeFile(path, content string) error {
-	// #nosec G306 - Generated context files are meant to be world-readable (contain code/docs, not secrets)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
 }
 
 func (m *WizardModel) clipboardCopyCmd(content string) tea.Cmd {
@@ -896,19 +933,30 @@ func parseSize(sizeStr string) (int64, error) {
 	return size * multiplier, nil
 }
 
-// Iterative command functions
+const pollInterval = 50 * time.Millisecond
+
+func (m *WizardModel) schedulePollScan() tea.Cmd {
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
+		return pollScanMsg{}
+	})
+}
+
+func (m *WizardModel) schedulePollGenerate() tea.Cmd {
+	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
+		return pollGenerateMsg{}
+	})
+}
+
 func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 	return func() tea.Msg {
 		if m.scanState == nil {
 			return ScanErrorMsg{Err: fmt.Errorf("scan state not initialized")}
 		}
 
-		// Start the goroutine if not already started
 		if !m.scanState.started {
 			m.scanState.started = true
 			go func() {
 				defer close(m.scanState.done)
-				// Store the scan result instead of discarding it
 				tree, err := m.scanState.scanner.ScanWithProgress(
 					m.scanState.rootPath,
 					m.scanState.config,
@@ -916,54 +964,46 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 				)
 				m.scanState.result = tree
 				m.scanState.scanErr = err
-
-				// Signal completion
-				select {
-				case <-m.scanState.done:
-					return
-				default:
-					// Send completion signal via progress channel
-					go func() {
-						time.Sleep(10 * time.Millisecond) // Small delay to allow progress messages
-						m.scanState.progressCh <- scanner.Progress{
-							Current: -1, // Special signal for completion
-							Total:   -1,
-							Stage:   "complete",
-						}
-					}()
-				}
 			}()
 		}
 
-		// Read one progress update
-		select {
-		case progress, ok := <-m.scanState.progressCh:
-			if !ok || (progress.Current == -1 && progress.Total == -1) {
-				// Channel closed or completion signal
-				<-m.scanState.done
-				// Use the stored result instead of rescanning
-				if m.scanState.scanErr != nil {
-					return ScanErrorMsg{Err: m.scanState.scanErr}
-				}
-				return ScanCompleteMsg{Tree: m.scanState.result}
-			}
-			// Send progress and re-enqueue
-			return ScanProgressMsg{
-				Current: progress.Current,
-				Total:   progress.Total,
-				Stage:   progress.Stage,
-			}
-		case <-m.scanState.done:
-			// Completed - use stored result
-			if m.scanState.scanErr != nil {
-				return ScanErrorMsg{Err: m.scanState.scanErr}
-			}
-			return ScanCompleteMsg{Tree: m.scanState.result}
-		default:
-			// No progress yet, yield to event loop and re-check
-			time.Sleep(10 * time.Millisecond)
-			return m.iterativeScanCmd()()
+		return pollScanMsg{}
+	}
+}
+
+func (m *WizardModel) pollScan() tea.Cmd {
+	if m.scanState == nil {
+		return nil
+	}
+
+	select {
+	case progress, ok := <-m.scanState.progressCh:
+		if !ok {
+			return m.finishScan()
 		}
+		return tea.Batch(
+			func() tea.Msg {
+				return ScanProgressMsg{
+					Current: progress.Current,
+					Total:   progress.Total,
+					Stage:   progress.Stage,
+				}
+			},
+			m.schedulePollScan(),
+		)
+	case <-m.scanState.done:
+		return m.finishScan()
+	default:
+		return m.schedulePollScan()
+	}
+}
+
+func (m *WizardModel) finishScan() tea.Cmd {
+	return func() tea.Msg {
+		if m.scanState.scanErr != nil {
+			return ScanErrorMsg{Err: m.scanState.scanErr}
+		}
+		return ScanCompleteMsg{Tree: m.scanState.result}
 	}
 }
 
@@ -973,7 +1013,6 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 			return GenerationErrorMsg{Err: fmt.Errorf("generation state not initialized")}
 		}
 
-		// Start the goroutine if not already started
 		if !m.generateState.started {
 			m.generateState.started = true
 			go func() {
@@ -988,39 +1027,50 @@ func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 					},
 				)
 				if err != nil {
+					m.generateState.content = ""
 					return
 				}
 
-				// Store the content for later use
 				m.generateState.content = content
-
-				// Signal completion
-				go func() {
-					time.Sleep(10 * time.Millisecond)
-					m.generateState.progressCh <- context.GenProgress{
-						Stage:   "complete",
-						Message: "Generation complete",
-					}
-				}()
 			}()
 		}
 
-		// Read one progress update
-		select {
-		case progress, ok := <-m.generateState.progressCh:
-			if !ok || progress.Stage == "complete" {
-				<-m.generateState.done
-				return m.finalizeGeneration()
-			}
-			return GenerationProgressMsg{
-				Stage:   progress.Stage,
-				Message: progress.Message,
-			}
-		case <-m.generateState.done:
-			return m.finalizeGeneration()
-		default:
-			return m.iterativeGenerateCmd()()
+		return pollGenerateMsg{}
+	}
+}
+
+func (m *WizardModel) pollGenerate() tea.Cmd {
+	if m.generateState == nil {
+		return nil
+	}
+
+	select {
+	case progress, ok := <-m.generateState.progressCh:
+		if !ok {
+			return m.finishGeneration()
 		}
+		if progress.Stage == "complete" {
+			return m.finishGeneration()
+		}
+		return tea.Batch(
+			func() tea.Msg {
+				return GenerationProgressMsg{
+					Stage:   progress.Stage,
+					Message: progress.Message,
+				}
+			},
+			m.schedulePollGenerate(),
+		)
+	case <-m.generateState.done:
+		return m.finishGeneration()
+	default:
+		return m.schedulePollGenerate()
+	}
+}
+
+func (m *WizardModel) finishGeneration() tea.Cmd {
+	return func() tea.Msg {
+		return m.finalizeGeneration()
 	}
 }
 
@@ -1046,7 +1096,7 @@ func (m *WizardModel) finalizeGeneration() tea.Msg {
 }
 
 func (m *WizardModel) validateContentSize(content string) error {
-	maxSizeStr := viper.GetString("context.max-size")
+	maxSizeStr := m.wizardConfig.Context.MaxSize
 	if maxSizeStr == "" {
 		return nil
 	}
@@ -1069,8 +1119,9 @@ func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
 	filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
 	filePath := filepath.Join(m.generateState.rootPath, filename)
 
-	if err := writeFile(filePath, content); err != nil {
-		return "", err
+	// #nosec G306 - Generated context files are meant to be world-readable
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 	return filePath, nil
 }

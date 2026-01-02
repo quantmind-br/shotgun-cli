@@ -12,7 +12,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
-	"github.com/spf13/viper"
 )
 
 type ReviewModel struct {
@@ -27,30 +26,27 @@ type ReviewModel struct {
 	generatedPath   string
 	clipboardCopied bool
 
-	// Cached stats calculated on initialization
 	totalBytes  int64
 	totalTokens int
 
-	// Max size from config
 	maxSizeBytes int64
 	maxSizeStr   string
 
-	// Gemini integration state
 	geminiAvailable  bool
 	geminiSending    bool
+	geminiStartTime  time.Time
 	geminiComplete   bool
 	geminiOutputFile string
 	geminiDuration   time.Duration
 	geminiError      error
 }
 
-// NewReview creates a new ReviewModel with precomputed statistics.
-// The fileTree is required for accurate size calculations.
 func NewReview(
 	selectedFiles map[string]bool,
 	fileTree *scanner.FileNode,
 	tmpl *template.Template,
 	taskDesc, rules string,
+	maxSizeStr string,
 ) *ReviewModel {
 	m := &ReviewModel{
 		selectedFiles:   selectedFiles,
@@ -58,13 +54,11 @@ func NewReview(
 		template:        tmpl,
 		taskDesc:        taskDesc,
 		rules:           rules,
+		maxSizeStr:      maxSizeStr,
 		geminiAvailable: gemini.IsAvailable() && gemini.IsConfigured(),
 	}
-	// Calculate stats on initialization (once)
 	m.totalBytes, m.totalTokens = m.calculateStats()
 
-	// Get max size from config
-	m.maxSizeStr = viper.GetString("context.max-size")
 	if m.maxSizeStr != "" {
 		m.maxSizeBytes, _ = parseSize(m.maxSizeStr)
 	}
@@ -77,9 +71,23 @@ func (m *ReviewModel) SetSize(width, height int) {
 	m.height = height
 }
 
-func (m *ReviewModel) Update(msg tea.KeyMsg) tea.Cmd {
-	if msg.String() == "ctrl+c" {
+type ClipboardCopyRequestMsg struct{}
+
+func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return nil
+	}
+
+	switch keyMsg.String() {
+	case "ctrl+c":
 		return tea.Quit
+	case "c":
+		if m.generated {
+			return func() tea.Msg {
+				return ClipboardCopyRequestMsg{}
+			}
+		}
 	}
 
 	return nil
@@ -304,9 +312,9 @@ func (m *ReviewModel) renderGeminiStatus() string {
 	status.WriteString("\n")
 
 	if m.geminiSending {
-		// Sending state with spinner-like indicator
 		sendingStyle := lipgloss.NewStyle().Foreground(styles.PrimaryColor)
-		status.WriteString("  " + sendingStyle.Render("⏳ Sending to Gemini..."))
+		elapsed := time.Since(m.geminiStartTime).Round(time.Second)
+		status.WriteString("  " + sendingStyle.Render(fmt.Sprintf("⏳ Sending to Gemini... (%s)", elapsed)))
 	} else if m.geminiComplete {
 		// Complete state
 		successIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("✔")
@@ -386,6 +394,9 @@ func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {
 func (m *ReviewModel) SetGeminiSending(sending bool) {
 	m.geminiSending = sending
 	m.geminiError = nil
+	if sending {
+		m.geminiStartTime = time.Now()
+	}
 }
 
 // SetGeminiComplete sets the Gemini complete state

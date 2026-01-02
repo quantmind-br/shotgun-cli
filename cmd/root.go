@@ -66,21 +66,34 @@ func launchTUIWizard() {
 		os.Exit(1)
 	}
 
-	// Create scanner configuration from Viper settings
-	config := &scanner.ScanConfig{
+	scanConfig := &scanner.ScanConfig{
 		MaxFiles:             viper.GetInt64("scanner.max-files"),
 		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
 		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString("scanner.max-memory"), 500*1024*1024),
 		SkipBinary:           viper.GetBool("scanner.skip-binary"),
 		IncludeHidden:        viper.GetBool("scanner.include-hidden"),
-		IncludeIgnored:       true, // Include ignored files in tree for toggle functionality
+		IncludeIgnored:       true,
 		Workers:              viper.GetInt("scanner.workers"),
 		RespectGitignore:     viper.GetBool("scanner.respect-gitignore"),
 		RespectShotgunignore: viper.GetBool("scanner.respect-shotgunignore"),
 	}
 
-	// Create wizard model
-	wizard := ui.NewWizard(rootPath, config)
+	wizardConfig := &ui.WizardConfig{
+		Gemini: ui.GeminiConfig{
+			BinaryPath:     viper.GetString("gemini.binary-path"),
+			Model:          viper.GetString("gemini.model"),
+			Timeout:        viper.GetInt("gemini.timeout"),
+			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+			SaveResponse:   viper.GetBool("gemini.save-response"),
+		},
+		Context: ui.ContextConfig{
+			IncludeTree:    viper.GetBool("context.include-tree"),
+			IncludeSummary: viper.GetBool("context.include-summary"),
+			MaxSize:        viper.GetString("context.max-size"),
+		},
+	}
+
+	wizard := ui.NewWizard(rootPath, scanConfig, wizardConfig)
 
 	// Configure Bubble Tea program
 	program := tea.NewProgram(

@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	keyEsc = "esc"
+	keyEsc                          = "esc"
+	fileSelectionHeaderFooterHeight = 6
 )
 
 type RescanRequestMsg struct{}
@@ -41,20 +42,21 @@ func (m *FileSelectionModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	if m.tree != nil {
-		m.tree.SetSize(width, height-6) // Reserve space for header and footer
+		m.tree.SetSize(width, height-fileSelectionHeaderFooterHeight)
 	}
 }
 
-func (m *FileSelectionModel) Update(msg tea.KeyMsg, selections map[string]bool) tea.Cmd {
-	if m.tree == nil {
+func (m *FileSelectionModel) Update(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok || m.tree == nil {
 		return nil
 	}
 
 	if m.filterMode {
-		return m.handleFilterMode(msg)
+		return m.handleFilterMode(keyMsg)
 	}
 
-	return m.handleNormalMode(msg, selections)
+	return m.handleNormalMode(keyMsg)
 }
 
 func (m *FileSelectionModel) handleFilterMode(msg tea.KeyMsg) tea.Cmd {
@@ -78,7 +80,7 @@ func (m *FileSelectionModel) handleFilterMode(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[string]bool) tea.Cmd {
+func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "up", "k":
 		m.tree.MoveUp()
@@ -90,7 +92,7 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[str
 		m.tree.ExpandNode()
 	case " ":
 		m.tree.ToggleSelection()
-		m.updateSelections(selections)
+		m.syncSelections()
 	case "i":
 		m.tree.ToggleShowIgnored()
 	case "/":
@@ -107,16 +109,16 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg, selections map[str
 	return nil
 }
 
-func (m *FileSelectionModel) updateSelections(selections map[string]bool) {
+func (m *FileSelectionModel) syncSelections() {
 	// Clear existing selections
-	for k := range selections {
-		delete(selections, k)
+	for k := range m.selections {
+		delete(m.selections, k)
 	}
 
 	// Copy new selections from tree
 	treeSelections := m.tree.GetSelections()
 	for k, v := range treeSelections {
-		selections[k] = v
+		m.selections[k] = v
 	}
 }
 

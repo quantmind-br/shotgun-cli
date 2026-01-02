@@ -41,9 +41,9 @@ func TestTemplateSelectionUpdateLoading(t *testing.T) {
 	model := NewTemplateSelection()
 	model.loading = true
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 }
 
@@ -53,9 +53,9 @@ func TestTemplateSelectionUpdateNoTemplates(t *testing.T) {
 		templates: []*template.Template{}, // Empty list
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 }
 
@@ -70,9 +70,9 @@ func TestTemplateSelectionUpdateUp(t *testing.T) {
 		cursor: 1,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyUp})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 0, model.cursor)
 }
@@ -87,9 +87,9 @@ func TestTemplateSelectionUpdateUpAtTop(t *testing.T) {
 		cursor: 0,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyUp})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyUp})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 0, model.cursor) // Should stay at 0
 }
@@ -105,9 +105,9 @@ func TestTemplateSelectionUpdateDown(t *testing.T) {
 		cursor: 1,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyDown})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 2, model.cursor)
 }
@@ -122,9 +122,9 @@ func TestTemplateSelectionUpdateDownAtBottom(t *testing.T) {
 		cursor: 1,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyDown})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 1, model.cursor) // Should stay at last
 }
@@ -144,9 +144,9 @@ func TestTemplateSelectionUpdateEnter(t *testing.T) {
 		cursor: 1,
 	}
 
-	returnedTemplate, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	assert.Equal(t, tmpl, returnedTemplate)
+	assert.Equal(t, tmpl, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, tmpl, model.selectedTemplate)
 }
@@ -166,9 +166,9 @@ func TestTemplateSelectionUpdateSpace(t *testing.T) {
 		cursor: 1,
 	}
 
-	returnedTemplate, cmd := model.Update(tea.KeyMsg{Type: tea.KeySpace})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeySpace})
 
-	assert.Equal(t, tmpl, returnedTemplate)
+	assert.Equal(t, tmpl, model.GetSelected())
 	assert.Nil(t, cmd)
 }
 
@@ -183,9 +183,9 @@ func TestTemplateSelectionUpdateHome(t *testing.T) {
 		cursor: 2,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyHome})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyHome})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 0, model.cursor)
 }
@@ -201,9 +201,9 @@ func TestTemplateSelectionUpdateEnd(t *testing.T) {
 		cursor: 0,
 	}
 
-	template, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnd})
 
-	assert.Nil(t, template)
+	assert.Nil(t, model.GetSelected())
 	assert.Nil(t, cmd)
 	assert.Equal(t, 2, model.cursor)
 }

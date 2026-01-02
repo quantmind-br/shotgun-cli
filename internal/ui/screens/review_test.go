@@ -31,7 +31,7 @@ func TestNewReview(t *testing.T) {
 		Content:     "Test content",
 	}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Test task", "Test rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Test task", "Test rules", "")
 
 	if m == nil {
 		t.Fatalf("NewReview returned nil")
@@ -61,7 +61,7 @@ func TestNewReview_NilTemplate(t *testing.T) {
 		Children: []*scanner.FileNode{},
 	}
 
-	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules", "")
 
 	if m == nil {
 		t.Fatalf("NewReview returned nil")
@@ -74,7 +74,7 @@ func TestNewReview_NilTemplate(t *testing.T) {
 func TestReviewModel_SetSize(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 	m.SetSize(100, 50)
 
 	if m.width != 100 {
@@ -88,7 +88,7 @@ func TestReviewModel_SetSize(t *testing.T) {
 func TestReviewModel_UpdateCtrlC(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	cmd := m.Update(msg)
 
@@ -100,7 +100,7 @@ func TestReviewModel_UpdateCtrlC(t *testing.T) {
 func TestReviewModel_UpdateOtherKey(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
 	cmd := m.Update(msg)
 
@@ -112,7 +112,7 @@ func TestReviewModel_UpdateOtherKey(t *testing.T) {
 func TestReviewModel_SetGenerated(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 
 	m.SetGenerated("/tmp/test.md", true)
 
@@ -130,7 +130,7 @@ func TestReviewModel_SetGenerated(t *testing.T) {
 func TestReviewModel_SetGenerated_FalseClipboard(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 
 	m.SetGenerated("/tmp/test.md", false)
 
@@ -175,7 +175,7 @@ func TestReviewModel_View_BeforeGeneration(t *testing.T) {
 		Content:     "Test content",
 	}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Test task description", "Test rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Test task description", "Test rules", "")
 	m.SetSize(80, 24)
 
 	view := m.View()
@@ -222,7 +222,7 @@ func TestReviewModel_View_AfterGeneration(t *testing.T) {
 		Content: "Test content",
 	}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", true)
 
 	view := m.View()
@@ -257,7 +257,7 @@ func TestReviewModel_View_AfterGeneration_ClipboardFailed(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", false)
 
 	view := m.View()
@@ -288,7 +288,7 @@ func TestReviewModel_View_NoTemplate(t *testing.T) {
 		},
 	}
 
-	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules", "")
 	view := m.View()
 
 	if !strings.Contains(view, "Template:") {
@@ -318,7 +318,7 @@ func TestReviewModel_View_NoRules(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "", "")
 	view := m.View()
 
 	// Rules section should not appear when empty
@@ -348,7 +348,7 @@ func TestReviewModel_View_LongTaskDescription(t *testing.T) {
 
 	// Create a very long task description (> 150 chars)
 	longTask := strings.Repeat("a", 200)
-	m := NewReview(selectedFiles, fileTree, tmpl, longTask, "")
+	m := NewReview(selectedFiles, fileTree, tmpl, longTask, "", "")
 	view := m.View()
 
 	// Should truncate and add ellipsis
@@ -378,7 +378,7 @@ func TestReviewModel_View_LongRules(t *testing.T) {
 
 	// Create very long rules (> 100 chars)
 	longRules := strings.Repeat("r", 150)
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", longRules)
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", longRules, "")
 	view := m.View()
 
 	// Should contain rules section
@@ -431,7 +431,7 @@ func TestReviewModel_calculateStats(t *testing.T) {
 		Content:     "Test content body",
 	}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task description", "Rule one, rule two")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task description", "Rule one, rule two", "")
 
 	totalBytes, totalTokens := m.calculateStats()
 
@@ -451,7 +451,7 @@ func TestReviewModel_calculateStats_NoFileTree(t *testing.T) {
 
 	selectedFiles := map[string]bool{"/path/to/file1.go": true}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
-	m := NewReview(selectedFiles, nil, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, nil, tmpl, "Task", "Rules", "")
 
 	totalBytes, _ := m.calculateStats()
 
@@ -478,7 +478,7 @@ func TestReviewModel_calculateStats_NoTemplate(t *testing.T) {
 			},
 		},
 	}
-	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules", "")
 
 	totalBytes, _ := m.calculateStats()
 
@@ -516,7 +516,7 @@ func TestReviewModel_walkTree(t *testing.T) {
 		},
 	}
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 	visited := make(map[string]bool)
 
 	m.walkTree(fileTree, func(node *scanner.FileNode, path string) {
@@ -586,7 +586,7 @@ func TestFormatSizeHelper_Large(t *testing.T) {
 func TestReview_SetGeminiStates(t *testing.T) {
 	t.Parallel()
 
-	m := NewReview(nil, nil, nil, "", "")
+	m := NewReview(nil, nil, nil, "", "", "")
 
 	// Test SetGeminiSending
 	m.SetGeminiSending(true)
@@ -649,7 +649,7 @@ func TestReview_ViewGeminiSending(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiSending(true)
 
@@ -679,7 +679,7 @@ func TestReview_ViewGeminiComplete(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiComplete("/tmp/gemini-output.txt", 3*time.Second)
 
@@ -710,7 +710,7 @@ func TestReview_ViewGeminiError(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiError(errors.New("gemini connection failed"))
 
@@ -743,7 +743,7 @@ func TestReview_ViewGeminiStatus(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetGenerated("/tmp/test.md", true)
 
 	// Test view with no gemini state
@@ -779,7 +779,7 @@ func TestReview_ViewSizeLimit(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: strings.Repeat("content", 1000)}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetSize(80, 24)
 
 	view := m.View()
@@ -840,7 +840,7 @@ func TestReview_calculateStatsLargeFile(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: strings.Repeat("content", 10000)}
 
-	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules")
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 
 	totalBytes, totalTokens := m.calculateStats()
 

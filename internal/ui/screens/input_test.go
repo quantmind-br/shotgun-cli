@@ -50,7 +50,7 @@ func TestTaskInputUpdateEscToBlur(t *testing.T) {
 	model := NewTaskInput("test")
 	assert.True(t, model.IsFocused())
 
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	assert.False(t, model.IsFocused())
 	assert.Nil(t, cmd)
@@ -63,7 +63,7 @@ func TestTaskInputUpdateEscToFocus(t *testing.T) {
 
 	assert.False(t, model.IsFocused())
 
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	assert.True(t, model.IsFocused())
 	assert.Nil(t, cmd)
@@ -73,12 +73,11 @@ func TestTaskInputUpdateRegularKey(t *testing.T) {
 	model := NewTaskInput("")
 
 	// Type a character
-	_, _ = model.Update(tea.KeyMsg{
+	_ = model.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'h'},
 	})
 
-	// cmd may be non-nil (textarea might return a cmd for cursor blink, etc.)
 	// The important assertion is that the character was added to the value
 	assert.Contains(t, model.GetValue(), "h")
 }
@@ -187,7 +186,7 @@ func TestRulesInputSetSize(t *testing.T) {
 func TestRulesInputUpdateEsc(t *testing.T) {
 	model := NewRulesInput("test")
 
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	// Should toggle focus state
 	assert.False(t, model.IsFocused())
@@ -198,12 +197,11 @@ func TestRulesInputUpdateRegularKey(t *testing.T) {
 	model := NewRulesInput("")
 
 	// Type a character
-	_, _ = model.Update(tea.KeyMsg{
+	_ = model.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'r'},
 	})
 
-	// cmd may be non-nil for textarea update
 	assert.Contains(t, model.GetValue(), "r")
 }
 

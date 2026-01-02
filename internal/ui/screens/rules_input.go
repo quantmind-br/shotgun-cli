@@ -10,6 +10,13 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
+const (
+	rulesInputHeaderFooterHeight = 12
+	rulesInputHorizontalPadding  = 6
+	rulesInputMinHeight          = 5
+	rulesInputMinWidth           = 20
+)
+
 type RulesInputModel struct {
 	textarea textarea.Model
 	width    int
@@ -57,24 +64,29 @@ func (m *RulesInputModel) SetSize(width, height int) {
 	m.height = height
 
 	// Calculate available space for textarea
-	availableHeight := height - 12 // Reserve space for header, instructions, character count, footer, border
-	availableWidth := width - 6    // Reserve space for margins and border
+	availableHeight := height - rulesInputHeaderFooterHeight
+	availableWidth := width - rulesInputHorizontalPadding
 
-	if availableHeight < 5 {
-		availableHeight = 5
+	if availableHeight < rulesInputMinHeight {
+		availableHeight = rulesInputMinHeight
 	}
-	if availableWidth < 20 {
-		availableWidth = 20
+	if availableWidth < rulesInputMinWidth {
+		availableWidth = rulesInputMinWidth
 	}
 
 	m.textarea.SetWidth(availableWidth)
 	m.textarea.SetHeight(availableHeight)
 }
 
-func (m *RulesInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
+func (m *RulesInputModel) Update(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return nil
+	}
+
 	var cmd tea.Cmd
 
-	switch msg.String() {
+	switch keyMsg.String() {
 	case keyEsc:
 		if m.textarea.Focused() {
 			m.textarea.Blur()
@@ -84,10 +96,10 @@ func (m *RulesInputModel) Update(msg tea.KeyMsg) (string, tea.Cmd) {
 			m.focused = true
 		}
 	default:
-		m.textarea, cmd = m.textarea.Update(msg)
+		m.textarea, cmd = m.textarea.Update(keyMsg)
 	}
 
-	return m.textarea.Value(), cmd
+	return cmd
 }
 
 func (m *RulesInputModel) View() string {

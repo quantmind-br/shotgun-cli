@@ -52,7 +52,7 @@ func TestFileSelectionUpdateWithNilTree(t *testing.T) {
 		tree: nil,
 	}
 
-	cmd := model.Update(tea.KeyMsg{}, nil)
+	cmd := model.Update(tea.KeyMsg{})
 	assert.Nil(t, cmd)
 }
 
@@ -123,51 +123,47 @@ func TestFileSelectionHandleNormalMode(t *testing.T) {
 			},
 		},
 	}
-	model := NewFileSelection(fileTree, nil)
+	selections := make(map[string]bool)
+	model := NewFileSelection(fileTree, selections)
 	model.SetSize(100, 50)
 
-	// Create a test selections map
-	testSelections := make(map[string]bool)
-
 	// Test Up arrow moves cursor up
-	cmd := model.handleNormalMode(tea.KeyMsg{Type: tea.KeyUp}, testSelections)
+	cmd := model.handleNormalMode(tea.KeyMsg{Type: tea.KeyUp})
 	assert.Nil(t, cmd)
 
 	// Test Down arrow moves cursor down
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyDown}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyDown})
 	assert.Nil(t, cmd)
 
 	// Test Left arrow collapses node
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyLeft}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyLeft})
 	assert.Nil(t, cmd)
 
 	// Test Right arrow expands node
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRight}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRight})
 	assert.Nil(t, cmd)
 
 	// Test Space toggles selection
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
 	assert.Nil(t, cmd)
-	// Selection count should have changed
-	// (can't verify exact count without knowing initial state)
 
 	// Test 'd' toggles directory selection
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	assert.Nil(t, cmd)
 
 	// Test 'i' toggles show ignored
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	assert.Nil(t, cmd)
 
 	// Test '/' enters filter mode
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	assert.Nil(t, cmd)
 	assert.True(t, model.filterMode)
 	assert.Equal(t, "", model.filterBuffer)
 
 	// Test F5 returns RescanRequestMsg
 	model.filterMode = false // Reset filter mode
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyF5}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyF5})
 	assert.NotNil(t, cmd)
 	// Cmd should return a RescanRequestMsg
 	if msg := cmd(); msg != nil {
@@ -177,7 +173,7 @@ func TestFileSelectionHandleNormalMode(t *testing.T) {
 	// Test Ctrl+C clears filter
 	model.filterMode = false
 	model.tree.SetFilter("test")
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyCtrlC}, testSelections)
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyCtrlC})
 	assert.Nil(t, cmd)
 	assert.Equal(t, "", model.tree.GetFilter())
 }
@@ -188,22 +184,22 @@ func TestFileSelectionUpdate(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(fileTree, nil)
+	selections := make(map[string]bool)
+	model := NewFileSelection(fileTree, selections)
 
 	// Test in filter mode calls handleFilterMode
 	model.filterMode = true
-	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter}, nil)
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	assert.Nil(t, cmd)
 	assert.False(t, model.filterMode)
 
 	// Test in normal mode calls handleNormalMode
 	model.filterMode = false
-	testSelections := make(map[string]bool)
-	cmd = model.Update(tea.KeyMsg{Type: tea.KeyUp}, testSelections)
+	cmd = model.Update(tea.KeyMsg{Type: tea.KeyUp})
 	assert.Nil(t, cmd)
 }
 
-func TestFileSelectionUpdateSelections(t *testing.T) {
+func TestFileSelectionSyncSelections(t *testing.T) {
 	fileTree := &scanner.FileNode{
 		Name:  "root",
 		Path:  "/root",
@@ -217,7 +213,8 @@ func TestFileSelectionUpdateSelections(t *testing.T) {
 			},
 		},
 	}
-	model := NewFileSelection(fileTree, nil)
+	selections := make(map[string]bool)
+	model := NewFileSelection(fileTree, selections)
 	model.SetSize(100, 50)
 
 	// Move cursor down to the file (root is expanded by default, so file is visible)
@@ -226,15 +223,12 @@ func TestFileSelectionUpdateSelections(t *testing.T) {
 	// Toggle selection on the file (ToggleSelection only works on files, not directories)
 	model.tree.ToggleSelection()
 
-	// Create a selections map to update
-	testSelections := make(map[string]bool)
+	// Call syncSelections to sync tree selections to model.selections
+	model.syncSelections()
 
-	// Call updateSelections
-	model.updateSelections(testSelections)
-
-	// Verify selections were copied from tree to map
-	assert.NotEmpty(t, testSelections)
-	assert.True(t, testSelections["/root/file1.go"])
+	// Verify selections were copied from tree to model's selections map
+	assert.NotEmpty(t, model.selections)
+	assert.True(t, model.selections["/root/file1.go"])
 }
 
 func TestFileSelectionView(t *testing.T) {

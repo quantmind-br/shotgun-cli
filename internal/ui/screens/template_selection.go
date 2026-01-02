@@ -60,12 +60,13 @@ func (m *TemplateSelectionModel) LoadTemplates() tea.Cmd {
 	}
 }
 
-func (m *TemplateSelectionModel) Update(msg tea.KeyMsg) (*template.Template, tea.Cmd) {
-	if m.loading || len(m.templates) == 0 {
-		return nil, nil
+func (m *TemplateSelectionModel) Update(msg tea.Msg) tea.Cmd {
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok || m.loading || len(m.templates) == 0 {
+		return nil
 	}
 
-	switch msg.String() {
+	switch keyMsg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
@@ -77,8 +78,6 @@ func (m *TemplateSelectionModel) Update(msg tea.KeyMsg) (*template.Template, tea
 	case "enter", " ":
 		if m.cursor >= 0 && m.cursor < len(m.templates) {
 			m.selectedTemplate = m.templates[m.cursor]
-
-			return m.templates[m.cursor], nil
 		}
 	case "home":
 		m.cursor = 0
@@ -86,7 +85,12 @@ func (m *TemplateSelectionModel) Update(msg tea.KeyMsg) (*template.Template, tea
 		m.cursor = len(m.templates) - 1
 	}
 
-	return nil, nil
+	return nil
+}
+
+// GetSelected returns the currently selected template, or nil if none selected
+func (m *TemplateSelectionModel) GetSelected() *template.Template {
+	return m.selectedTemplate
 }
 
 func (m *TemplateSelectionModel) HandleMessage(msg tea.Msg) tea.Cmd {
@@ -165,7 +169,12 @@ func (m *TemplateSelectionModel) checkEarlyReturns(header string) string {
 		return header + "\n\n" + styles.RenderError(fmt.Sprintf("Error loading templates: %v", m.err))
 	}
 	if len(m.templates) == 0 {
-		return header + "\n\n" + styles.RenderWarning("No templates found.")
+		noTemplatesMsg := styles.RenderWarning("No templates found.") + "\n\n" +
+			styles.HelpStyle.Render("To add templates:\n") +
+			styles.HelpStyle.Render("  1. Create a template file in ~/.config/shotgun/templates/\n") +
+			styles.HelpStyle.Render("  2. Or run: shotgun template create <name>\n") +
+			styles.HelpStyle.Render("\nTemplates use {{TASK}}, {{RULES}}, and {{FILES}} variables.")
+		return header + "\n\n" + noTemplatesMsg
 	}
 
 	return ""

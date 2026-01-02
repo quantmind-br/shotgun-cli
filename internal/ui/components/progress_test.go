@@ -5,8 +5,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
-	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,41 +30,6 @@ func TestProgressUpdate(t *testing.T) {
 	assert.Equal(t, int64(100), p.total)
 	assert.Equal(t, "scanning", p.stage)
 	assert.Equal(t, "processing files", p.message)
-	assert.True(t, p.visible)
-}
-
-func TestProgressUpdateFromScanner(t *testing.T) {
-	p := NewProgress()
-
-	progress := scanner.Progress{
-		Current: 5,
-		Total:   50,
-		Stage:   "scan-progress",
-	}
-
-	p.UpdateFromScanner(progress)
-
-	assert.Equal(t, int64(5), p.current)
-	assert.Equal(t, int64(50), p.total)
-	assert.Equal(t, "scan-progress", p.stage)
-	assert.Equal(t, "", p.message)
-	assert.True(t, p.visible)
-}
-
-func TestProgressUpdateFromGenerator(t *testing.T) {
-	p := NewProgress()
-
-	progress := context.GenProgress{
-		Stage:   "generate",
-		Message: "generating content",
-	}
-
-	p.UpdateFromGenerator(progress)
-
-	assert.Equal(t, int64(0), p.current)
-	assert.Equal(t, int64(0), p.total)
-	assert.Equal(t, "generate", p.stage)
-	assert.Equal(t, "generating content", p.message)
 	assert.True(t, p.visible)
 }
 
@@ -188,15 +151,6 @@ func TestProgressRenderProgressBarOverflow(t *testing.T) {
 	for _, c := range bar {
 		assert.Contains(t, "█░", string(c))
 	}
-}
-
-func TestProgressSpinnerTickCmd(t *testing.T) {
-	p := NewProgress()
-
-	cmd := p.GetSpinnerTickCmd()
-
-	// Should return a tick command for the spinner
-	assert.NotNil(t, cmd)
 }
 
 func TestProgressCenterLine(t *testing.T) {

@@ -7,8 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
-	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
@@ -53,14 +51,6 @@ func (m *ProgressModel) Update(current, total int64, stage, message string) {
 	m.stage = stage
 	m.message = message
 	m.visible = true
-}
-
-func (m *ProgressModel) UpdateFromScanner(progress scanner.Progress) {
-	m.Update(progress.Current, progress.Total, progress.Stage, "")
-}
-
-func (m *ProgressModel) UpdateFromGenerator(progress context.GenProgress) {
-	m.Update(0, 0, progress.Stage, progress.Message)
 }
 
 func (m *ProgressModel) UpdateMessage(stage, message string) {
@@ -270,9 +260,4 @@ func (m *ProgressModel) visualWidth(text string) int {
 
 func (m *ProgressModel) GetProgress() (int64, int64, string, string) {
 	return m.current, m.total, m.stage, m.message
-}
-
-// GetSpinnerTickCmd returns the tick command for the spinner
-func (m *ProgressModel) GetSpinnerTickCmd() tea.Cmd {
-	return m.spinner.Tick
 }
