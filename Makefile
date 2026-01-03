@@ -12,7 +12,7 @@ INSTALL_DIR := $(PREFIX)/bin
 
 OS_ARCHES := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install install-local install-system uninstall deps generate coverage release
+.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install install-local install-system uninstall deps generate coverage release version-bump version-patch version-minor version-major release-tag release-push release-snapshot
 
 help:
 	@echo "Usage: make <target>"
@@ -99,5 +99,89 @@ coverage: ## Generate coverage profile and report
 	$(GO) test -coverprofile=$(COVERAGE_FILE) $(PKG)
 	$(GO) tool cover -func=$(COVERAGE_FILE)
 
-release: ## Build release artifacts with Goreleaser
-	goreleaser release --clean
+# Version management
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+VERSION_RAW := $(shell echo "$(VERSION)" | sed 's/^v//')
+VERSION_NEXT := $(shell bash -c 'version="$(VERSION_RAW)"; IFS=. read -r major minor patch <<< "$$version"; echo "$$major.$$((minor+1)).0"')
+
+version-bump: ## Display current and next version
+	@echo "Current version: $(VERSION)"
+	@echo "Next minor version: v$(VERSION_NEXT)"
+	@echo ""
+	@echo "Use one of:"
+	@echo "  make version-patch  # Bump patch version (0.0.X -> 0.0.Y)"
+	@echo "  make version-minor  # Bump minor version (0.X.0 -> 0.Y.0)"
+	@echo "  make version-major  # Bump major version (X.0.0 -> Y.0.0)"
+
+version-patch: ## Bump patch version (e.g., v1.2.3 -> v1.2.4)
+	@bash -c 'version="$(VERSION_RAW)"; IFS=. read -r major minor patch <<< "$$version"; new_version="$$major.$$minor.$$((patch+1))"; \
+	echo "Bumping version from $(VERSION) to v$$new_version"; \
+	echo "$$new_version" > .version.tmp && mv .version.tmp VERSION'
+
+version-minor: ## Bump minor version (e.g., v1.2.3 -> v1.3.0)
+	@bash -c 'version="$(VERSION_RAW)"; IFS=. read -r major minor patch <<< "$$version"; new_version="$$major.$$((minor+1)).0"; \
+	echo "Bumping version from $(VERSION) to v$$new_version"; \
+	echo "$$new_version" > .version.tmp && mv .version.tmp VERSION'
+
+version-major: ## Bump major version (e.g., v1.2.3 -> v2.0.0)
+	@bash -c 'version="$(VERSION_RAW)"; IFS=. read -r major minor patch <<< "$$version"; new_version="$$((major+1)).0.0"; \
+	echo "Bumping version from $(VERSION) to v$$new_version"; \
+	echo "$$new_version" > .version.tmp && mv .version.tmp VERSION'
+
+version-set: ## Set a specific version (use VERSION=1.2.3)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION parameter is required. Usage: make version-set VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "Setting version to v$(VERSION)"
+	@echo "$(VERSION)" > .version.tmp && mv .version.tmp VERSION
+
+release-tag: ## Create and push a new git tag (use VERSION=1.2.3)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION parameter is required. Usage: make release-tag VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "Checking working tree status..."
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Working tree is not clean. Please commit or stash changes first."; \
+		git status --short; \
+		exit 1; \
+	fi
+	@echo "Current version: $(VERSION)"
+	@echo "Creating tag v$(VERSION)..."
+	@git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	@echo "Tag v$(VERSION) created successfully"
+	@echo ""
+	@echo "To push the tag and trigger the release, run:"
+	@echo "  make release-push VERSION=$(VERSION)"
+
+release-push: ## Push tag to remote and trigger GitHub release
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION parameter is required. Usage: make release-push VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "Pushing tag v$(VERSION) to origin..."
+	@git push origin "v$(VERSION)"
+	@echo ""
+	@echo "Tag pushed! Release workflow should start at:"
+	@echo "  https://github.com/quantmind-br/shotgun-cli/actions"
+
+release-snapshot: ## Build release artifacts locally without creating a tag
+	goreleaser release --snapshot --clean
+
+release-test: ## Test release configuration without publishing
+	goreleaser release --snapshot --clean --skip-publish
+
+release: ## Create and push new release (use VERSION=1.2.3)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION parameter is required. Usage: make release VERSION=1.2.3"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting release process for v$(VERSION)..."
+	@echo ""
+	@$(MAKE) release-tag VERSION=$(VERSION)
+	@echo ""
+	@$(MAKE) release-push VERSION=$(VERSION)
+	@echo ""
+	@echo "✅ Release v$(VERSION) initiated!"
+	@echo "   Watch the release at: https://github.com/quantmind-br/shotgun-cli/releases"
