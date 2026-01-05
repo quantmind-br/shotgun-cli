@@ -2,58 +2,69 @@
 
 ## Data Models
 
-The system uses several core data structures to manage the flow of context information:
+The system architecture revolves around several core data structures that facilitate the scanning, transformation, and delivery of project context:
 
-*   **`FileNode` (Scanner)**: A recursive tree structure representing the project's file system. It includes metadata like path, size, and ignore status (`IsGitignored`, `IsCustomIgnored`).
-*   **`FileContent` (Context)**: Represents the actual content of a file, including its relative path, detected programming language, and the raw string content.
-*   **`Template` (Template)**: Contains the structure for the prompt sent to the LLM. It includes metadata (name, description) and `RequiredVars` (placeholders like `{TASK}`, `{RULES}`, `{FILE_STRUCTURE}`).
-*   **`ContextData` (Generator)**: The final data assembly used for template rendering. It aggregates user inputs (`Task`, `Rules`), the rendered `FileStructure` (ASCII tree + file blocks), and system metadata like `CurrentDate`.
-*   **`Result` (Gemini)**: Holds the output from the LLM execution, containing the response text and performance metrics (duration).
+- **FileNode**: A recursive tree structure representing the file system.
+    - `Name`, `Path`, `RelPath`, `IsDir`, `Size`, `Children` (slice of `FileNode`).
+    - `IsGitignored`, `IsCustomIgnored`: Boolean flags for filtering state.
+- **ScanConfig**: Configuration for the filesystem crawler.
+    - Limits: `MaxFileSize`, `MaxFiles`, `MaxMemory`.
+    - Filters: `SkipBinary`, `IncludeHidden`, `IgnorePatterns`, `IncludePatterns`.
+- **ContextData**: The aggregate model passed to the template engine.
+    - `Task`: User-provided task description.
+    - `Rules`: User-provided constraints/rules.
+    - `FileStructure`: ASCII tree representation of the selected files.
+    - `Files`: Slice of `FileContent` objects containing path and full text.
+    - `CurrentDate`: Generated timestamp.
+- **Template**: Structure representing a prompt template.
+    - `Name`, `Description`, `Content`, `Source`.
 
 ## Input Sources
 
-Data enters the system through three primary channels:
+Data enters the system through multiple channels:
 
-1.  **Local File System**: The `Scanner` component traverses the project directory, reading file metadata and contents.
-2.  **User Input (CLI/TUI)**: Users provide operational instructions via command-line flags and interactive UI screens (tasks, custom rules, file selections, and template choices).
-3.  **Embedded/Local Templates**: Prompt templates are loaded from either embedded assets or a local `templates/` directory.
-4.  **External LLM (Gemini)**: The system receives processed responses back from the Gemini LLM via the `geminiweb` CLI utility.
+- **File System**: The primary source of data. The `scanner` module traverses the local directory to build the `FileNode` tree and read file contents.
+- **CLI Arguments/Flags**: User preferences, model selection, and paths provided via `cobra` commands.
+- **Interactive UI (TUI)**: User input for task descriptions, custom rules, and manual file selection/deselection via `bubbletea` screens.
+- **Configuration Files**: `shotgun.yaml` and `.shotgunignore` files, as well as global config via `viper`.
+- **Templates**: Pre-defined or user-provided Markdown templates (embedded, XDG config dir, or custom path).
 
 ## Data Transformations
 
-Data undergoes several stages of transformation before reaching the output:
+The system performs several stages of data transformation:
 
-1.  **Scanning & Filtering**: The raw file system is transformed into a `FileNode` tree. Files are filtered based on `.gitignore`, `.shotgunignore`, and binary detection.
-2.  **Tree Rendering**: The `FileNode` tree is transformed into an ASCII representation for inclusion in the prompt.
-3.  **Language Detection**: Filenames are mapped to programming languages (e.g., `.go` -> `go`, `Dockerfile` -> `dockerfile`) for better LLM context.
-4.  **Template Variable Substitution**: The `Renderer` performs string replacement, injecting `ContextData` into `{VARIABLE}` placeholders. It also converts `{VAR}` syntax to Go-style `{{.Var}}` if necessary.
-5.  **ANSI Stripping**: Responses from the `geminiweb` utility are cleaned of ANSI escape codes and parsed to extract the meaningful LLM response.
+1.  **Scanning to Tree**: Flat file system paths are transformed into a hierarchical `FileNode` tree.
+2.  **Filtering**: The tree is pruned based on `.gitignore`, `.shotgunignore`, and user-defined patterns.
+3.  **Context Assembly**: Selected files are read and bundled into a `ContextData` struct.
+4.  **Template Rendering**: The `ContextData` is merged into a Markdown template.
+    - Converts `{VARIABLE}` placeholders to `{{.Variable}}` Go template syntax.
+    - Uses `text/template` for the final string interpolation.
+5.  **Output Cleaning**: If sending to Gemini, the raw response from the `geminiweb` binary is processed to strip ANSI escape codes and parse structured blocks.
 
 ## Storage Mechanisms
 
-The application is primarily a transient CLI tool, but it interacts with the following storage:
+The system is primarily transient and focused on "piping" data, but uses:
 
-*   **Memory**: Most data (scanned trees, file contents, rendered templates) resides in memory during the application lifecycle.
-*   **System Clipboard**: The generated context or LLM response can be persisted to the system clipboard for user use in other applications.
-*   **Local Filesystem**: Templates are stored as `.md` files. The tool also reads configuration from files like `.shotgunignore`.
-*   **Shell Pipe/Stdio**: Data is streamed between the CLI and external processes like `geminiweb`.
+- **System Clipboard**: Temporary storage for the generated context string.
+- **XDG Config Directory**: Local storage for user templates and configuration (`~/.config/shotgun-cli/`).
+- **Memory Cache**: The `TemplateManager` maintains an in-memory map of loaded templates to avoid redundant I/O.
+- **Gemini Cookies**: `geminiweb` stores authentication state in `~/.geminiweb/cookies.json`.
 
 ## Data Validation
 
-Validation occurs at multiple points to ensure integrity:
+Validation occurs at multiple points in the lifecycle:
 
-*   **File Limits**: Checks against `MaxFileSize`, `MaxFiles`, and `MaxTotalSize` during content collection to prevent memory issues or LLM context window overflows.
-*   **Binary Detection**: A "peek" mechanism reads the first 1024 bytes to verify if a file is text-based before full ingestion.
-*   **Template Validation**: Templates are checked for unmatched braces and malformed variable patterns.
-*   **Required Variables**: The renderer ensures that all variables defined in a template are supplied by the system or user before execution.
-*   **UTF-8 Verification**: Validates that file content is valid UTF-8 to avoid processing corrupt or incompatible data.
+- **Config Validation**: `validateConfig` ensures limits (MaxFileSize, etc.) are within sane bounds.
+- **Template Validation**: Ensures templates contain required variables and valid syntax before rendering.
+- **Token Estimation**: Counts tokens in the generated context to warn if it exceeds model limits.
+- **Size Limits**: Final generated context is checked against `MaxTotalSize` before being output or copied.
+- **Binary Detection**: Files are checked for binary content before reading to prevent corrupting the prompt context.
 
 ## Output Formats
 
-The system produces data in several formats:
+The final processed data leaves the system in three main ways:
 
-*   **Markdown**: The primary format for generated prompts and LLM responses.
-*   **ASCII Tree**: A visual representation of the project structure.
-*   **Structured CLI Output**: Progress updates and results are printed to `stdout`.
-*   **Clipboard Content**: The final rendered prompt or LLM response is copied to the clipboard.
-*   **JSON (Internal/Debug)**: Various structures include JSON tags for potential logging or debugging exports.
+- **Standard Output (Stdout)**: The generated context or the LLM response is printed to the terminal.
+- **System Clipboard**: The generated context is copied for manual pasting into LLM web interfaces.
+- **External Process (Stdin)**: The generated context is piped into the `geminiweb` binary to interact with Google Gemini models.
+- **Markdown Files**: Templates and generated results are typically formatted as Markdown for readability.

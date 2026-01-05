@@ -1,67 +1,75 @@
 # Dependency Analysis
 
 ## Internal Dependencies
+The project is structured into a strictly hierarchical package layout, ensuring a clear separation of concerns between the CLI entry points, UI components, and core business logic.
 
-The application follows a layered architecture with clear boundaries between command-line interfaces, user interface components, and core domain logic.
-
-### Module Map
-- **cmd**: Entry point (Cobra). Depends on `internal/ui` (for wizard mode), `internal/core/scanner` (for config), and `internal/platform/gemini`.
-- **internal/ui**: TUI implementation (Bubble Tea). High-level orchestrator.
-  - Depends on `internal/ui/screens`, `internal/ui/components` for UI layout.
-  - Depends on `internal/core/scanner`, `internal/core/context`, `internal/core/template` for domain logic.
-  - Depends on `internal/platform/clipboard`, `internal/platform/gemini` for side-effect operations.
-- **internal/core/context**: Handles the logic of combining files and templates.
-  - Depends on `internal/core/scanner` for the data structures (`FileNode`).
-  - Contains `TreeRenderer` and `TemplateRenderer`.
-- **internal/core/scanner**: Filesystem traversal logic.
-  - Depends on `internal/core/ignore` for filtering logic.
-- **internal/core/template**: Template loading and management.
-  - Depends on `internal/assets` for embedded templates.
-- **internal/core/ignore**: Abstraction over ignore rules (gitignore, custom, built-in).
-  - Standalone domain logic focused on path matching.
-- **internal/platform**: Infrastructure and external integrations.
-  - **gemini**: Wrapper around the `geminiweb` CLI.
-  - **clipboard**: OS-level clipboard interaction.
-- **internal/assets**: Static assets and embedded Go templates.
+- **`main.go`**: Entry point that initializes logging and calls the `cmd` package.
+- **`cmd/`**: CLI layer using Cobra. It depends on `internal/ui` for the interactive mode and `internal/core` for headless operations.
+- **`internal/ui/`**: TUI layer using Bubble Tea. The `WizardModel` acts as the primary coordinator, depending on:
+    - `internal/core/context` for prompt generation logic.
+    - `internal/core/scanner` for file discovery.
+    - `internal/core/template` for managing prompt templates.
+    - `internal/platform/` for clipboard and LLM integration.
+    - `internal/ui/screens/` and `internal/ui/components/` for UI state and rendering.
+- **`internal/core/`**: Core logic layer.
+    - `context` depends on `scanner` and `template`.
+    - `scanner` depends on `ignore` for filtering logic.
+    - `template` depends on `internal/assets` for default embedded templates.
+- **`internal/platform/`**: Infrastructure adapters.
+    - `gemini` interacts with the external `geminiweb` tool.
+    - `clipboard` interacts with the system clipboard.
+- **`internal/utils/`**: Shared utility functions used across all layers.
 
 ## External Dependencies
+The application leverages the standard Go ecosystem for CLI and TUI development.
 
-### Core Frameworks
-- **github.com/spf13/cobra**: CLI command structure and argument parsing.
-- **github.com/spf13/viper**: Configuration management (YAML, Env, Flags).
-- **github.com/charmbracelet/bubbletea**: TUI framework (The Elm Architecture in Go).
-- **github.com/charmbracelet/bubbles & lipgloss**: TUI components and styling.
+| Library | Purpose |
+|---------|---------|
+| `github.com/spf13/cobra` | CLI command structure and argument parsing. |
+| `github.com/spf13/viper` | Configuration management and environment variable binding. |
+| `github.com/charmbracelet/bubbletea` | The Elm Architecture (TEA) framework for the TUI wizard. |
+| `github.com/charmbracelet/bubbles` | Common TUI components (progress bars, etc.). |
+| `github.com/charmbracelet/lipgloss` | Terminal UI styling and layout. |
+| `github.com/rs/zerolog` | Structured logging. |
+| `github.com/sabhiram/go-gitignore` | Pattern matching for `.gitignore` file compliance. |
+| `github.com/atotto/clipboard` | Cross-platform system clipboard access. |
+| `github.com/adrg/xdg` | XDG Base Directory specification support for config paths. |
+| `github.com/stretchr/testify` | Unit testing assertions and mocking. |
 
-### Utilities
-- **github.com/adrg/xdg**: Cross-platform XDG base directory support (config/cache paths).
-- **github.com/atotto/clipboard**: Cross-platform clipboard access.
-- **github.com/rs/zerolog**: Structured logging.
-- **github.com/sabhiram/go-gitignore**: Parsing and matching `.gitignore` files.
-- **golang.org/x/text**: Language detection and string casing.
-- **github.com/stretchr/testify**: Testing assertions and mocks.
+### Runtime Dependencies
+- **`geminiweb`**: An external CLI tool required for Google Gemini integration. It is invoked via `os/exec`.
 
 ## Dependency Graph
+The dependency structure follows a layered architecture:
 
-The dependency flow is primarily **Top-Down**:
-
-1.  **UI/CLI Layer** (`cmd`, `internal/ui`) -> **Domain/Core Layer** (`scanner`, `context`, `template`)
-2.  **Domain/Core Layer** -> **Infrastructure Layer** (`platform`, `ignore`, `assets`)
-3.  **Cross-cutting** (`utils`, `styles`) are used across layers.
-
-The structure avoids circular dependencies by using a "Star" pattern where `internal/ui` acts as the mediator between different core modules, and the core modules communicate via shared data structures (like `scanner.FileNode`) defined in lower-level packages.
+```mermaid
+graph TD
+    Main[main.go] --> Cmd[cmd/]
+    Cmd --> UI[internal/ui/]
+    Cmd --> Core[internal/core/]
+    Cmd --> Platform[internal/platform/]
+    
+    UI --> Core
+    UI --> Platform
+    UI --> Screens[internal/ui/screens/]
+    
+    Core_Context[internal/core/context] --> Core_Scanner[internal/core/scanner]
+    Core_Context --> Core_Template[internal/core/template]
+    Core_Scanner --> Core_Ignore[internal/core/ignore]
+    Core_Template --> Assets[internal/assets]
+    
+    Screens --> Core
+    Screens --> UI_Styles[internal/ui/styles]
+```
 
 ## Dependency Injection
-
-The project uses **Constructor Injection** and **Interface-based abstractions**:
-
-- **Interface Abstraction**: `ContextGenerator` and `Scanner` are defined as interfaces, allowing for different implementations (though `DefaultContextGenerator` and `FileSystemScanner` are the primary ones).
-- **Manual Injection**: `WizardModel` is initialized with a `ScanConfig` and creates its own instances of screens/components.
-- **Functional Injection**: Progress reporting is handled via callbacks (`func(GenProgress)`) or channels (`chan Progress`), decoupling the core logic from UI update mechanisms.
-- **Service Management**: `TemplateManager` encapsulates the complexity of loading templates from multiple sources (embedded, XDG, custom) and is injected into components that need template access.
+The project utilizes **Manual Constructor Injection**.
+- Components receive their dependencies (configuration, scanners, executors) as arguments in `New...` functions.
+- There is no global state for core logic; objects are instantiated in the `cmd` layer or the `wizard` coordinator and passed down.
+- **TUI Pattern**: In the UI layer, decoupling is achieved through Bubble Tea's message-passing system. Screens do not call the Wizard directly; they return `tea.Msg` (e.g., `RescanRequestMsg`), which the Wizard handles to change state or trigger core logic.
 
 ## Potential Issues
-
-- **Tight Coupling to Gemini CLI**: The `internal/platform/gemini` package depends on the availability of an external binary (`geminiweb`). While abstracted, the application logic in `internal/ui/wizard.go` has specific message types and states tied to this integration.
-- **Fat Wizard Model**: `internal/ui/wizard.go` acts as a "God Object" for the TUI, holding state for scanning, generation, and Gemini communication. While typical for Bubble Tea `Update` functions, it creates high coupling between all UI screens.
-- **Reflective Template Rendering**: The `ContextGenerator` performs string replacements (`convertTemplateVariables`) to bridge custom template syntax to Go's `text/template`, which adds a runtime dependency on specific string patterns.
-- **Global Logger/Viper**: Extensive use of global `log` (zerolog) and `viper` across packages makes unit testing components in isolation slightly more difficult as they depend on global state.
+- **God Object Pattern**: `internal/ui/wizard.go` (the `WizardModel`) carries significant responsibility. It manages the TUI state machine, coordinates all screens, and triggers all core logic operations. While manageable now, this could become a maintenance bottleneck as more steps are added.
+- **External CLI Coupling**: The Gemini integration is tightly coupled to a specific external tool (`geminiweb`) rather than an SDK. This creates a brittle runtime dependency that cannot be easily verified at compile time.
+- **Tight UI/Core Coupling**: While core logic is independent of the UI, the UI layer is tightly coupled to core data structures (like `scanner.FileNode`). Changes in the core data model directly impact the TUI rendering and event handling.
+- **Implicit Filesystem Dependency**: `internal/core/scanner` and `internal/core/context` make direct calls to the `os` and `io` packages. While tested via `_test.go` files, abstracting the filesystem (e.g., using `afero`) would improve testability and allow for virtual codebase analysis.

@@ -1,48 +1,50 @@
 # Code Structure Analysis
 
 ## Architectural Overview
-The codebase follows a layered, modular CLI architecture in Go, utilizing a "Hexagonal-lite" approach where core business logic is decoupled from user interface and external platform integrations. The application supports two primary modes: an interactive TUI (Terminal User Interface) wizard and a headless CLI mode. 
+The `shotgun-cli` is a Go-based command-line tool designed to generate LLM-optimized context from a codebase. It employs a **modular CLI architecture** with a clear separation between the presentation layer (TUI vs. Headless), core business logic (scanning, template management, context generation), and external platform integrations (Gemini, Clipboard).
 
-The architecture is divided into four main layers:
-1.  **Command Layer (`cmd/`)**: Entry point using the Cobra framework, responsible for CLI argument parsing, configuration loading, and orchestration.
-2.  **UI Layer (`internal/ui/`)**: Implements the interactive wizard using the Bubble Tea framework (MVU pattern - Model-View-Update).
-3.  **Core Domain Layer (`internal/core/`)**: Contains the primary business logic for file scanning, template management, and context generation.
-4.  **Platform/Infrastructure Layer (`internal/platform/`)**: Handles external integrations like the Gemini LLM executor and system clipboard.
+The application follows a **layered design**:
+1.  **Entry Layer**: `main.go` and `cmd/` (Cobra-based CLI handling).
+2.  **Orchestration Layer**: `internal/ui/wizard.go` (Bubble Tea-based TUI) manages the workflow state.
+3.  **Core Domain Layer**: `internal/core/` handles file scanning, ignore rules, and context assembly.
+4.  **Platform/Infrastructure Layer**: `internal/platform/` handles OS-level and external API interactions.
 
 ## Core Components
-*   **Scanner (`internal/core/scanner`)**: Responsibile for walking the filesystem, respecting ignore rules, and building a `FileNode` tree representation of the codebase.
-*   **Context Generator (`internal/core/context`)**: The heart of the application; it aggregates selected file contents, renders the project structure, and applies templates to produce the final LLM-optimized prompt.
-*   **Ignore Engine (`internal/core/ignore`)**: A layered rule processor that handles built-in, `.gitignore`, and custom `.shotgunignore` patterns to filter files during scanning.
-*   **Template Manager (`internal/core/template`)**: Manages the discovery and loading of templates from embedded assets, user config directories, and custom paths.
-*   **Wizard (`internal/ui/wizard.go`)**: Orchestrates the multi-step user flow (File Selection -> Template Selection -> Task Input -> Rules Input -> Review/Generate).
+*   **CLI Engine (`cmd/`)**: Built with Cobra and Viper, it handles command routing, flag parsing, and configuration loading. It provides two modes: an interactive TUI wizard and a headless CLI.
+*   **Scanner (`internal/core/scanner`)**: Responsible for traversing the filesystem. It builds a hierarchical `FileNode` tree while respecting complex ignore rules.
+*   **Template System (`internal/core/template`)**: A sophisticated subsystem for loading, managing, and rendering templates. It supports multiple sources (embedded, XDG config, and custom paths) with a priority-based override mechanism.
+*   **Context Generator (`internal/core/context`)**: The primary business logic component that assembles the final LLM prompt. It merges file tree structures, selected file contents, and user-provided instructions into a templated output.
+*   **TUI Wizard (`internal/ui`)**: An interactive 5-step workflow (File Selection → Template Selection → Task Input → Rules Input → Review) built using the Bubble Tea (The Elm Architecture) pattern.
 
 ## Service Definitions
-*   **FileSystemScanner**: A service that implements the `Scanner` interface to provide concurrent file discovery with progress reporting via channels.
-*   **DefaultContextGenerator**: Implements the `ContextGenerator` interface to transform a file tree and selected files into a formatted prompt string.
-*   **Gemini Executor**: A bridge service that wraps the `geminiweb` external binary to send generated contexts directly to the LLM and retrieve responses.
-*   **Token Estimator**: Provides heuristic-based token counting (e.g., 4 bytes per token) to help users stay within LLM context window limits.
+*   **`Scanner`**: A service that performs filesystem traversal. It provides both standard and progress-aware scanning methods.
+*   **`TemplateManager`**: Manages the lifecycle of prompt templates, including discovery across different filesystem locations and variable validation.
+*   **`ContextGenerator`**: Orchestrates the transformation of raw file data and user input into a formatted Markdown document optimized for LLM consumption.
+*   **`GeminiExecutor`**: An infrastructure service that interacts with the `geminiweb` binary to send generated contexts to the Gemini LLM and parse the responses.
 
 ## Interface Contracts
-*   **`Scanner`**: Defines `Scan` and `ScanWithProgress`. Allows for different scanning implementations (e.g., local vs. remote).
-*   **`ContextGenerator`**: Defines methods for prompt generation (`Generate`, `GenerateWithProgress`). It ensures the generation logic is consistent regardless of whether it's called from the TUI or headless CLI.
-*   **`IgnoreEngine`**: Defines the contract for rule-based path filtering, supporting dynamic loading of ignore files.
-*   **`TemplateManager`**: Orchestrates template lifecycle, including discovery across multiple prioritized sources.
+*   **`scanner.Scanner`**: Defines `Scan` and `ScanWithProgress`. This abstraction allows for different scanning implementations (e.g., concurrent vs. sequential).
+*   **`template.TemplateManager`**: Contracts for `ListTemplates`, `GetTemplate`, and `RenderTemplate`, decoupling the UI from how templates are stored or rendered.
+*   **`context.ContextGenerator`**: Defines the `Generate` methods. It takes a file tree and user selections and returns the final string context.
+*   **`tea.Model`**: The `WizardModel` and its sub-screens implement this interface, ensuring a consistent message-passing architecture for the TUI.
 
 ## Design Patterns Identified
-*   **Model-View-Update (MVU)**: Used throughout the TUI layer via the Bubble Tea framework to manage UI state and transitions.
-*   **Strategy Pattern**: Employed in the `IgnoreEngine` where different matchers (built-in, gitignore, custom) are layered to decide if a path should be filtered.
-*   **Composition**: The `WizardModel` composes various screen models (`FileSelectionModel`, `ReviewModel`, etc.) to delegate UI responsibilities.
-*   **Singleton/Manager**: The `TemplateManager` acts as a central registry for all prompt templates available to the system.
-*   **Dependency Injection**: Services like the `Scanner` and `ContextGenerator` are instantiated and passed into the UI components, facilitating testability.
+*   **The Elm Architecture (TEA)**: Heavily used in the `internal/ui` package via Bubble Tea for managing state, updates, and view rendering.
+*   **Composite Pattern**: The `FileNode` structure represents the filesystem as a tree of nodes, allowing uniform treatment of files and directories.
+*   **Strategy Pattern**: The `TemplateSource` interface (implemented by `EmbeddedSource` and `FilesystemSource`) allows the `TemplateManager` to load templates from different locations using the same logic.
+*   **Observer/Reactive Pattern**: Use of Go channels for reporting progress from long-running core operations (scanning, generation) back to the UI.
+*   **Factory Pattern**: `NewWizard`, `NewManager`, and `NewDefaultContextGenerator` are used to instantiate complex components with their dependencies.
 
 ## Component Relationships
-*   **Orchestration**: `cmd/root.go` initializes the configuration and launches either the `Wizard` (TUI) or specific subcommands.
-*   **Data Flow**: The `Scanner` produces a `FileNode` tree. The UI allows users to toggle selection flags on these nodes. The `ContextGenerator` then consumes the `FileNode` tree and the map of selections to produce the final text output.
-*   **Feedback Loop**: Core services use Go channels (`chan Progress`) to send real-time updates back to the UI layer, allowing the Bubble Tea `Update` loop to refresh progress bars and status messages.
+*   **`WizardModel` → `Scanner`**: The wizard initiates the scan at startup to populate the file selection screen.
+*   **`WizardModel` → `ContextGenerator`**: The wizard feeds gathered user inputs (task, rules) and file selections into the generator at the final step.
+*   **`ContextGenerator` → `TemplateRenderer`**: The generator uses templates to format the final output.
+*   **`TemplateManager` → `TemplateSource`**: The manager aggregates templates from multiple sources, applying priority rules.
+*   **`cmd` → `WizardModel`**: The root command launches the TUI by initializing the wizard and passing it to the Bubble Tea runtime.
 
 ## Key Methods & Functions
-*   **`Scanner.ScanWithProgress`**: Asynchronously crawls the filesystem and streams progress updates.
-*   **`ContextGenerator.GenerateWithProgressEx`**: Orchestrates the rendering of the ASCII tree structure and file content blocks into a cohesive prompt.
-*   **`IgnoreEngine.ShouldIgnore`**: The central logic for path filtering, applying priority-based matching across multiple rule layers.
-*   **`Executor.Send`**: Executes the external `geminiweb` process, handling stdin/stdout and timeout management.
-*   **`EstimateFromBytes`**: The primary heuristic function for calculating token usage without requiring heavy tokenizer libraries.
+*   **`scanner.ScanWithProgress`**: Performs thread-safe filesystem traversal with real-time feedback.
+*   **`template.Manager.loadFromSources`**: Implements the priority-based template loading logic.
+*   **`context.DefaultContextGenerator.GenerateWithProgressEx`**: The "brain" of the application that sequences tree rendering, content collection, and template interpolation.
+*   **`gemini.Executor.Send`**: Manages external process execution (geminiweb), stdin/stdout piping, and ANSI code stripping for LLM interaction.
+*   **`ui.WizardModel.Update`**: The central state machine transition function that handles all TUI navigation and asynchronous task completions.
