@@ -79,6 +79,16 @@ func launchTUIWizard() {
 	}
 
 	wizardConfig := &ui.WizardConfig{
+		LLM: ui.LLMConfig{
+			Provider:       viper.GetString("llm.provider"),
+			APIKey:         viper.GetString("llm.api-key"),
+			BaseURL:        viper.GetString("llm.base-url"),
+			Model:          viper.GetString("llm.model"),
+			Timeout:        viper.GetInt("llm.timeout"),
+			SaveResponse:   viper.GetBool("gemini.save-response"),
+			BinaryPath:     viper.GetString("gemini.binary-path"),
+			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+		},
 		Gemini: ui.GeminiConfig{
 			BinaryPath:     viper.GetString("gemini.binary-path"),
 			Model:          viper.GetString("gemini.model"),
@@ -240,7 +250,14 @@ func setConfigDefaults() {
 	viper.SetDefault("output.format", "markdown")
 	viper.SetDefault("output.clipboard", true)
 
-	// Gemini integration defaults
+	// LLM Provider defaults
+	viper.SetDefault("llm.provider", "geminiweb")
+	viper.SetDefault("llm.api-key", "")
+	viper.SetDefault("llm.base-url", "")
+	viper.SetDefault("llm.model", "")
+	viper.SetDefault("llm.timeout", 300)
+
+	// Gemini integration defaults (kept for backward compatibility)
 	viper.SetDefault("gemini.enabled", false)
 	viper.SetDefault("gemini.binary-path", "")
 	viper.SetDefault("gemini.model", "gemini-2.5-flash")

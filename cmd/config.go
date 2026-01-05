@@ -135,7 +135,7 @@ func showCurrentConfig() error {
 	}
 
 	// Display by category
-	categoryOrder := []string{"scanner", "context", "template", "output", "gemini"}
+	categoryOrder := []string{"scanner", "context", "template", "output", "llm", "gemini"}
 
 	for _, category := range categoryOrder {
 		if keys, exists := categories[category]; exists {
@@ -265,7 +265,13 @@ func isValidConfigKey(key string) bool {
 		// Output keys
 		"output.format",
 		"output.clipboard",
-		// Gemini integration keys
+		// LLM Provider keys
+		"llm.provider",
+		"llm.api-key",
+		"llm.base-url",
+		"llm.model",
+		"llm.timeout",
+		// Gemini integration keys (kept for backward compatibility)
 		"gemini.enabled",
 		"gemini.binary-path",
 		"gemini.model",
@@ -303,10 +309,18 @@ func validateConfigValue(key, value string) error {
 		return validateTemplatePath(value)
 	case "gemini.model":
 		return validateGeminiModel(value)
-	case "gemini.timeout":
+	case "gemini.timeout", "llm.timeout":
 		return validateGeminiTimeout(value)
 	case "gemini.browser-refresh":
 		return validateGeminiBrowserRefresh(value)
+	case "llm.provider":
+		return validateLLMProvider(value)
+	case "llm.api-key":
+		return nil // API key can be any string
+	case "llm.base-url":
+		return validateLLMBaseURL(value)
+	case "llm.model":
+		return nil // Model can be any string, validation is provider-specific
 	}
 
 	return nil
@@ -435,9 +449,31 @@ func validateGeminiBrowserRefresh(value string) error {
 	return fmt.Errorf("expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)")
 }
 
+func validateLLMProvider(value string) error {
+	validProviders := []string{"openai", "anthropic", "gemini", "geminiweb"}
+	for _, provider := range validProviders {
+		if value == provider {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("expected one of: %s", strings.Join(validProviders, ", "))
+}
+
+func validateLLMBaseURL(value string) error {
+	if value == "" {
+		return nil
+	}
+	// Basic URL validation
+	if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+		return fmt.Errorf("URL must start with http:// or https://")
+	}
+	return nil
+}
+
 func convertConfigValue(key, value string) (interface{}, error) {
 	switch key {
-	case "scanner.max-files", "scanner.workers", "gemini.timeout":
+	case "scanner.max-files", "scanner.workers", "gemini.timeout", "llm.timeout":
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, fmt.Errorf("failed to parse integer value: %w", err)

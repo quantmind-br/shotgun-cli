@@ -11,10 +11,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/anthropic"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiapi"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/openai"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
@@ -28,6 +32,19 @@ const (
 	StepReview            = 5
 )
 
+// LLMConfig holds configuration for the LLM provider.
+type LLMConfig struct {
+	Provider       string
+	APIKey         string
+	BaseURL        string
+	Model          string
+	Timeout        int
+	SaveResponse   bool
+	BinaryPath     string // For GeminiWeb
+	BrowserRefresh string // For GeminiWeb
+}
+
+// GeminiConfig holds legacy configuration for GeminiWeb.
 type GeminiConfig struct {
 	BinaryPath     string
 	Model          string
@@ -36,13 +53,16 @@ type GeminiConfig struct {
 	SaveResponse   bool
 }
 
+// ContextConfig holds context generation configuration.
 type ContextConfig struct {
 	IncludeTree    bool
 	IncludeSummary bool
 	MaxSize        string
 }
 
+// WizardConfig holds all wizard configuration.
 type WizardConfig struct {
+	LLM     LLMConfig
 	Gemini  GeminiConfig
 	Context ContextConfig
 }
@@ -577,20 +597,28 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 		return nil
 	}
 
-	// Check availability
-	if !gemini.IsAvailable() {
+	// Create provider based on configuration
+	provider, err := m.createLLMProvider()
+	if err != nil {
 		if m.review != nil {
-			m.review.SetGeminiError(fmt.Errorf("geminiweb not found"))
+			m.review.SetGeminiError(err)
 		}
-
 		return nil
 	}
 
-	if !gemini.IsConfigured() {
+	// Check availability
+	if !provider.IsAvailable() {
 		if m.review != nil {
-			m.review.SetGeminiError(fmt.Errorf("geminiweb not configured - run: geminiweb auto-login"))
+			m.review.SetGeminiError(fmt.Errorf("%s not available", provider.Name()))
 		}
+		return nil
+	}
 
+	// Validate config
+	if err := provider.ValidateConfig(); err != nil {
+		if m.review != nil {
+			m.review.SetGeminiError(err)
+		}
 		return nil
 	}
 
@@ -599,7 +627,7 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 		m.review.SetGeminiSending(true)
 	}
 
-	return m.sendToGeminiCmd()
+	return m.sendToLLMCmd(provider)
 }
 
 func (m *WizardModel) handleGeminiProgress(msg GeminiProgressMsg) {
@@ -630,26 +658,70 @@ func (m *WizardModel) handleGeminiError(msg GeminiErrorMsg) {
 	}
 }
 
-func (m *WizardModel) sendToGeminiCmd() tea.Cmd {
-	return func() tea.Msg {
-		cfg := gemini.Config{
-			BinaryPath:     m.wizardConfig.Gemini.BinaryPath,
-			Model:          m.wizardConfig.Gemini.Model,
-			Timeout:        m.wizardConfig.Gemini.Timeout,
-			BrowserRefresh: m.wizardConfig.Gemini.BrowserRefresh,
+// createLLMProvider creates an LLM provider based on wizard configuration.
+func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
+	cfg := llm.Config{
+		Provider:       llm.ProviderType(m.wizardConfig.LLM.Provider),
+		APIKey:         m.wizardConfig.LLM.APIKey,
+		BaseURL:        m.wizardConfig.LLM.BaseURL,
+		Model:          m.wizardConfig.LLM.Model,
+		Timeout:        m.wizardConfig.LLM.Timeout,
+		BinaryPath:     m.wizardConfig.LLM.BinaryPath,
+		BrowserRefresh: m.wizardConfig.LLM.BrowserRefresh,
+	}
+
+	// Apply defaults if not set
+	cfg.WithDefaults()
+
+	// For GeminiWeb, use legacy config if LLM config is not set
+	if cfg.Provider == llm.ProviderGeminiWeb || cfg.Provider == "" {
+		if cfg.Model == "" {
+			cfg.Model = m.wizardConfig.Gemini.Model
 		}
+		if cfg.Timeout == 0 {
+			cfg.Timeout = m.wizardConfig.Gemini.Timeout
+		}
+		if cfg.BinaryPath == "" {
+			cfg.BinaryPath = m.wizardConfig.Gemini.BinaryPath
+		}
+		if cfg.BrowserRefresh == "" {
+			cfg.BrowserRefresh = m.wizardConfig.Gemini.BrowserRefresh
+		}
+		cfg.Provider = llm.ProviderGeminiWeb
+	}
 
-		executor := gemini.NewExecutor(cfg)
+	switch cfg.Provider {
+	case llm.ProviderOpenAI:
+		return openai.NewClient(cfg)
+	case llm.ProviderAnthropic:
+		return anthropic.NewClient(cfg)
+	case llm.ProviderGemini:
+		return geminiapi.NewClient(cfg)
+	case llm.ProviderGeminiWeb:
+		return gemini.NewWebProvider(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
+	}
+}
 
+func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
+	return func() tea.Msg {
 		ctx := gocontext.Background()
-		result, err := executor.Send(ctx, m.generatedContent)
+		result, err := provider.SendWithProgress(ctx, m.generatedContent, func(stage string) {
+			// Progress callback - could be used for updates
+		})
 		if err != nil {
 			return GeminiErrorMsg{Err: err}
 		}
 
 		outputFile := strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
 
-		if m.wizardConfig.Gemini.SaveResponse {
+		saveResponse := m.wizardConfig.LLM.SaveResponse
+		if !saveResponse {
+			saveResponse = m.wizardConfig.Gemini.SaveResponse
+		}
+
+		if saveResponse {
 			if err := os.WriteFile(outputFile, []byte(result.Response), 0600); err != nil {
 				return GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
 			}

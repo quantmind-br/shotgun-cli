@@ -6,12 +6,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 )
 
 var contextSendCmd = &cobra.Command{
@@ -76,52 +75,52 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no content to send (file or stdin is empty)")
 	}
 
-	// Check if Gemini is enabled
-	if !viper.GetBool("gemini.enabled") {
-		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set gemini.enabled true")
+	// Check if any LLM provider is enabled/configured
+	provider := viper.GetString("llm.provider")
+
+	// Backward compatibility: if llm.provider is geminiweb, check gemini.enabled
+	if provider == "" || provider == "geminiweb" {
+		if !viper.GetBool("gemini.enabled") {
+			return fmt.Errorf("LLM integration is disabled. Enable with: shotgun-cli config set gemini.enabled true\nOr configure a different provider: shotgun-cli llm list")
+		}
 	}
 
-	// Check availability
-	if !gemini.IsAvailable() {
-		return fmt.Errorf("geminiweb not found. Run 'shotgun-cli gemini doctor' for help")
-	}
-
-	if !gemini.IsConfigured() {
-		return fmt.Errorf("geminiweb not configured. Run 'shotgun-cli gemini doctor' for help")
-	}
-
-	// Get flags
+	// Get flag overrides
 	model, _ := cmd.Flags().GetString("model")
-	if model == "" {
-		model = viper.GetString("gemini.model")
-	}
-
 	timeout, _ := cmd.Flags().GetInt("timeout")
-	if timeout == 0 {
-		timeout = viper.GetInt("gemini.timeout")
-	}
-
 	outputFile, _ := cmd.Flags().GetString("output")
 	raw, _ := cmd.Flags().GetBool("raw")
 
 	// Build config
-	cfg := gemini.Config{
-		BinaryPath:     viper.GetString("gemini.binary-path"),
-		Model:          model,
-		Timeout:        timeout,
-		BrowserRefresh: viper.GetString("gemini.browser-refresh"),
-		Verbose:        viper.GetBool("verbose"),
+	cfg := BuildLLMConfigWithOverrides(model, timeout)
+
+	// Create provider
+	llmProvider, err := CreateLLMProvider(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
 	}
 
-	executor := gemini.NewExecutor(cfg)
+	if !llmProvider.IsAvailable() {
+		return fmt.Errorf("%s not available. Run 'shotgun-cli llm doctor' for help", llmProvider.Name())
+	}
 
-	log.Info().Str("model", model).Int("content_length", len(content)).Msg("Sending to Gemini")
-	fmt.Printf("🤖 Sending to Gemini (%s)...\n", model)
+	if err := llmProvider.ValidateConfig(); err != nil {
+		return fmt.Errorf("%s configuration error: %w. Run 'shotgun-cli llm doctor' for help", llmProvider.Name(), err)
+	}
+
+	// Send
+	log.Info().
+		Str("provider", llmProvider.Name()).
+		Str("model", cfg.Model).
+		Int("content_length", len(content)).
+		Msg("Sending to LLM")
+
+	fmt.Printf("Sending to %s (%s)...\n", llmProvider.Name(), cfg.Model)
 
 	ctx := context.Background()
-	result, err := executor.Send(ctx, content)
+	result, err := llmProvider.Send(ctx, content)
 	if err != nil {
-		return fmt.Errorf("gemini request failed: %w", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 
 	// Get response
@@ -135,13 +134,29 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 		if err := os.WriteFile(outputFile, []byte(response), 0600); err != nil {
 			return fmt.Errorf("failed to save response to '%s': %w", outputFile, err)
 		}
-		fmt.Printf("✅ Response saved to: %s\n", outputFile)
-		fmt.Printf("⏱️  Response time: %s\n", gemini.FormatDuration(result.Duration))
+		fmt.Printf("Response saved to: %s\n", outputFile)
 	} else {
 		fmt.Println(response)
 	}
 
+	// Show usage if available
+	if result.Usage != nil {
+		fmt.Printf("Tokens: %d (prompt: %d, completion: %d)\n",
+			result.Usage.TotalTokens,
+			result.Usage.PromptTokens,
+			result.Usage.CompletionTokens)
+	}
+	fmt.Printf("Duration: %s\n", formatDuration(result.Duration))
+
 	return nil
+}
+
+// formatDuration formats a duration for display.
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
 func init() {

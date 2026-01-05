@@ -90,15 +90,18 @@ func TestRunContextSend_FromFile(t *testing.T) {
 		// If gemini is available and working, the test should succeed
 		// If gemini is not available or not working, it should fail with expected error
 		if err != nil {
-			// We expect either gemini not available/configured error or send error
+			// We expect either LLM/gemini not available/configured error or send error
 			errorMsg := err.Error()
 			// Check that we got one of the expected error types
 			assert.True(t,
 				strings.Contains(errorMsg, "geminiweb") ||
 					strings.Contains(errorMsg, "gemini request failed") ||
 					strings.Contains(errorMsg, "failed to read file") ||
-					strings.Contains(errorMsg, "gemini integration is disabled"),
-				"Expected gemini-related error, got: %s", errorMsg)
+					strings.Contains(errorMsg, "gemini integration is disabled") ||
+					strings.Contains(errorMsg, "LLM integration is disabled") ||
+					strings.Contains(errorMsg, "not available") ||
+					strings.Contains(errorMsg, "request failed"),
+				"Expected LLM/gemini-related error, got: %s", errorMsg)
 		}
 		// If err is nil, it means gemini is working and the test succeeded
 	})
@@ -171,7 +174,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		err := runContextSend(cmd, []string{testFile})
 		// If it fails, check it's the right kind of error
 		if err != nil {
-			assert.Contains(t, err.Error(), "gemini")
+			assert.True(t, strings.Contains(err.Error(), "gemini") ||
+				strings.Contains(err.Error(), "LLM") ||
+				strings.Contains(err.Error(), "not available"))
 		}
 	})
 
@@ -189,7 +194,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		err := runContextSend(cmd, []string{testFile})
 		// If it fails, check it's the right kind of error
 		if err != nil {
-			assert.Contains(t, err.Error(), "gemini")
+			assert.True(t, strings.Contains(err.Error(), "gemini") ||
+				strings.Contains(err.Error(), "LLM") ||
+				strings.Contains(err.Error(), "not available"))
 		}
 	})
 
@@ -205,7 +212,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		err := runContextSend(cmd, []string{testFile})
 		// If it fails, check it's the right kind of error
 		if err != nil {
-			assert.Contains(t, err.Error(), "gemini")
+			assert.True(t, strings.Contains(err.Error(), "gemini") ||
+				strings.Contains(err.Error(), "LLM") ||
+				strings.Contains(err.Error(), "not available"))
 		}
 	})
 
@@ -220,7 +229,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		err := runContextSend(cmd, []string{testFile})
 		// If it fails, check it's the right kind of error
 		if err != nil {
-			assert.Contains(t, err.Error(), "gemini")
+			assert.True(t, strings.Contains(err.Error(), "gemini") ||
+				strings.Contains(err.Error(), "LLM") ||
+				strings.Contains(err.Error(), "not available"))
 		}
 	})
 
@@ -242,7 +253,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		err := runContextSend(cmd, []string{testFile})
 		// If it fails, check it's the right kind of error
 		if err != nil {
-			assert.Contains(t, err.Error(), "gemini")
+			assert.True(t, strings.Contains(err.Error(), "gemini") ||
+				strings.Contains(err.Error(), "LLM") ||
+				strings.Contains(err.Error(), "not available"))
 		}
 	})
 }
