@@ -47,22 +47,67 @@ Updates the configuration file with the new value. If no config file exists,
 it will be created in the appropriate location for your platform.
 
 Supported configuration keys:
-  scanner.max-files           - Maximum number of files to scan (default: 10000)
-  scanner.max-file-size       - Maximum size per file (default: "1MB")
-  scanner.respect-gitignore   - Respect .gitignore files (default: true)
-  scanner.skip-binary         - Skip binary files (default: true)
-  context.max-size           - Maximum context size (default: "10MB")
-  context.include-tree       - Include directory tree (default: true)
-  context.include-summary    - Include file summaries (default: true)
-  template.custom-path       - Path to custom templates (default: "")
-  output.format              - Output format (default: "markdown")
-  output.clipboard           - Copy to clipboard (default: true)
+
+  LLM Provider:
+    llm.provider              - LLM provider: openai, anthropic, gemini, geminiweb (default: "geminiweb")
+    llm.api-key               - API key for the provider (required for openai, anthropic, gemini)
+    llm.base-url              - Custom API endpoint URL (for OpenRouter, Azure, etc.)
+    llm.model                 - Model to use (e.g., gpt-4o, claude-sonnet-4-20250514, gemini-2.5-flash)
+    llm.timeout               - Request timeout in seconds (default: 300)
+
+  Scanner:
+    scanner.max-files         - Maximum number of files to scan (default: 10000)
+    scanner.max-file-size     - Maximum size per file (default: "1MB")
+    scanner.max-memory        - Maximum memory usage (default: "500MB")
+    scanner.respect-gitignore - Respect .gitignore files (default: true)
+    scanner.skip-binary       - Skip binary files (default: true)
+    scanner.workers           - Number of parallel workers (default: 1)
+    scanner.include-hidden    - Include hidden files (default: false)
+    scanner.respect-shotgunignore - Respect .shotgunignore files (default: true)
+
+  Context:
+    context.max-size          - Maximum context size (default: "10MB")
+    context.include-tree      - Include directory tree (default: true)
+    context.include-summary   - Include file summaries (default: true)
+
+  Template:
+    template.custom-path      - Path to custom templates (default: "")
+
+  Output:
+    output.format             - Output format: markdown, text (default: "markdown")
+    output.clipboard          - Copy to clipboard (default: true)
+
+  GeminiWeb (legacy):
+    gemini.enabled            - Enable GeminiWeb integration (default: false)
+    gemini.binary-path        - Path to geminiweb binary
+    gemini.model              - Model for GeminiWeb (default: "gemini-2.5-flash")
+    gemini.timeout            - Timeout in seconds (default: 300)
+    gemini.browser-refresh    - Browser refresh method: auto, chrome, firefox, edge
 
 Examples:
+  # Configure OpenAI
+  shotgun-cli config set llm.provider openai
+  shotgun-cli config set llm.api-key sk-your-api-key
+  shotgun-cli config set llm.model gpt-4o
+
+  # Configure Anthropic Claude
+  shotgun-cli config set llm.provider anthropic
+  shotgun-cli config set llm.api-key sk-ant-your-api-key
+  shotgun-cli config set llm.model claude-sonnet-4-20250514
+
+  # Configure Google Gemini API
+  shotgun-cli config set llm.provider gemini
+  shotgun-cli config set llm.api-key your-gemini-api-key
+  shotgun-cli config set llm.model gemini-2.5-flash
+
+  # Use custom endpoint (OpenRouter, Azure, etc.)
+  shotgun-cli config set llm.provider openai
+  shotgun-cli config set llm.base-url https://openrouter.ai/api/v1
+  shotgun-cli config set llm.api-key your-openrouter-key
+
+  # Scanner settings
   shotgun-cli config set scanner.max-files 5000
-  shotgun-cli config set context.max-size 5MB
-  shotgun-cli config set output.clipboard false
-  shotgun-cli config set scanner.respect-gitignore true`,
+  shotgun-cli config set context.max-size 5MB`,
 
 	Args: cobra.ExactArgs(2),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
