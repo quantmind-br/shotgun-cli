@@ -13,27 +13,36 @@ This document provides a high-level overview of the `shotgun-cli` Go project, it
 
 The project follows a Clean Architecture pattern, separating concerns into distinct layers. When adding new features, respect these boundaries.
 
-1.  **`cmd` (Presentation/Adapter Layer)**
+1.  **`cmd` (Presentation Layer)**
     *   **Purpose**: Handles user interaction via CLI commands using the Cobra framework. This is the application's composition root.
-    *   **Responsibilities**: Parsing flags, orchestrating calls to core services, and handling top-level errors.
-    *   **Example**: `@cmd/send.go` defines the `context send` command.
+    *   **Responsibilities**: Parsing flags, orchestrating calls to the application service, and handling top-level errors.
+    *   **Example**: `@cmd/context.go` defines the `context` command and uses `app.ContextService`.
 
-2.  **`internal/ui` (Presentation/Adapter Layer)**
+2.  **`internal/ui` (Presentation Layer)**
     *   **Purpose**: Implements the interactive TUI wizard using the Bubble Tea framework.
     *   **Pattern**: Follows the Model-View-Update (MVU) pattern. State is managed in models, views render the UI, and updates are handled via messages.
     *   **Example**: `@internal/ui/wizard.go` is the main orchestrator for the TUI.
 
-3.  **`internal/core` (Core/Domain Layer)**
+3.  **`internal/app` (Application Layer)**
+    *   **Purpose**: Orchestrates business logic and provides a unified API for different presentation layers (CLI/TUI).
+    *   **Key Components**:
+        *   `ContextService`: Interface and service for context generation workflow.
+        *   `DefaultProviderRegistry`: Unified registry for LLM providers.
+    *   **Rule**: This layer should contain orchestration logic but remain independent of specific presentation frameworks.
+
+4.  **`internal/core` (Core/Domain Layer)**
     *   **Purpose**: Contains the core business logic, independent of external frameworks and tools.
     *   **Sub-packages**:
         *   `context`: Builds the final LLM context.
         *   `scanner`: Scans the filesystem.
+        *   `diff`: Pure business logic for diff processing (splitting, counting).
         *   `template`: Manages prompt templates.
         *   `ignore`: Handles file ignore logic.
         *   `tokens`: Estimates token counts.
-    *   **Rule**: Code in this layer should NOT depend on `cmd`, `ui`, or `platform`.
+        *   `llm`: Provider interfaces and registry logic.
+    *   **Rule**: Code in this layer should NOT depend on `cmd`, `ui`, `app`, or `platform`.
 
-4.  **`internal/platform` (Infrastructure Layer)**
+5.  **`internal/platform` (Infrastructure Layer)**
     *   **Purpose**: Implements integrations with external systems.
     *   **Sub-packages**:
         *   `gemini`: Interacts with the Google Gemini AI via an external binary.

@@ -40,6 +40,28 @@ bd sync               # Sync with git
 
 
 
+## Architecture & Application Logic
+
+### Application Service Layer
+
+The project uses a dedicated application layer in `internal/app` to orchestrate business logic shared between CLI and TUI.
+
+*   **`ContextService` (internal/app/context.go)**: The primary orchestrator for context generation.
+    *   `Generate(ctx, cfg)`: Synchronous generation (used by CLI).
+    *   `GenerateWithProgress(ctx, cfg, callback)`: Async generation with progress updates (used by TUI).
+    *   `SendToLLM(ctx, content, provider)`: Standardized way to send content to an LLM.
+
+*   **`DefaultProviderRegistry` (internal/app/providers.go)**: Centralized registry for LLM providers.
+    *   To add a new provider: Implement `llm.Provider`, then register it in `internal/app/providers.go`.
+    *   Both CLI and TUI consume this registry to create providers.
+
+### Core Logic Additions
+
+*   **`internal/core/diff`**: Pure business logic for git diff operations. Use `diff.IntelligentSplit` to split large diffs while preserving file boundaries.
+*   **`internal/core/scanner`**: Use `scanner.CollectSelections` or `scanner.NewSelectAll` for handling file selections in a tree.
+
+---
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 

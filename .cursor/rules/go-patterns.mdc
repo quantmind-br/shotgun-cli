@@ -102,6 +102,48 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 }
 ```
 
+## Application Layer Patterns (`internal/app`)
+
+The application layer orchestrates the workflow between core components. Both the CLI (`cmd`) and TUI (`internal/ui`) should use the application layer for high-level operations.
+
+### ContextService
+
+Use `app.ContextService` to perform context generation. It handles scanning, selection application, generation, and saving to disk.
+
+*   **CLI usage**: Uses `Generate()` (sync).
+*   **TUI usage**: Uses `GenerateWithProgress()` to provide feedback during long-running scans or generations.
+
+```go
+svc := app.NewContextService(
+    app.WithScanner(customScanner),
+    app.WithGenerator(customGenerator),
+)
+
+result, err := svc.Generate(ctx, app.GenerateConfig{
+    RootPath: "./",
+    // ... config
+})
+```
+
+### LLM Provider Registry
+
+Always use `app.DefaultProviderRegistry` to create LLM providers. This ensures consistency across CLI and TUI.
+
+*   **Registration**: Providers are registered in `internal/app/providers.go`.
+*   **Creation**: Use `registry.Create(providerName, config)` to get a provider instance.
+
+```go
+provider, err := app.DefaultProviderRegistry.Create(llm.ProviderOpenAI, llmConfig)
+```
+
+### Progress Callback Pattern
+
+When implementing long-running application logic, support the `ProgressCallback` pattern to allow UI layers to show progress.
+
+```go
+type ProgressCallback func(stage string, message string, current, total int64)
+```
+
 ## TUI Development (`internal/ui`)
 
 The interactive UI is built with Bubble Tea and follows the Model-View-Update (MVU) pattern.
