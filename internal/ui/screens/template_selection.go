@@ -6,6 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/viper"
+
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
@@ -44,7 +47,9 @@ func (m *TemplateSelectionModel) SetSize(width, height int) {
 
 func (m *TemplateSelectionModel) LoadTemplates() tea.Cmd {
 	return func() tea.Msg {
-		manager, err := template.NewManager()
+		manager, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			return TemplatesErrorMsg{Err: err}
 		}

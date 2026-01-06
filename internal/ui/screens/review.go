@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
@@ -39,6 +40,9 @@ type ReviewModel struct {
 	geminiOutputFile string
 	geminiDuration   time.Duration
 	geminiError      error
+
+	viewport      viewport.Model
+	viewportReady bool
 }
 
 func NewReview(
@@ -56,6 +60,7 @@ func NewReview(
 		rules:           rules,
 		maxSizeStr:      maxSizeStr,
 		geminiAvailable: gemini.IsAvailable() && gemini.IsConfigured(),
+		viewport:        viewport.New(0, 0),
 	}
 	m.totalBytes, m.totalTokens = m.calculateStats()
 
@@ -66,9 +71,15 @@ func NewReview(
 	return m
 }
 
+const footerHeight = 4
+
 func (m *ReviewModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+
+	m.viewport.Width = width
+	m.viewport.Height = height - footerHeight
+	m.viewportReady = true
 }
 
 type ClipboardCopyRequestMsg struct{}
@@ -88,19 +99,38 @@ func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
 				return ClipboardCopyRequestMsg{}
 			}
 		}
+	case "up", "k":
+		m.viewport.ScrollUp(1)
+	case "down", "j":
+		m.viewport.ScrollDown(1)
+	case "pgup", "ctrl+u":
+		m.viewport.HalfPageUp()
+	case "pgdown", "ctrl+d":
+		m.viewport.HalfPageDown()
+	case "home", "g":
+		m.viewport.GotoTop()
+	case "end", "G":
+		m.viewport.GotoBottom()
 	}
 
 	return nil
 }
 
 func (m *ReviewModel) View() string {
+	scrollableContent := m.buildScrollableContent()
+	m.viewport.SetContent(scrollableContent)
+
+	footer := m.renderFixedFooter()
+	return m.viewport.View() + "\n" + footer
+}
+
+func (m *ReviewModel) buildScrollableContent() string {
 	header := styles.RenderHeader(5, "Review & Generate")
 
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Files summary with styled token estimate
 	fileCount := len(m.selectedFiles)
 	filesIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📁")
 	filesLabel := styles.TitleStyle.Render("Selected Files:")
@@ -109,7 +139,6 @@ func (m *ReviewModel) View() string {
 	content.WriteString(filesIcon + " " + filesLabel + " " + filesStats)
 	content.WriteString("\n\n")
 
-	// Show some selected files (up to 5) with styling
 	count := 0
 	for filePath := range m.selectedFiles {
 		if count >= 5 {
@@ -130,7 +159,6 @@ func (m *ReviewModel) View() string {
 
 	content.WriteString("\n")
 
-	// Template summary
 	tmplIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📋")
 	tmplLabel := styles.TitleStyle.Render("Template:")
 	content.WriteString(tmplIcon + " " + tmplLabel)
@@ -150,7 +178,6 @@ func (m *ReviewModel) View() string {
 	}
 	content.WriteString("\n")
 
-	// Task summary
 	taskIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("🎯")
 	taskLabel := styles.TitleStyle.Render("Task:")
 	content.WriteString(taskIcon + " " + taskLabel)
@@ -163,7 +190,6 @@ func (m *ReviewModel) View() string {
 	content.WriteString(taskStyled)
 	content.WriteString("\n\n")
 
-	// Rules summary (if provided)
 	if strings.TrimSpace(m.rules) != "" {
 		rulesIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📝")
 		rulesLabel := styles.TitleStyle.Render("Rules & Constraints:")
@@ -178,18 +204,88 @@ func (m *ReviewModel) View() string {
 		content.WriteString("\n\n")
 	}
 
-	// Token/Size limits section with visual indicator
 	content.WriteString(m.renderSizeLimitSection())
 	content.WriteString("\n")
 
-	// Generation status
 	if m.generated {
-		content.WriteString(m.renderPostGenerationView())
+		content.WriteString(m.renderGenerationStatusContent())
 	} else {
-		content.WriteString(m.renderPreGenerationView())
+		content.WriteString(m.renderPreGenerationContent())
 	}
 
 	return content.String()
+}
+
+func (m *ReviewModel) renderFixedFooter() string {
+	if m.generated {
+		line1 := []string{"↑/↓: Scroll", "c: Copy"}
+		if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
+			line1 = append(line1, "F9: Gemini")
+		}
+		line2 := []string{"F1: Help", "Ctrl+Q: Exit"}
+		return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+	}
+
+	line1 := []string{"↑/↓: Scroll", "F7: Back", "F8: Generate"}
+	line2 := []string{"F1: Help", "Ctrl+Q: Quit"}
+	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+}
+
+func (m *ReviewModel) renderGenerationStatusContent() string {
+	var view strings.Builder
+
+	view.WriteString(styles.RenderSuccess("Context generated successfully!"))
+	view.WriteString("\n\n")
+
+	if m.generatedPath != "" {
+		fileIcon := lipgloss.NewStyle().Foreground(styles.AccentColor).Render("📄")
+		pathStyled := styles.PathStyle.Render(m.generatedPath)
+		view.WriteString(fileIcon + " Saved to: " + pathStyled)
+		view.WriteString("\n")
+	}
+
+	if m.clipboardCopied {
+		clipIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("📋")
+		clipText := styles.SuccessStyle.Render("Copied to clipboard")
+		view.WriteString(clipIcon + " " + clipText)
+	} else {
+		clipIcon := lipgloss.NewStyle().Foreground(styles.WarningColor).Render("📋")
+		clipText := styles.WarningStyle.Render("Clipboard copy failed")
+		view.WriteString(clipIcon + " " + clipText)
+		view.WriteString("\n")
+		tip := styles.HelpStyle.Render("   Tip: Copy manually with 'cat " + m.generatedPath + " | wl-copy'")
+		view.WriteString(tip)
+	}
+	view.WriteString("\n\n")
+
+	view.WriteString(m.renderGeminiStatus())
+
+	return view.String()
+}
+
+func (m *ReviewModel) renderPreGenerationContent() string {
+	var view strings.Builder
+
+	infoIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("ℹ")
+	infoLabel := styles.HelpStyle.Render("Ready to generate context. This will:")
+	view.WriteString(infoIcon + " " + infoLabel)
+	view.WriteString("\n")
+
+	bulletStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+	itemStyle := lipgloss.NewStyle().Foreground(styles.TextColor)
+
+	items := []string{
+		"Create a comprehensive context file",
+		"Save it as shotgun-prompt-YYYYMMDD-HHMMSS.md",
+		"Copy the content to your clipboard",
+	}
+
+	for _, item := range items {
+		view.WriteString(bulletStyle.Render("  • ") + itemStyle.Render(item))
+		view.WriteString("\n")
+	}
+
+	return view.String()
 }
 
 func (m *ReviewModel) renderSizeLimitSection() string {
@@ -252,57 +348,6 @@ func (m *ReviewModel) renderSizeLimitSection() string {
 	return section.String()
 }
 
-func (m *ReviewModel) renderPostGenerationView() string {
-	var view strings.Builder
-
-	// Success message
-	view.WriteString(styles.RenderSuccess("Context generated successfully!"))
-	view.WriteString("\n\n")
-
-	// File saved info
-	if m.generatedPath != "" {
-		fileIcon := lipgloss.NewStyle().Foreground(styles.AccentColor).Render("📄")
-		pathStyled := styles.PathStyle.Render(m.generatedPath)
-		view.WriteString(fileIcon + " Saved to: " + pathStyled)
-		view.WriteString("\n")
-	}
-
-	// Clipboard status with better visual
-	if m.clipboardCopied {
-		clipIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("📋")
-		clipText := styles.SuccessStyle.Render("Copied to clipboard")
-		view.WriteString(clipIcon + " " + clipText)
-	} else {
-		clipIcon := lipgloss.NewStyle().Foreground(styles.WarningColor).Render("📋")
-		clipText := styles.WarningStyle.Render("Clipboard copy failed")
-		view.WriteString(clipIcon + " " + clipText)
-		view.WriteString("\n")
-		tip := styles.HelpStyle.Render("   Tip: Copy manually with 'cat " + m.generatedPath + " | wl-copy'")
-		view.WriteString(tip)
-	}
-	view.WriteString("\n\n")
-
-	// Gemini status section
-	view.WriteString(m.renderGeminiStatus())
-	view.WriteString("\n")
-
-	// Footer
-	line1 := []string{
-		"c: Copy to Clipboard",
-	}
-	if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
-		line1 = append(line1, "F9: Send to Gemini")
-	}
-	line2 := []string{
-		"F1: Help",
-		"Ctrl+Q: Exit",
-	}
-	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
-	view.WriteString(footer)
-
-	return view.String()
-}
-
 func (m *ReviewModel) renderGeminiStatus() string {
 	var status strings.Builder
 
@@ -343,45 +388,6 @@ func (m *ReviewModel) renderGeminiStatus() string {
 	}
 
 	return status.String()
-}
-
-func (m *ReviewModel) renderPreGenerationView() string {
-	var view strings.Builder
-
-	// Info section
-	infoIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("ℹ")
-	infoLabel := styles.HelpStyle.Render("Ready to generate context. This will:")
-	view.WriteString(infoIcon + " " + infoLabel)
-	view.WriteString("\n")
-
-	bulletStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
-	itemStyle := lipgloss.NewStyle().Foreground(styles.TextColor)
-
-	items := []string{
-		"Create a comprehensive context file",
-		"Save it as shotgun-prompt-YYYYMMDD-HHMMSS.md",
-		"Copy the content to your clipboard",
-	}
-
-	for _, item := range items {
-		view.WriteString(bulletStyle.Render("  • ") + itemStyle.Render(item))
-		view.WriteString("\n")
-	}
-	view.WriteString("\n")
-
-	// Footer
-	line1 := []string{
-		"F7: Back",
-		"F8: Generate",
-	}
-	line2 := []string{
-		"F1: Help",
-		"Ctrl+Q: Quit",
-	}
-	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
-	view.WriteString(footer)
-
-	return view.String()
 }
 
 func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {

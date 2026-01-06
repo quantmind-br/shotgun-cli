@@ -3,22 +3,23 @@ package cmd
 import (
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 )
 
 // BuildLLMConfig builds the LLM configuration from Viper.
 func BuildLLMConfig() llm.Config {
-	provider := llm.ProviderType(viper.GetString("llm.provider"))
+	provider := llm.ProviderType(viper.GetString(config.KeyLLMProvider))
 
 	// Get defaults for the provider.
 	defaults := llm.DefaultConfigs()[provider]
 
 	cfg := llm.Config{
 		Provider: provider,
-		APIKey:   viper.GetString("llm.api-key"),
-		BaseURL:  viper.GetString("llm.base-url"),
-		Model:    viper.GetString("llm.model"),
-		Timeout:  viper.GetInt("llm.timeout"),
+		APIKey:   viper.GetString(config.KeyLLMAPIKey),
+		BaseURL:  viper.GetString(config.KeyLLMBaseURL),
+		Model:    viper.GetString(config.KeyLLMModel),
+		Timeout:  viper.GetInt(config.KeyLLMTimeout),
 	}
 
 	// Apply defaults if not configured.
@@ -34,11 +35,11 @@ func BuildLLMConfig() llm.Config {
 
 	// GeminiWeb-specific configurations.
 	if provider == llm.ProviderGeminiWeb {
-		cfg.BinaryPath = viper.GetString("gemini.binary-path")
-		cfg.BrowserRefresh = viper.GetString("gemini.browser-refresh")
+		cfg.BinaryPath = viper.GetString(config.KeyGeminiBinaryPath)
+		cfg.BrowserRefresh = viper.GetString(config.KeyGeminiBrowserRefresh)
 		// Use gemini model if llm.model is not set.
-		if viper.GetString("llm.model") == "" {
-			cfg.Model = viper.GetString("gemini.model")
+		if viper.GetString(config.KeyLLMModel) == "" {
+			cfg.Model = viper.GetString(config.KeyGeminiModel)
 		}
 	}
 

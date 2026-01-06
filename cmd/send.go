@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 )
 
 var contextSendCmd = &cobra.Command{
@@ -76,11 +78,11 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if any LLM provider is enabled/configured
-	provider := viper.GetString("llm.provider")
+	provider := viper.GetString(config.KeyLLMProvider)
 
 	// Backward compatibility: if llm.provider is geminiweb, check gemini.enabled
 	if provider == "" || provider == "geminiweb" {
-		if !viper.GetBool("gemini.enabled") {
+		if !viper.GetBool(config.KeyGeminiEnabled) {
 			return fmt.Errorf("LLM integration is disabled. Enable with: shotgun-cli config set gemini.enabled true\nOr configure a different provider: shotgun-cli llm list")
 		}
 	}

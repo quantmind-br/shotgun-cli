@@ -17,7 +17,7 @@ var _ TemplateManager = (*Manager)(nil)
 
 func newTestManager(tb testing.TB) *Manager {
 	tb.Helper()
-	mgr, err := NewManager()
+	mgr, err := NewManager(ManagerConfig{})
 	if err != nil {
 		tb.Fatalf("NewManager failed: %v", err)
 	}

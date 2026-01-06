@@ -223,6 +223,7 @@ func TestReviewModel_View_AfterGeneration(t *testing.T) {
 	}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 
 	view := m.View()
@@ -258,6 +259,7 @@ func TestReviewModel_View_AfterGeneration_ClipboardFailed(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", false)
 
 	view := m.View()
@@ -289,6 +291,7 @@ func TestReviewModel_View_NoTemplate(t *testing.T) {
 	}
 
 	m := NewReview(selectedFiles, fileTree, nil, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	view := m.View()
 
 	if !strings.Contains(view, "Template:") {
@@ -319,6 +322,7 @@ func TestReviewModel_View_NoRules(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "", "")
+	m.SetSize(80, 40)
 	view := m.View()
 
 	// Rules section should not appear when empty
@@ -346,14 +350,16 @@ func TestReviewModel_View_LongTaskDescription(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	// Create a very long task description (> 150 chars)
 	longTask := strings.Repeat("a", 200)
 	m := NewReview(selectedFiles, fileTree, tmpl, longTask, "", "")
+	m.SetSize(80, 100)
 	view := m.View()
 
-	// Should truncate and add ellipsis
-	if !strings.Contains(view, "...") {
-		t.Fatalf("expected truncation with ellipsis for long task")
+	if strings.Contains(view, strings.Repeat("a", 200)) {
+		t.Fatalf("full task should not appear - expected truncation")
+	}
+	if strings.Contains(view, strings.Repeat("a", 148)) {
+		t.Fatalf("task should be truncated at 147 chars")
 	}
 }
 
@@ -376,18 +382,19 @@ func TestReviewModel_View_LongRules(t *testing.T) {
 	}
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
-	// Create very long rules (> 100 chars)
 	longRules := strings.Repeat("r", 150)
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", longRules, "")
+	m.SetSize(80, 100)
 	view := m.View()
 
-	// Should contain rules section
 	if !strings.Contains(view, "Rules & Constraints:") {
 		t.Fatalf("expected rules section for non-empty rules")
 	}
-	// Should truncate
-	if !strings.Contains(view, "...") {
-		t.Fatalf("expected truncation with ellipsis for long rules")
+	if strings.Contains(view, strings.Repeat("r", 150)) {
+		t.Fatalf("full rules should not appear - expected truncation")
+	}
+	if strings.Contains(view, strings.Repeat("r", 98)) {
+		t.Fatalf("rules should be truncated at 97 chars")
 	}
 }
 
@@ -650,6 +657,7 @@ func TestReview_ViewGeminiSending(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiSending(true)
 
@@ -680,6 +688,7 @@ func TestReview_ViewGeminiComplete(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiComplete("/tmp/gemini-output.txt", 3*time.Second)
 
@@ -711,6 +720,7 @@ func TestReview_ViewGeminiError(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 	m.SetGeminiError(errors.New("gemini connection failed"))
 
@@ -744,6 +754,7 @@ func TestReview_ViewGeminiStatus(t *testing.T) {
 	tmpl := &template.Template{Name: "Test", Content: "Content"}
 
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 
 	// Test view with no gemini state
@@ -850,5 +861,97 @@ func TestReview_calculateStatsLargeFile(t *testing.T) {
 	}
 	if totalTokens <= 0 {
 		t.Fatalf("expected positive token count for large content")
+	}
+}
+
+func TestReviewModel_ViewportInitialization(t *testing.T) {
+	t.Parallel()
+
+	m := NewReview(nil, nil, nil, "task", "rules", "")
+
+	m.SetSize(80, 24)
+
+	if m.viewport.Width != 80 {
+		t.Fatalf("expected viewport width 80, got %d", m.viewport.Width)
+	}
+
+	expectedHeight := 24 - footerHeight
+	if m.viewport.Height != expectedHeight {
+		t.Fatalf("expected viewport height %d, got %d", expectedHeight, m.viewport.Height)
+	}
+
+	if !m.viewportReady {
+		t.Fatalf("expected viewportReady to be true after SetSize")
+	}
+}
+
+func TestReviewModel_ScrollKeyHandling(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		key  tea.KeyMsg
+	}{
+		{"down arrow", tea.KeyMsg{Type: tea.KeyDown}},
+		{"up arrow", tea.KeyMsg{Type: tea.KeyUp}},
+		{"j key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}},
+		{"k key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}},
+		{"pgdown", tea.KeyMsg{Type: tea.KeyPgDown}},
+		{"pgup", tea.KeyMsg{Type: tea.KeyPgUp}},
+		{"home", tea.KeyMsg{Type: tea.KeyHome}},
+		{"end", tea.KeyMsg{Type: tea.KeyEnd}},
+		{"g key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}}},
+		{"G key", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewReview(nil, nil, nil, "task", "rules", "")
+			m.SetSize(80, 24)
+
+			cmd := m.Update(tt.key)
+			if cmd != nil {
+				t.Fatalf("scroll keys should not return commands, got non-nil for %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestReviewModel_FooterContainsScrollHint(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{Name: "file.go", Path: "/path/to/file.go", IsDir: false, Size: 512},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 24)
+
+	view := m.View()
+
+	if !strings.Contains(view, "↑/↓: Scroll") {
+		t.Fatalf("expected scroll hint in footer")
+	}
+}
+
+func TestReviewModel_ExistingKeysStillWork(t *testing.T) {
+	t.Parallel()
+
+	m := NewReview(nil, nil, nil, "task", "rules", "")
+	m.SetGenerated("/tmp/test.md", true)
+	m.SetSize(80, 24)
+
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+	cmd := m.Update(msg)
+
+	if cmd == nil {
+		t.Fatalf("'c' key should return clipboard copy command when generated")
 	}
 }

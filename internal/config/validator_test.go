@@ -1,0 +1,308 @@
+package config
+
+import (
+	"testing"
+)
+
+func TestIsValidKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		key  string
+		want bool
+	}{
+		{KeyScannerMaxFiles, true},
+		{KeyLLMProvider, true},
+		{KeyGeminiEnabled, true},
+		{KeyTemplateCustomPath, true},
+		{"invalid.key", false},
+		{"", false},
+		{"scanner", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			t.Parallel()
+			if got := IsValidKey(tt.key); got != tt.want {
+				t.Errorf("IsValidKey(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidKeys(t *testing.T) {
+	t.Parallel()
+
+	keys := ValidKeys()
+	if len(keys) == 0 {
+		t.Error("ValidKeys() returned empty slice")
+	}
+
+	seen := make(map[string]bool)
+	for _, key := range keys {
+		if seen[key] {
+			t.Errorf("ValidKeys() contains duplicate: %s", key)
+		}
+		seen[key] = true
+	}
+}
+
+func TestValidateValue_Workers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"1", false},
+		{"4", false},
+		{"32", false},
+		{"0", true},
+		{"33", true},
+		{"-1", true},
+		{"abc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyScannerWorkers, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(workers, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_MaxFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"100", false},
+		{"10000", false},
+		{"0", true},
+		{"-1", true},
+		{"10MB", true},
+		{"1KB", true},
+		{"abc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyScannerMaxFiles, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(max-files, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_SizeFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"1MB", false},
+		{"500KB", false},
+		{"1GB", false},
+		{"100", false},
+		{"abc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyScannerMaxFileSize, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(max-file-size, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_Boolean(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"true", false},
+		{"false", false},
+		{"TRUE", false},
+		{"FALSE", false},
+		{"yes", true},
+		{"no", true},
+		{"1", true},
+		{"0", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyGeminiEnabled, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(gemini.enabled, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_LLMProvider(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"openai", false},
+		{"anthropic", false},
+		{"gemini", false},
+		{"geminiweb", false},
+		{"invalid", true},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyLLMProvider, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(llm.provider, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_OutputFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"markdown", false},
+		{"text", false},
+		{"json", true},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyOutputFormat, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(output.format, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_Timeout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"60", false},
+		{"300", false},
+		{"3600", false},
+		{"0", true},
+		{"-1", true},
+		{"3601", true},
+		{"abc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyLLMTimeout, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(llm.timeout, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_URL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"", false},
+		{"https://api.openai.com/v1", false},
+		{"http://localhost:8080", false},
+		{"ftp://invalid", true},
+		{"not-a-url", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyLLMBaseURL, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(llm.base-url, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestConvertValue_Integer(t *testing.T) {
+	t.Parallel()
+
+	val, err := ConvertValue(KeyScannerMaxFiles, "1000")
+	if err != nil {
+		t.Fatalf("ConvertValue failed: %v", err)
+	}
+	if val != 1000 {
+		t.Errorf("ConvertValue(max-files, \"1000\") = %v, want 1000", val)
+	}
+}
+
+func TestConvertValue_Boolean(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value string
+		want  bool
+	}{
+		{"true", true},
+		{"TRUE", true},
+		{"false", false},
+		{"FALSE", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			val, err := ConvertValue(KeyGeminiEnabled, tt.value)
+			if err != nil {
+				t.Fatalf("ConvertValue failed: %v", err)
+			}
+			if val != tt.want {
+				t.Errorf("ConvertValue(gemini.enabled, %q) = %v, want %v", tt.value, val, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertValue_String(t *testing.T) {
+	t.Parallel()
+
+	val, err := ConvertValue(KeyLLMProvider, "openai")
+	if err != nil {
+		t.Fatalf("ConvertValue failed: %v", err)
+	}
+	if val != "openai" {
+		t.Errorf("ConvertValue(llm.provider, \"openai\") = %v, want \"openai\"", val)
+	}
+}

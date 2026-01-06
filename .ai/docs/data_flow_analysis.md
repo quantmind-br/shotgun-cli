@@ -2,69 +2,71 @@
 
 ## Data Models
 
-The system architecture revolves around several core data structures that facilitate the scanning, transformation, and delivery of project context:
+The system centers on several key data structures that facilitate the transformation of codebase information into LLM prompts:
 
-- **FileNode**: A recursive tree structure representing the file system.
-    - `Name`, `Path`, `RelPath`, `IsDir`, `Size`, `Children` (slice of `FileNode`).
-    - `IsGitignored`, `IsCustomIgnored`: Boolean flags for filtering state.
-- **ScanConfig**: Configuration for the filesystem crawler.
-    - Limits: `MaxFileSize`, `MaxFiles`, `MaxMemory`.
-    - Filters: `SkipBinary`, `IncludeHidden`, `IgnorePatterns`, `IncludePatterns`.
-- **ContextData**: The aggregate model passed to the template engine.
-    - `Task`: User-provided task description.
-    - `Rules`: User-provided constraints/rules.
-    - `FileStructure`: ASCII tree representation of the selected files.
-    - `Files`: Slice of `FileContent` objects containing path and full text.
-    - `CurrentDate`: Generated timestamp.
-- **Template**: Structure representing a prompt template.
-    - `Name`, `Description`, `Content`, `Source`.
+*   **`scanner.FileNode`**: A hierarchical representation of the project's file system. It stores metadata such as path, name, directory status, and ignore flags (`IsGitignored`, `IsCustomIgnored`).
+*   **`context.FileContent`**: Represents a single file's data for context generation.
+    *   `Path`, `RelPath`: Location of the file.
+    *   `Language`: Detected programming language.
+    *   `Content`: Full text content of the file.
+    *   `Size`: File size in bytes.
+*   **`context.ContextData`**: The primary data object used for rendering templates. It aggregates the task description, rules, file structure (ASCII tree), and the list of `FileContent` objects.
+*   **`llm.Result`**: Standardized output from any LLM provider, containing the processed response, raw API response, model used, and usage metrics (tokens, duration).
+*   **`llm.Config`**: Encapsulates provider settings like API keys, base URLs, model names, and timeouts.
 
 ## Input Sources
 
 Data enters the system through multiple channels:
 
-- **File System**: The primary source of data. The `scanner` module traverses the local directory to build the `FileNode` tree and read file contents.
-- **CLI Arguments/Flags**: User preferences, model selection, and paths provided via `cobra` commands.
-- **Interactive UI (TUI)**: User input for task descriptions, custom rules, and manual file selection/deselection via `bubbletea` screens.
-- **Configuration Files**: `shotgun.yaml` and `.shotgunignore` files, as well as global config via `viper`.
-- **Templates**: Pre-defined or user-provided Markdown templates (embedded, XDG config dir, or custom path).
+*   **Local Filesystem**: The primary source of data. The system recursively scans the directory tree starting from the current working directory or a specified path.
+*   **TUI Wizard (Interactive)**:
+    *   **File Selection**: Users interactively toggle files/directories in the `FileNode` tree.
+    *   **Template Selection**: Users choose from predefined or custom Markdown prompt templates.
+    *   **Task/Rules Input**: Users provide textual descriptions of the task and specific constraints.
+*   **CLI Arguments & Stdin (Headless)**:
+    *   Existing context files can be passed as arguments.
+    *   Piped content via `stdin` allows for integration with other tools.
+*   **Configuration Files**: YAML files (managed via Viper) provide persistent settings for scanners, LLM providers, and display preferences.
+*   **Environment Variables**: Prefix `SHOTGUN_` variables can override configuration (e.g., `SHOTGUN_LLM_API_KEY`).
 
 ## Data Transformations
 
-The system performs several stages of data transformation:
+Information undergoes several transformation stages:
 
-1.  **Scanning to Tree**: Flat file system paths are transformed into a hierarchical `FileNode` tree.
-2.  **Filtering**: The tree is pruned based on `.gitignore`, `.shotgunignore`, and user-defined patterns.
-3.  **Context Assembly**: Selected files are read and bundled into a `ContextData` struct.
-4.  **Template Rendering**: The `ContextData` is merged into a Markdown template.
-    - Converts `{VARIABLE}` placeholders to `{{.Variable}}` Go template syntax.
-    - Uses `text/template` for the final string interpolation.
-5.  **Output Cleaning**: If sending to Gemini, the raw response from the `geminiweb` binary is processed to strip ANSI escape codes and parse structured blocks.
+1.  **Scanning & Filtering**: The raw filesystem is walked to build a `FileNode` tree. Files are filtered based on ignore patterns (.gitignore, .shotgunignore), size limits, and binary checks.
+2.  **Language Detection**: Based on file extensions and basenames (e.g., `Dockerfile`, `go.mod`), the system assigns a language tag to each file for better syntax highlighting in the prompt.
+3.  **Context Assembly**: Selected files and metadata are gathered into a `ContextData` struct. A tree renderer converts the hierarchical `FileNode` structure into an ASCII representation.
+4.  **Template Rendering**:
+    *   **Variable Substitution**: Placeholders like `{TASK}` and `{RULES}` are replaced with user-provided text.
+    *   **Go Template Execution**: The system uses `text/template` for complex rendering, including logic for looping over files and conditional blocks.
+5.  **LLM Request Mapping**: The final context string is wrapped into provider-specific JSON structures (e.g., OpenAI's `ChatCompletionRequest`) before being sent via HTTP.
 
 ## Storage Mechanisms
 
-The system is primarily transient and focused on "piping" data, but uses:
+The application is primarily stateless but utilizes the following for persistence and temporary storage:
 
-- **System Clipboard**: Temporary storage for the generated context string.
-- **XDG Config Directory**: Local storage for user templates and configuration (`~/.config/shotgun-cli/`).
-- **Memory Cache**: The `TemplateManager` maintains an in-memory map of loaded templates to avoid redundant I/O.
-- **Gemini Cookies**: `geminiweb` stores authentication state in `~/.geminiweb/cookies.json`.
+*   **Configuration Files**: Stored in `~/.config/shotgun-cli/config.yaml` or a user-specified path.
+*   **Template Files**: Loaded from embedded assets, `~/.config/shotgun-cli/templates/`, or a custom path.
+*   **Local Output Files**: Users can explicitly save generated contexts or LLM responses to `.md` files.
+*   **System Clipboard**: The generated context can be programmatically copied to the system clipboard for use in web-based LLM interfaces.
+*   **Cache**: A hidden `.ai/analysis_cache.json` exists for caching analysis results (used by internal agents).
 
 ## Data Validation
 
-Validation occurs at multiple points in the lifecycle:
+Validation occurs at several boundaries:
 
-- **Config Validation**: `validateConfig` ensures limits (MaxFileSize, etc.) are within sane bounds.
-- **Template Validation**: Ensures templates contain required variables and valid syntax before rendering.
-- **Token Estimation**: Counts tokens in the generated context to warn if it exceeds model limits.
-- **Size Limits**: Final generated context is checked against `MaxTotalSize` before being output or copied.
-- **Binary Detection**: Files are checked for binary content before reading to prevent corrupting the prompt context.
+*   **Configuration Validation**: `validateConfig` checks for valid file counts, size limits, and required provider settings (API keys).
+*   **File Integrity**: `isTextFile` peeks at the first 1024 bytes of a file to detect binary content (null bytes or invalid UTF-8) before full ingestion.
+*   **Template Validation**: `validateVariables` ensures that all required variables for a selected template are provided by the user before generation.
+*   **Provider Validation**: `ValidateConfig` in LLM clients checks for the presence of necessary credentials and model availability.
+*   **Size Constraints**: The system enforces `MaxTotalSize` during both file collection and the final context generation to ensure prompts fit within LLM context windows.
 
 ## Output Formats
 
-The final processed data leaves the system in three main ways:
+Data leaves the system in several formats:
 
-- **Standard Output (Stdout)**: The generated context or the LLM response is printed to the terminal.
-- **System Clipboard**: The generated context is copied for manual pasting into LLM web interfaces.
-- **External Process (Stdin)**: The generated context is piped into the `geminiweb` binary to interact with Google Gemini models.
-- **Markdown Files**: Templates and generated results are typically formatted as Markdown for readability.
+*   **Markdown**: The primary output format for codebase contexts, utilizing headers, lists, and code blocks.
+*   **JSON**: Used for API communication with LLM providers (OpenAI, Anthropic, Gemini).
+*   **Interactive TUI**: Real-time progress updates and review screens rendered using the Bubble Tea framework.
+*   **Raw Terminal Output**: In headless mode, the context or LLM response is printed directly to `stdout`.
+*   **Clipboard**: UTF-8 string data copied to the system's clipboard buffer.

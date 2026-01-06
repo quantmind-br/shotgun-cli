@@ -433,3 +433,19 @@ func TestRenderFileName_InvalidState(t *testing.T) {
 		t.Fatalf("expected non-empty result for invalid state")
 	}
 }
+
+func TestMutedColorAccessibility(t *testing.T) {
+	t.Parallel()
+
+	if MutedColor == Nord3 {
+		t.Fatal("MutedColor should not use Nord3 - insufficient contrast ratio for accessibility")
+	}
+}
+
+func TestDimTextAccessibility(t *testing.T) {
+	t.Parallel()
+
+	if DimText == Nord3 {
+		t.Fatal("DimText should not use Nord3 - insufficient contrast ratio for accessibility")
+	}
+}

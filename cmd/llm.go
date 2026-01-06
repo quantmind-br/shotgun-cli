@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 )
 
@@ -205,7 +206,7 @@ func runLLMList(cmd *cobra.Command, args []string) error {
 		{llm.ProviderGeminiWeb, "GeminiWeb", "Browser-based (no API key)", "N/A"},
 	}
 
-	current := viper.GetString("llm.provider")
+	current := viper.GetString(config.KeyLLMProvider)
 
 	for _, p := range providers {
 		marker := "  "

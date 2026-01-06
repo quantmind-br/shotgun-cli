@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 )
 
@@ -82,7 +83,7 @@ func printGeminiStatusHuman(status gemini.Status) error {
 	_, _ = fmt.Fprintln(w)
 
 	// Enabled status
-	enabled := viper.GetBool("gemini.enabled")
+	enabled := viper.GetBool(config.KeyGeminiEnabled)
 	enabledIcon := iconCross
 	if enabled {
 		enabledIcon = iconCheck
@@ -110,11 +111,11 @@ func printGeminiStatusHuman(status gemini.Status) error {
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "=== Configuration ===")
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "Model:\t%s\n", viper.GetString("gemini.model"))
-	_, _ = fmt.Fprintf(w, "Timeout:\t%ds\n", viper.GetInt("gemini.timeout"))
-	_, _ = fmt.Fprintf(w, "Auto-send:\t%v\n", viper.GetBool("gemini.auto-send"))
-	_, _ = fmt.Fprintf(w, "Save response:\t%v\n", viper.GetBool("gemini.save-response"))
-	_, _ = fmt.Fprintf(w, "Browser refresh:\t%s\n", viper.GetString("gemini.browser-refresh"))
+	_, _ = fmt.Fprintf(w, "Model:\t%s\n", viper.GetString(config.KeyGeminiModel))
+	_, _ = fmt.Fprintf(w, "Timeout:\t%ds\n", viper.GetInt(config.KeyGeminiTimeout))
+	_, _ = fmt.Fprintf(w, "Auto-send:\t%v\n", viper.GetBool(config.KeyGeminiAutoSend))
+	_, _ = fmt.Fprintf(w, "Save response:\t%v\n", viper.GetBool(config.KeyGeminiSaveResponse))
+	_, _ = fmt.Fprintf(w, "Browser refresh:\t%s\n", viper.GetString(config.KeyGeminiBrowserRefresh))
 
 	_ = w.Flush()
 
@@ -164,12 +165,12 @@ func printGeminiStatusJSON(status gemini.Status) error {
 		BrowserRefresh string `json:"browserRefresh"`
 	}{
 		Status:         status,
-		Enabled:        viper.GetBool("gemini.enabled"),
-		Model:          viper.GetString("gemini.model"),
-		Timeout:        viper.GetInt("gemini.timeout"),
-		AutoSend:       viper.GetBool("gemini.auto-send"),
-		SaveResponse:   viper.GetBool("gemini.save-response"),
-		BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+		Enabled:        viper.GetBool(config.KeyGeminiEnabled),
+		Model:          viper.GetString(config.KeyGeminiModel),
+		Timeout:        viper.GetInt(config.KeyGeminiTimeout),
+		AutoSend:       viper.GetBool(config.KeyGeminiAutoSend),
+		SaveResponse:   viper.GetBool(config.KeyGeminiSaveResponse),
+		BrowserRefresh: viper.GetString(config.KeyGeminiBrowserRefresh),
 	}
 
 	data, err := json.MarshalIndent(output, "", "  ")
@@ -209,7 +210,7 @@ func runGeminiDoctor(cmd *cobra.Command, args []string) error {
 
 	// Check 3: Enabled config
 	fmt.Print("Checking configuration... ")
-	if viper.GetBool("gemini.enabled") {
+	if viper.GetBool(config.KeyGeminiEnabled) {
 		fmt.Println("✓ enabled")
 	} else {
 		fmt.Println("⚠ disabled")
@@ -218,7 +219,7 @@ func runGeminiDoctor(cmd *cobra.Command, args []string) error {
 
 	// Check 4: Model validity
 	fmt.Print("Checking model... ")
-	model := viper.GetString("gemini.model")
+	model := viper.GetString(config.KeyGeminiModel)
 	if gemini.IsValidModel(model) {
 		fmt.Printf("✓ %s\n", model)
 	} else {
@@ -228,7 +229,7 @@ func runGeminiDoctor(cmd *cobra.Command, args []string) error {
 
 	// Check 5: Timeout
 	fmt.Print("Checking timeout... ")
-	timeout := viper.GetInt("gemini.timeout")
+	timeout := viper.GetInt(config.KeyGeminiTimeout)
 	if timeout > 0 && timeout <= 3600 {
 		fmt.Printf("✓ %ds\n", timeout)
 	} else {

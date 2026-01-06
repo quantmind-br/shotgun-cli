@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	cfgkeys "github.com/quantmind-br/shotgun-cli/internal/config"
 	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
@@ -212,14 +213,14 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 
 	// Use config defaults for Gemini if not specified via flags
 	if geminiModel == "" {
-		geminiModel = viper.GetString("gemini.model")
+		geminiModel = viper.GetString(cfgkeys.KeyGeminiModel)
 	}
 	if geminiTimeout == 0 {
-		geminiTimeout = viper.GetInt("gemini.timeout")
+		geminiTimeout = viper.GetInt(cfgkeys.KeyGeminiTimeout)
 	}
 
 	// Enable gemini via config if auto-send is enabled AND gemini is enabled
-	if !sendGemini && viper.GetBool("gemini.auto-send") && viper.GetBool("gemini.enabled") {
+	if !sendGemini && viper.GetBool(cfgkeys.KeyGeminiAutoSend) && viper.GetBool(cfgkeys.KeyGeminiEnabled) {
 		sendGemini = true
 	}
 
@@ -245,30 +246,30 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	}, nil
 }
 
-func generateContextHeadless(config GenerateConfig) error {
+func generateContextHeadless(cfg GenerateConfig) error {
 	// Initialize scanner with configuration from viper
 	scannerConfig := scanner.ScanConfig{
-		MaxFiles:             viper.GetInt64("scanner.max-files"),
-		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
-		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString("scanner.max-memory"), 500*1024*1024),
-		SkipBinary:           viper.GetBool("scanner.skip-binary"),
-		IncludeHidden:        viper.GetBool("scanner.include-hidden"),
-		IncludeIgnored:       viper.GetBool("scanner.include-ignored"),
-		Workers:              viper.GetInt("scanner.workers"),
-		RespectGitignore:     viper.GetBool("scanner.respect-gitignore"),
-		RespectShotgunignore: viper.GetBool("scanner.respect-shotgunignore"),
-		IgnorePatterns:       config.Exclude,
-		IncludePatterns:      config.Include,
+		MaxFiles:             viper.GetInt64(cfgkeys.KeyScannerMaxFiles),
+		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(cfgkeys.KeyScannerMaxFileSize), 1024*1024),
+		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(cfgkeys.KeyScannerMaxMemory), 500*1024*1024),
+		SkipBinary:           viper.GetBool(cfgkeys.KeyScannerSkipBinary),
+		IncludeHidden:        viper.GetBool(cfgkeys.KeyScannerIncludeHidden),
+		IncludeIgnored:       viper.GetBool(cfgkeys.KeyScannerIncludeIgnored),
+		Workers:              viper.GetInt(cfgkeys.KeyScannerWorkers),
+		RespectGitignore:     viper.GetBool(cfgkeys.KeyScannerRespectGitignore),
+		RespectShotgunignore: viper.GetBool(cfgkeys.KeyScannerRespectShotgunignore),
+		IgnorePatterns:       cfg.Exclude,
+		IncludePatterns:      cfg.Include,
 	}
 
 	// Apply CLI flag overrides
-	if config.Workers > 0 {
-		scannerConfig.Workers = config.Workers
+	if cfg.Workers > 0 {
+		scannerConfig.Workers = cfg.Workers
 	}
-	if config.IncludeHidden {
+	if cfg.IncludeHidden {
 		scannerConfig.IncludeHidden = true
 	}
-	if config.IncludeIgnored {
+	if cfg.IncludeIgnored {
 		scannerConfig.IncludeIgnored = true
 	}
 
@@ -279,7 +280,7 @@ func generateContextHeadless(config GenerateConfig) error {
 	var tree *scanner.FileNode
 	var err error
 
-	if config.ProgressMode != ProgressNone {
+	if cfg.ProgressMode != ProgressNone {
 		// Scan with progress
 		progressCh := make(chan scanner.Progress, 100)
 		doneCh := make(chan struct{})
@@ -292,7 +293,7 @@ func generateContextHeadless(config GenerateConfig) error {
 				if p.Total > 0 {
 					percent = float64(p.Current) / float64(p.Total) * 100
 				}
-				renderProgress(config.ProgressMode, ProgressOutput{
+				renderProgress(cfg.ProgressMode, ProgressOutput{
 					Timestamp: p.Timestamp.Format(time.RFC3339),
 					Stage:     p.Stage,
 					Message:   p.Message,
@@ -303,13 +304,13 @@ func generateContextHeadless(config GenerateConfig) error {
 			}
 		}()
 
-		tree, err = fs.ScanWithProgress(config.RootPath, &scannerConfig, progressCh)
+		tree, err = fs.ScanWithProgress(cfg.RootPath, &scannerConfig, progressCh)
 		close(progressCh)
 		<-doneCh
 
-		clearProgressLine(config.ProgressMode)
+		clearProgressLine(cfg.ProgressMode)
 	} else {
-		tree, err = fs.Scan(config.RootPath, &scannerConfig)
+		tree, err = fs.Scan(cfg.RootPath, &scannerConfig)
 	}
 
 	if err != nil {
@@ -328,11 +329,11 @@ func generateContextHeadless(config GenerateConfig) error {
 	generator := ctxgen.NewDefaultContextGenerator()
 
 	// Determine task and rules values
-	taskValue := config.Task
+	taskValue := cfg.Task
 	if taskValue == "" {
 		taskValue = "Context generation"
 	}
-	rulesValue := config.Rules
+	rulesValue := cfg.Rules
 
 	// Initialize template variables
 	templateVars := map[string]string{
@@ -343,45 +344,47 @@ func generateContextHeadless(config GenerateConfig) error {
 	}
 
 	// Merge custom variables (they can override defaults)
-	for k, v := range config.CustomVars {
+	for k, v := range cfg.CustomVars {
 		templateVars[k] = v
 	}
 
 	// Load template content if specified
 	var templateContent string
-	if config.Template != "" {
-		tmplMgr, err := template.NewManager()
+	if cfg.Template != "" {
+		tmplMgr, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(cfgkeys.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize template manager: %w", err)
 		}
-		tmpl, err := tmplMgr.GetTemplate(config.Template)
+		tmpl, err := tmplMgr.GetTemplate(cfg.Template)
 		if err != nil {
-			return fmt.Errorf("failed to load template %q: %w", config.Template, err)
+			return fmt.Errorf("failed to load template %q: %w", cfg.Template, err)
 		}
 		templateContent = tmpl.Content
-		log.Debug().Str("template", config.Template).Msg("Using custom template")
+		log.Debug().Str("template", cfg.Template).Msg("Using custom template")
 	}
 
 	contextConfig := ctxgen.GenerateConfig{
-		MaxTotalSize:   config.MaxSize,
+		MaxTotalSize:   cfg.MaxSize,
 		TemplateVars:   templateVars,
 		Template:       templateContent,
-		SkipBinary:     viper.GetBool("scanner.skip-binary"),
-		IncludeTree:    viper.GetBool("context.include-tree"),
-		IncludeSummary: viper.GetBool("context.include-summary"),
+		SkipBinary:     viper.GetBool(cfgkeys.KeyScannerSkipBinary),
+		IncludeTree:    viper.GetBool(cfgkeys.KeyContextIncludeTree),
+		IncludeSummary: viper.GetBool(cfgkeys.KeyContextIncludeSummary),
 	}
 
 	// Generate context (with or without progress)
 	var content string
-	if config.ProgressMode != ProgressNone {
+	if cfg.ProgressMode != ProgressNone {
 		content, err = generator.GenerateWithProgressEx(tree, selections, contextConfig, func(p ctxgen.GenProgress) {
-			renderProgress(config.ProgressMode, ProgressOutput{
+			renderProgress(cfg.ProgressMode, ProgressOutput{
 				Timestamp: time.Now().Format(time.RFC3339),
 				Stage:     p.Stage,
 				Message:   p.Message,
 			})
 		})
-		clearProgressLine(config.ProgressMode)
+		clearProgressLine(cfg.ProgressMode)
 	} else {
 		content, err = generator.Generate(tree, selections, contextConfig)
 	}
@@ -392,27 +395,27 @@ func generateContextHeadless(config GenerateConfig) error {
 
 	// Check size limits
 	contentSize := int64(len(content))
-	if contentSize > config.MaxSize {
-		if config.EnforceLimit {
+	if contentSize > cfg.MaxSize {
+		if cfg.EnforceLimit {
 			return fmt.Errorf(
 				"generated context size (%s) exceeds limit (%s). "+
 					"Use --no-enforce-limit to allow truncation or generation without enforcement",
-				utils.FormatBytes(contentSize), utils.FormatBytes(config.MaxSize))
+				utils.FormatBytes(contentSize), utils.FormatBytes(cfg.MaxSize))
 		} else {
 			log.Warn().
 				Int64("actual", contentSize).
-				Int64("limit", config.MaxSize).
+				Int64("limit", cfg.MaxSize).
 				Msg("Generated context exceeds size limit - continuing without enforcement")
 		}
 	}
 
 	// Write output file
-	if err := os.WriteFile(config.Output, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write output file '%s': %w", config.Output, err)
+	if err := os.WriteFile(cfg.Output, []byte(content), 0600); err != nil {
+		return fmt.Errorf("failed to write output file '%s': %w", cfg.Output, err)
 	}
 
 	// Copy to clipboard if enabled
-	if viper.GetBool("output.clipboard") {
+	if viper.GetBool(cfgkeys.KeyOutputClipboard) {
 		if err := clipboard.Copy(content); err != nil {
 			log.Warn().Err(err).Msg("Failed to copy to clipboard")
 		} else {
@@ -424,15 +427,15 @@ func generateContextHeadless(config GenerateConfig) error {
 	contentBytes := int64(len(content))
 	estimatedTokens := tokens.EstimateFromBytes(contentBytes)
 	fmt.Printf("✅ Context generated successfully!\n")
-	fmt.Printf("📁 Root path: %s\n", config.RootPath)
-	fmt.Printf("📄 Output file: %s\n", config.Output)
+	fmt.Printf("📁 Root path: %s\n", cfg.RootPath)
+	fmt.Printf("📄 Output file: %s\n", cfg.Output)
 	fmt.Printf("📊 Files processed: %d\n", fileCount)
 	fmt.Printf("📏 Total size: %s (~%s tokens)\n", utils.FormatBytes(contentBytes), tokens.FormatTokens(estimatedTokens))
-	fmt.Printf("🎯 Size limit: %s\n", utils.FormatBytes(config.MaxSize))
+	fmt.Printf("🎯 Size limit: %s\n", utils.FormatBytes(cfg.MaxSize))
 
 	// Send to Gemini if requested
-	if config.SendGemini {
-		if err := sendToGemini(config, content); err != nil {
+	if cfg.SendGemini {
+		if err := sendToGemini(cfg, content); err != nil {
 			log.Error().Err(err).Msg("Failed to send to Gemini")
 			fmt.Printf("❌ Gemini: %v\n", err)
 		}
@@ -441,9 +444,9 @@ func generateContextHeadless(config GenerateConfig) error {
 	return nil
 }
 
-func sendToGemini(config GenerateConfig, content string) error {
+func sendToGemini(cfg GenerateConfig, content string) error {
 	// Check if Gemini is enabled
-	if !viper.GetBool("gemini.enabled") {
+	if !viper.GetBool(cfgkeys.KeyGeminiEnabled) {
 		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set gemini.enabled true")
 	}
 
@@ -458,11 +461,11 @@ func sendToGemini(config GenerateConfig, content string) error {
 
 	// Build gemini config
 	geminiCfg := gemini.Config{
-		BinaryPath:     viper.GetString("gemini.binary-path"),
-		Model:          config.GeminiModel,
-		Timeout:        config.GeminiTimeout,
-		BrowserRefresh: viper.GetString("gemini.browser-refresh"),
-		Verbose:        viper.GetBool("verbose"),
+		BinaryPath:     viper.GetString(cfgkeys.KeyGeminiBinaryPath),
+		Model:          cfg.GeminiModel,
+		Timeout:        cfg.GeminiTimeout,
+		BrowserRefresh: viper.GetString(cfgkeys.KeyGeminiBrowserRefresh),
+		Verbose:        viper.GetBool(cfgkeys.KeyVerbose),
 	}
 
 	executor := gemini.NewExecutor(geminiCfg)
@@ -476,13 +479,13 @@ func sendToGemini(config GenerateConfig, content string) error {
 	}
 
 	// Determine output file
-	geminiOutput := config.GeminiOutput
+	geminiOutput := cfg.GeminiOutput
 	if geminiOutput == "" {
-		geminiOutput = strings.TrimSuffix(config.Output, ".md") + "_response.md"
+		geminiOutput = strings.TrimSuffix(cfg.Output, ".md") + "_response.md"
 	}
 
 	// Save response
-	if viper.GetBool("gemini.save-response") {
+	if viper.GetBool(cfgkeys.KeyGeminiSaveResponse) {
 		if err := os.WriteFile(geminiOutput, []byte(result.Response), 0600); err != nil {
 			return fmt.Errorf("failed to save response: %w", err)
 		}

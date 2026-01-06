@@ -55,10 +55,52 @@ Use the `zerolog` library for structured, leveled logging. Do not use `fmt.Print
 
 ## Configuration Management
 
-Configuration is managed by Viper and initialized in `@cmd/root.go`.
+Configuration is managed by Viper and initialized in `@cmd/root.go`. The `internal/config` package provides centralized configuration key constants and validation.
 
-*   **DO NOT** access Viper globally (e.g., `viper.GetString()`) from within `internal/core` or `internal/platform`.
-*   **DO** pass configuration values or dedicated config structs from the `cmd` layer down to the components that need them. This follows the principle of explicit dependencies.
+### Configuration Keys
+
+Always use constants from `internal/config/keys.go` instead of hardcoded strings:
+
+```go
+import "github.com/quantmind-br/shotgun-cli/internal/config"
+
+// Good - use typed constants
+viper.GetInt(config.KeyScannerMaxFiles)
+viper.GetString(config.KeyLLMProvider)
+
+// Bad - avoid magic strings
+viper.GetInt("scanner.max-files")
+```
+
+### Configuration Validation
+
+Use `internal/config/validator.go` for validating configuration values:
+
+```go
+if !config.IsValidKey(key) {
+    return fmt.Errorf("invalid key: %s", key)
+}
+if err := config.ValidateValue(key, value); err != nil {
+    return err
+}
+```
+
+### Architecture Rules
+
+*   **DO NOT** access Viper globally from within `internal/core` or `internal/platform`.
+*   **DO** pass configuration values or dedicated config structs from the `cmd` layer down to the components that need them.
+
+```go
+// cmd layer - can use viper
+mgr, err := template.NewManager(template.ManagerConfig{
+    CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+})
+
+// internal/core layer - receives config via dependency injection
+func NewManager(cfg ManagerConfig) (*Manager, error) {
+    customPath := cfg.CustomPath  // Use injected value, no viper
+}
+```
 
 ## TUI Development (`internal/ui`)
 

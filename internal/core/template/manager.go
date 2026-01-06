@@ -11,7 +11,6 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/quantmind-br/shotgun-cli/internal/assets"
-	"github.com/spf13/viper"
 )
 
 // TemplateManager defines the interface for template management
@@ -30,35 +29,33 @@ type Manager struct {
 	renderer  *Renderer
 }
 
-// NewManager creates a new template manager instance
-func NewManager() (*Manager, error) {
+// ManagerConfig holds configuration for the template manager.
+type ManagerConfig struct {
+	CustomPath string
+}
+
+// NewManager creates a new template manager instance.
+func NewManager(cfg ManagerConfig) (*Manager, error) {
 	manager := &Manager{
 		templates: make(map[string]*Template),
 		renderer:  NewRenderer(),
 	}
 
-	// Create template sources in priority order (first = lowest priority, last = highest priority)
-	// Later sources override earlier ones
 	sources := []TemplateSource{}
 
-	// 1. Embedded templates (lowest priority)
 	templatesFS, err := fs.Sub(assets.Templates, "templates")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create templates filesystem: %w", err)
 	}
 	sources = append(sources, NewEmbeddedSource(templatesFS))
 
-	// 2. User config directory templates (XDG compliant)
 	userTemplatesDir := filepath.Join(xdg.ConfigHome, "shotgun-cli", "templates")
 	if err := os.MkdirAll(userTemplatesDir, 0o750); err == nil {
-		// Only add if directory creation succeeded or already exists
 		sources = append(sources, NewFilesystemSource(userTemplatesDir, "user"))
 	}
 
-	// 3. Custom path from config (highest priority)
-	customPath := viper.GetString("template.custom-path")
+	customPath := cfg.CustomPath
 	if customPath != "" {
-		// Expand home directory if needed
 		if strings.HasPrefix(customPath, "~/") {
 			home, err := os.UserHomeDir()
 			if err == nil {
@@ -66,15 +63,12 @@ func NewManager() (*Manager, error) {
 			}
 		}
 
-		// Create directory if it doesn't exist
 		if err := os.MkdirAll(customPath, 0o750); err == nil {
-			// Use basename of custom path as source name for display
 			sourceName := filepath.Base(customPath)
 			sources = append(sources, NewFilesystemSource(customPath, sourceName))
 		}
 	}
 
-	// Load templates from all sources
 	if err := manager.loadFromSources(sources); err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}

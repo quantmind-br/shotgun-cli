@@ -10,7 +10,9 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 )
 
@@ -32,7 +34,9 @@ Example:
   shotgun-cli template list`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		manager, err := template.NewManager()
+		manager, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize template manager: %w", err)
 		}
@@ -94,7 +98,9 @@ Examples:
 
 	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		manager, err := template.NewManager()
+		manager, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			log.Debug().Err(err).Msg("Failed to initialize template manager for completion")
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -119,7 +125,9 @@ Examples:
 		templateName := args[0]
 
 		// Verify template exists
-		manager, err := template.NewManager()
+		manager, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize template manager: %w", err)
 		}
@@ -175,7 +183,9 @@ Examples:
 }
 
 func renderTemplate(templateName string, variables map[string]string, output string) error {
-	manager, err := template.NewManager()
+	manager, err := template.NewManager(template.ManagerConfig{
+		CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize template manager: %w", err)
 	}
@@ -324,7 +334,9 @@ Examples:
 		outputPath := args[1]
 
 		// Get template manager
-		manager, err := template.NewManager()
+		manager, err := template.NewManager(template.ManagerConfig{
+			CustomPath: viper.GetString(config.KeyTemplateCustomPath),
+		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize template manager: %w", err)
 		}

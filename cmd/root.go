@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
@@ -67,39 +68,39 @@ func launchTUIWizard() {
 	}
 
 	scanConfig := &scanner.ScanConfig{
-		MaxFiles:             viper.GetInt64("scanner.max-files"),
-		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString("scanner.max-file-size"), 1024*1024),
-		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString("scanner.max-memory"), 500*1024*1024),
-		SkipBinary:           viper.GetBool("scanner.skip-binary"),
-		IncludeHidden:        viper.GetBool("scanner.include-hidden"),
+		MaxFiles:             viper.GetInt64(config.KeyScannerMaxFiles),
+		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxFileSize), 1024*1024),
+		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxMemory), 500*1024*1024),
+		SkipBinary:           viper.GetBool(config.KeyScannerSkipBinary),
+		IncludeHidden:        viper.GetBool(config.KeyScannerIncludeHidden),
 		IncludeIgnored:       true,
-		Workers:              viper.GetInt("scanner.workers"),
-		RespectGitignore:     viper.GetBool("scanner.respect-gitignore"),
-		RespectShotgunignore: viper.GetBool("scanner.respect-shotgunignore"),
+		Workers:              viper.GetInt(config.KeyScannerWorkers),
+		RespectGitignore:     viper.GetBool(config.KeyScannerRespectGitignore),
+		RespectShotgunignore: viper.GetBool(config.KeyScannerRespectShotgunignore),
 	}
 
 	wizardConfig := &ui.WizardConfig{
 		LLM: ui.LLMConfig{
-			Provider:       viper.GetString("llm.provider"),
-			APIKey:         viper.GetString("llm.api-key"),
-			BaseURL:        viper.GetString("llm.base-url"),
-			Model:          viper.GetString("llm.model"),
-			Timeout:        viper.GetInt("llm.timeout"),
-			SaveResponse:   viper.GetBool("gemini.save-response"),
-			BinaryPath:     viper.GetString("gemini.binary-path"),
-			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
+			Provider:       viper.GetString(config.KeyLLMProvider),
+			APIKey:         viper.GetString(config.KeyLLMAPIKey),
+			BaseURL:        viper.GetString(config.KeyLLMBaseURL),
+			Model:          viper.GetString(config.KeyLLMModel),
+			Timeout:        viper.GetInt(config.KeyLLMTimeout),
+			SaveResponse:   viper.GetBool(config.KeyGeminiSaveResponse),
+			BinaryPath:     viper.GetString(config.KeyGeminiBinaryPath),
+			BrowserRefresh: viper.GetString(config.KeyGeminiBrowserRefresh),
 		},
 		Gemini: ui.GeminiConfig{
-			BinaryPath:     viper.GetString("gemini.binary-path"),
-			Model:          viper.GetString("gemini.model"),
-			Timeout:        viper.GetInt("gemini.timeout"),
-			BrowserRefresh: viper.GetString("gemini.browser-refresh"),
-			SaveResponse:   viper.GetBool("gemini.save-response"),
+			BinaryPath:     viper.GetString(config.KeyGeminiBinaryPath),
+			Model:          viper.GetString(config.KeyGeminiModel),
+			Timeout:        viper.GetInt(config.KeyGeminiTimeout),
+			BrowserRefresh: viper.GetString(config.KeyGeminiBrowserRefresh),
+			SaveResponse:   viper.GetBool(config.KeyGeminiSaveResponse),
 		},
 		Context: ui.ContextConfig{
-			IncludeTree:    viper.GetBool("context.include-tree"),
-			IncludeSummary: viper.GetBool("context.include-summary"),
-			MaxSize:        viper.GetString("context.max-size"),
+			IncludeTree:    viper.GetBool(config.KeyContextIncludeTree),
+			IncludeSummary: viper.GetBool(config.KeyContextIncludeSummary),
+			MaxSize:        viper.GetString(config.KeyContextMaxSize),
 		},
 	}
 
@@ -182,10 +183,10 @@ func initConfig() {
 
 	// Bind persistent flags to viper
 	if rootCmd.PersistentFlags().Lookup("verbose") != nil {
-		_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+		_ = viper.BindPFlag(config.KeyVerbose, rootCmd.PersistentFlags().Lookup("verbose"))
 	}
 	if rootCmd.PersistentFlags().Lookup("quiet") != nil {
-		_ = viper.BindPFlag("quiet", rootCmd.PersistentFlags().Lookup("quiet"))
+		_ = viper.BindPFlag(config.KeyQuiet, rootCmd.PersistentFlags().Lookup("quiet"))
 	}
 
 	// Read config file
@@ -227,52 +228,46 @@ func getConfigDir() string {
 }
 
 func setConfigDefaults() {
-	// Scanner defaults
-	viper.SetDefault("scanner.max-files", 10000)
-	viper.SetDefault("scanner.max-file-size", "1MB")
-	viper.SetDefault("scanner.respect-gitignore", true)
-	viper.SetDefault("scanner.skip-binary", true)
-	viper.SetDefault("scanner.workers", 1)
-	viper.SetDefault("scanner.include-hidden", false)
-	viper.SetDefault("scanner.include-ignored", false)
-	viper.SetDefault("scanner.respect-shotgunignore", true)
-	viper.SetDefault("scanner.max-memory", "500MB")
+	viper.SetDefault(config.KeyScannerMaxFiles, 10000)
+	viper.SetDefault(config.KeyScannerMaxFileSize, "1MB")
+	viper.SetDefault(config.KeyScannerRespectGitignore, true)
+	viper.SetDefault(config.KeyScannerSkipBinary, true)
+	viper.SetDefault(config.KeyScannerWorkers, 1)
+	viper.SetDefault(config.KeyScannerIncludeHidden, false)
+	viper.SetDefault(config.KeyScannerIncludeIgnored, false)
+	viper.SetDefault(config.KeyScannerRespectShotgunignore, true)
+	viper.SetDefault(config.KeyScannerMaxMemory, "500MB")
 
-	// Context generation defaults
-	viper.SetDefault("context.max-size", "10MB")
-	viper.SetDefault("context.include-tree", true)
-	viper.SetDefault("context.include-summary", true)
+	viper.SetDefault(config.KeyContextMaxSize, "10MB")
+	viper.SetDefault(config.KeyContextIncludeTree, true)
+	viper.SetDefault(config.KeyContextIncludeSummary, true)
 
-	// Template defaults
-	viper.SetDefault("template.custom-path", "")
+	viper.SetDefault(config.KeyTemplateCustomPath, "")
 
-	// Output defaults
-	viper.SetDefault("output.format", "markdown")
-	viper.SetDefault("output.clipboard", true)
+	viper.SetDefault(config.KeyOutputFormat, "markdown")
+	viper.SetDefault(config.KeyOutputClipboard, true)
 
-	// LLM Provider defaults
-	viper.SetDefault("llm.provider", "geminiweb")
-	viper.SetDefault("llm.api-key", "")
-	viper.SetDefault("llm.base-url", "")
-	viper.SetDefault("llm.model", "")
-	viper.SetDefault("llm.timeout", 300)
+	viper.SetDefault(config.KeyLLMProvider, "geminiweb")
+	viper.SetDefault(config.KeyLLMAPIKey, "")
+	viper.SetDefault(config.KeyLLMBaseURL, "")
+	viper.SetDefault(config.KeyLLMModel, "")
+	viper.SetDefault(config.KeyLLMTimeout, 300)
 
-	// Gemini integration defaults (kept for backward compatibility)
-	viper.SetDefault("gemini.enabled", false)
-	viper.SetDefault("gemini.binary-path", "")
-	viper.SetDefault("gemini.model", "gemini-2.5-flash")
-	viper.SetDefault("gemini.timeout", 300)
-	viper.SetDefault("gemini.browser-refresh", "auto")
-	viper.SetDefault("gemini.auto-send", false)
-	viper.SetDefault("gemini.save-response", true)
+	viper.SetDefault(config.KeyGeminiEnabled, false)
+	viper.SetDefault(config.KeyGeminiBinaryPath, "")
+	viper.SetDefault(config.KeyGeminiModel, "gemini-2.5-flash")
+	viper.SetDefault(config.KeyGeminiTimeout, 300)
+	viper.SetDefault(config.KeyGeminiBrowserRefresh, "auto")
+	viper.SetDefault(config.KeyGeminiAutoSend, false)
+	viper.SetDefault(config.KeyGeminiSaveResponse, true)
 }
 
 func updateLoggingLevel() {
 	level := zerolog.InfoLevel
 
-	if viper.GetBool("quiet") {
+	if viper.GetBool(config.KeyQuiet) {
 		level = zerolog.ErrorLevel
-	} else if viper.GetBool("verbose") {
+	} else if viper.GetBool(config.KeyVerbose) {
 		level = zerolog.DebugLevel
 	}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/quantmind-br/shotgun-cli/internal/utils"
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 )
 
 var configCmd = &cobra.Command{
@@ -114,13 +114,11 @@ Examples:
 		key := args[0]
 		value := args[1]
 
-		// Validate configuration key
-		if !isValidConfigKey(key) {
+		if !config.IsValidKey(key) {
 			return fmt.Errorf("invalid configuration key '%s'. Use 'shotgun-cli config show' to see available keys", key)
 		}
 
-		// Validate value format for specific keys
-		if err := validateConfigValue(key, value); err != nil {
+		if err := config.ValidateValue(key, value); err != nil {
 			return fmt.Errorf("invalid value for '%s': %w", key, err)
 		}
 
@@ -226,7 +224,7 @@ func showCurrentConfig() error {
 
 // getGeminiStatusSummary returns a brief status summary for Gemini integration.
 func getGeminiStatusSummary() string {
-	if !viper.GetBool("gemini.enabled") {
+	if !viper.GetBool(config.KeyGeminiEnabled) {
 		return "disabled"
 	}
 
@@ -250,8 +248,7 @@ func getGeminiStatusSummary() string {
 }
 
 func setConfigValue(key, value string) error {
-	// Convert string value to appropriate type
-	convertedValue, err := convertConfigValue(key, value)
+	convertedValue, err := config.ConvertValue(key, value)
 	if err != nil {
 		return err
 	}
@@ -287,255 +284,6 @@ func setConfigValue(key, value string) error {
 	log.Debug().Str("key", key).Interface("value", convertedValue).Str("path", configPath).Msg("Configuration updated")
 
 	return nil
-}
-
-func isValidConfigKey(key string) bool {
-	validKeys := []string{
-		// Scanner keys
-		"scanner.max-files",
-		"scanner.max-file-size",
-		"scanner.respect-gitignore",
-		"scanner.skip-binary",
-		"scanner.workers",
-		"scanner.include-hidden",
-		"scanner.include-ignored",
-		"scanner.respect-shotgunignore",
-		"scanner.max-memory",
-		// Context keys
-		"context.max-size",
-		"context.include-tree",
-		"context.include-summary",
-		// Template keys
-		"template.custom-path",
-		// Output keys
-		"output.format",
-		"output.clipboard",
-		// LLM Provider keys
-		"llm.provider",
-		"llm.api-key",
-		"llm.base-url",
-		"llm.model",
-		"llm.timeout",
-		// Gemini integration keys (kept for backward compatibility)
-		"gemini.enabled",
-		"gemini.binary-path",
-		"gemini.model",
-		"gemini.timeout",
-		"gemini.browser-refresh",
-		"gemini.auto-send",
-		"gemini.save-response",
-	}
-
-	for _, validKey := range validKeys {
-		if key == validKey {
-			return true
-		}
-	}
-
-	return false
-}
-
-func validateConfigValue(key, value string) error {
-	switch key {
-	case "scanner.max-files":
-		return validateMaxFiles(value)
-	case "scanner.max-file-size", "context.max-size", "scanner.max-memory":
-		return validateSizeFormat(value)
-	case "scanner.respect-gitignore", "scanner.skip-binary",
-		"scanner.include-hidden", "scanner.include-ignored", "scanner.respect-shotgunignore",
-		"context.include-tree", "context.include-summary", "output.clipboard",
-		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
-		return validateBooleanValue(value)
-	case "scanner.workers":
-		return validateWorkers(value)
-	case "output.format":
-		return validateOutputFormat(value)
-	case "template.custom-path", "gemini.binary-path":
-		return validateTemplatePath(value)
-	case "gemini.model":
-		return validateGeminiModel(value)
-	case "gemini.timeout", "llm.timeout":
-		return validateGeminiTimeout(value)
-	case "gemini.browser-refresh":
-		return validateGeminiBrowserRefresh(value)
-	case "llm.provider":
-		return validateLLMProvider(value)
-	case "llm.api-key":
-		return nil // API key can be any string
-	case "llm.base-url":
-		return validateLLMBaseURL(value)
-	case "llm.model":
-		return nil // Model can be any string, validation is provider-specific
-	}
-
-	return nil
-}
-
-func validateWorkers(value string) error {
-	var workers int
-	if _, err := fmt.Sscanf(value, "%d", &workers); err != nil {
-		return fmt.Errorf("expected a positive integer")
-	}
-	if workers < 1 || workers > 32 {
-		return fmt.Errorf("must be between 1 and 32, got %d", workers)
-	}
-
-	return nil
-}
-
-func validateMaxFiles(value string) error {
-	// Reject size formats (e.g., "10MB", "1KB")
-	upper := strings.ToUpper(strings.TrimSpace(value))
-	isSizeFormat := strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") ||
-		strings.HasSuffix(upper, "KB")
-	if !isSizeFormat && strings.HasSuffix(upper, "B") && len(upper) > 1 {
-		isSizeFormat = upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9'
-	}
-	if isSizeFormat {
-		return fmt.Errorf("expected a number, got size format")
-	}
-
-	var dummy int
-	if _, err := fmt.Sscanf(value, "%d", &dummy); err != nil {
-		return fmt.Errorf("expected a positive integer")
-	}
-	if dummy <= 0 {
-		return fmt.Errorf("must be positive, got %d", dummy)
-	}
-
-	return nil
-}
-
-func validateSizeFormat(value string) error {
-	if _, err := utils.ParseSize(value); err != nil {
-		return fmt.Errorf("expected size format (e.g., 1MB, 500KB): %w", err)
-	}
-
-	return nil
-}
-
-func validateBooleanValue(value string) error {
-	lower := strings.ToLower(value)
-	if lower != "true" && lower != "false" {
-		return fmt.Errorf("expected 'true' or 'false', got '%s'", value)
-	}
-
-	return nil
-}
-
-func validateOutputFormat(value string) error {
-	if value != "markdown" && value != "text" {
-		return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
-	}
-
-	return nil
-}
-
-func validateTemplatePath(value string) error {
-	if value == "" {
-		return nil
-	}
-
-	expandedValue := value
-	if strings.HasPrefix(value, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to expand home directory: %w", err)
-		}
-		expandedValue = filepath.Join(home, value[2:])
-	}
-
-	parentDir := filepath.Dir(expandedValue)
-	if parentDir != "." && parentDir != "/" {
-		if info, err := os.Stat(parentDir); err == nil {
-			if !info.IsDir() {
-				return fmt.Errorf("parent path exists but is not a directory: %s", parentDir)
-			}
-		}
-	}
-
-	return nil
-}
-
-func validateGeminiModel(value string) error {
-	validModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.0-pro"}
-	for _, model := range validModels {
-		if value == model {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("expected one of: %s", strings.Join(validModels, ", "))
-}
-
-func validateGeminiTimeout(value string) error {
-	var timeout int
-	if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
-		return fmt.Errorf("expected a positive integer (seconds)")
-	}
-	if timeout <= 0 {
-		return fmt.Errorf("timeout must be positive, got %d", timeout)
-	}
-	if timeout > 3600 {
-		return fmt.Errorf("timeout too large (max 3600 seconds), got %d", timeout)
-	}
-
-	return nil
-}
-
-func validateGeminiBrowserRefresh(value string) error {
-	validValues := []string{"", "auto", "chrome", "firefox", "edge", "chromium", "opera"}
-	for _, valid := range validValues {
-		if value == valid {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)")
-}
-
-func validateLLMProvider(value string) error {
-	validProviders := []string{"openai", "anthropic", "gemini", "geminiweb"}
-	for _, provider := range validProviders {
-		if value == provider {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("expected one of: %s", strings.Join(validProviders, ", "))
-}
-
-func validateLLMBaseURL(value string) error {
-	if value == "" {
-		return nil
-	}
-	// Basic URL validation
-	if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
-		return fmt.Errorf("URL must start with http:// or https://")
-	}
-	return nil
-}
-
-func convertConfigValue(key, value string) (interface{}, error) {
-	switch key {
-	case "scanner.max-files", "scanner.workers", "gemini.timeout", "llm.timeout":
-		var intVal int
-		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
-			return nil, fmt.Errorf("failed to parse integer value: %w", err)
-		}
-
-		return intVal, nil
-
-	case "scanner.respect-gitignore", "scanner.skip-binary",
-		"scanner.include-hidden", "scanner.include-ignored", "scanner.respect-shotgunignore",
-		"context.include-tree", "context.include-summary", "output.clipboard",
-		"gemini.enabled", "gemini.auto-send", "gemini.save-response":
-		return strings.ToLower(value) == "true", nil
-
-	default:
-		// String values
-		return value, nil
-	}
 }
 
 func getConfigSource(key string) string {

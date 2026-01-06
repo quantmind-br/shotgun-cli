@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,7 +37,7 @@ func TestIsValidConfigKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isValidConfigKey(tt.key)
+			result := config.IsValidKey(tt.key)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -61,7 +62,7 @@ func TestValidateMaxFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateMaxFiles(tt.value)
+			err := config.ValidateValue(config.KeyScannerMaxFiles, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -93,7 +94,7 @@ func TestValidateSizeFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateSizeFormat(tt.value)
+			err := config.ValidateValue(config.KeyScannerMaxFileSize, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -125,7 +126,7 @@ func TestValidateBooleanValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateBooleanValue(tt.value)
+			err := config.ValidateValue(config.KeyGeminiEnabled, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -151,7 +152,7 @@ func TestValidateOutputFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateOutputFormat(tt.value)
+			err := config.ValidateValue(config.KeyOutputFormat, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -184,7 +185,7 @@ func TestValidateTemplatePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateTemplatePath(tt.value)
+			err := config.ValidateValue(config.KeyTemplateCustomPath, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -220,7 +221,7 @@ func TestValidateConfigValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateConfigValue(tt.key, tt.value)
+			err := config.ValidateValue(tt.key, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -253,7 +254,7 @@ func TestConvertConfigValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := convertConfigValue(tt.key, tt.value)
+			result, err := config.ConvertValue(tt.key, tt.value)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
