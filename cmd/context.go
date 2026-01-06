@@ -13,12 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	cfgkeys "github.com/quantmind-br/shotgun-cli/internal/config"
-	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
@@ -247,7 +246,75 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 }
 
 func generateContextHeadless(cfg GenerateConfig) error {
-	// Initialize scanner with configuration from viper
+	scannerConfig := buildScannerConfig(cfg)
+	log.Debug().Interface("config", scannerConfig).Msg("Scanner configuration")
+
+	templateVars := buildTemplateVars(cfg)
+	templateContent, err := loadTemplateContent(cfg.Template)
+	if err != nil {
+		return err
+	}
+
+	svc := app.NewContextService()
+	svcCfg := app.GenerateConfig{
+		RootPath:        cfg.RootPath,
+		ScanConfig:      &scannerConfig,
+		Template:        templateContent,
+		TemplateVars:    templateVars,
+		MaxSize:         cfg.MaxSize,
+		EnforceLimit:    cfg.EnforceLimit,
+		OutputPath:      cfg.Output,
+		CopyToClipboard: viper.GetBool(cfgkeys.KeyOutputClipboard),
+		IncludeTree:     viper.GetBool(cfgkeys.KeyContextIncludeTree),
+		IncludeSummary:  viper.GetBool(cfgkeys.KeyContextIncludeSummary),
+		SkipBinary:      viper.GetBool(cfgkeys.KeyScannerSkipBinary),
+	}
+
+	var result *app.GenerateResult
+	ctx := context.Background()
+
+	if cfg.ProgressMode != ProgressNone {
+		result, err = svc.GenerateWithProgress(ctx, svcCfg, func(stage, msg string, cur, total int64) {
+			var percent float64
+			if total > 0 {
+				percent = float64(cur) / float64(total) * 100
+			}
+			renderProgress(cfg.ProgressMode, ProgressOutput{
+				Timestamp: time.Now().Format(time.RFC3339),
+				Stage:     stage,
+				Message:   msg,
+				Current:   cur,
+				Total:     total,
+				Percent:   percent,
+			})
+		})
+		clearProgressLine(cfg.ProgressMode)
+	} else {
+		result, err = svc.Generate(ctx, svcCfg)
+	}
+
+	if err != nil {
+		return fmt.Errorf("context generation failed: %w", err)
+	}
+
+	log.Info().Int("files", result.FileCount).Msg("Files scanned")
+	if result.CopiedToClipboard {
+		log.Info().Msg("Context copied to clipboard")
+	}
+
+	printGenerationSummary(result, cfg)
+
+	if cfg.SendGemini {
+		if err := sendToGemini(cfg, result.Content); err != nil {
+			log.Error().Err(err).Msg("Failed to send to Gemini")
+			fmt.Printf("❌ Gemini: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+func buildScannerConfig(cfg GenerateConfig) scanner.ScanConfig {
 	scannerConfig := scanner.ScanConfig{
 		MaxFiles:             viper.GetInt64(cfgkeys.KeyScannerMaxFiles),
 		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(cfgkeys.KeyScannerMaxFileSize), 1024*1024),
@@ -262,7 +329,6 @@ func generateContextHeadless(cfg GenerateConfig) error {
 		IncludePatterns:      cfg.Include,
 	}
 
-	// Apply CLI flag overrides
 	if cfg.Workers > 0 {
 		scannerConfig.Workers = cfg.Workers
 	}
@@ -273,171 +339,59 @@ func generateContextHeadless(cfg GenerateConfig) error {
 		scannerConfig.IncludeIgnored = true
 	}
 
-	log.Debug().Interface("config", scannerConfig).Msg("Scanner configuration")
+	return scannerConfig
+}
 
-	// Create and run scanner
-	fs := scanner.NewFileSystemScanner()
-	var tree *scanner.FileNode
-	var err error
-
-	if cfg.ProgressMode != ProgressNone {
-		// Scan with progress
-		progressCh := make(chan scanner.Progress, 100)
-		doneCh := make(chan struct{})
-
-		// Goroutine to consume progress
-		go func() {
-			defer close(doneCh)
-			for p := range progressCh {
-				var percent float64
-				if p.Total > 0 {
-					percent = float64(p.Current) / float64(p.Total) * 100
-				}
-				renderProgress(cfg.ProgressMode, ProgressOutput{
-					Timestamp: p.Timestamp.Format(time.RFC3339),
-					Stage:     p.Stage,
-					Message:   p.Message,
-					Current:   p.Current,
-					Total:     p.Total,
-					Percent:   percent,
-				})
-			}
-		}()
-
-		tree, err = fs.ScanWithProgress(cfg.RootPath, &scannerConfig, progressCh)
-		close(progressCh)
-		<-doneCh
-
-		clearProgressLine(cfg.ProgressMode)
-	} else {
-		tree, err = fs.Scan(cfg.RootPath, &scannerConfig)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to scan files: %w", err)
-	}
-
-	selections := scanner.NewSelectAll(tree)
-	fileCount := tree.CountFiles()
-	log.Info().Int("files", fileCount).Msg("Files scanned")
-
-	// Initialize context generator
-	generator := ctxgen.NewDefaultContextGenerator()
-
-	// Determine task and rules values
+func buildTemplateVars(cfg GenerateConfig) map[string]string {
 	taskValue := cfg.Task
 	if taskValue == "" {
 		taskValue = "Context generation"
 	}
-	rulesValue := cfg.Rules
 
-	// Initialize template variables
 	templateVars := map[string]string{
 		"TASK":           taskValue,
-		"RULES":          rulesValue,
+		"RULES":          cfg.Rules,
 		"FILE_STRUCTURE": "",
 		"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 	}
 
-	// Merge custom variables (they can override defaults)
 	for k, v := range cfg.CustomVars {
 		templateVars[k] = v
 	}
 
-	// Load template content if specified
-	var templateContent string
-	if cfg.Template != "" {
-		tmplMgr, err := template.NewManager(template.ManagerConfig{
-			CustomPath: viper.GetString(cfgkeys.KeyTemplateCustomPath),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to initialize template manager: %w", err)
-		}
-		tmpl, err := tmplMgr.GetTemplate(cfg.Template)
-		if err != nil {
-			return fmt.Errorf("failed to load template %q: %w", cfg.Template, err)
-		}
-		templateContent = tmpl.Content
-		log.Debug().Str("template", cfg.Template).Msg("Using custom template")
+	return templateVars
+}
+
+func loadTemplateContent(templateName string) (string, error) {
+	if templateName == "" {
+		return "", nil
 	}
 
-	contextConfig := ctxgen.GenerateConfig{
-		MaxTotalSize:   cfg.MaxSize,
-		TemplateVars:   templateVars,
-		Template:       templateContent,
-		SkipBinary:     viper.GetBool(cfgkeys.KeyScannerSkipBinary),
-		IncludeTree:    viper.GetBool(cfgkeys.KeyContextIncludeTree),
-		IncludeSummary: viper.GetBool(cfgkeys.KeyContextIncludeSummary),
-	}
-
-	// Generate context (with or without progress)
-	var content string
-	if cfg.ProgressMode != ProgressNone {
-		content, err = generator.GenerateWithProgressEx(tree, selections, contextConfig, func(p ctxgen.GenProgress) {
-			renderProgress(cfg.ProgressMode, ProgressOutput{
-				Timestamp: time.Now().Format(time.RFC3339),
-				Stage:     p.Stage,
-				Message:   p.Message,
-			})
-		})
-		clearProgressLine(cfg.ProgressMode)
-	} else {
-		content, err = generator.Generate(tree, selections, contextConfig)
-	}
-
+	tmplMgr, err := template.NewManager(template.ManagerConfig{
+		CustomPath: viper.GetString(cfgkeys.KeyTemplateCustomPath),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to generate context: %w", err)
+		return "", fmt.Errorf("failed to initialize template manager: %w", err)
 	}
 
-	// Check size limits
-	contentSize := int64(len(content))
-	if contentSize > cfg.MaxSize {
-		if cfg.EnforceLimit {
-			return fmt.Errorf(
-				"generated context size (%s) exceeds limit (%s). "+
-					"Use --no-enforce-limit to allow truncation or generation without enforcement",
-				utils.FormatBytes(contentSize), utils.FormatBytes(cfg.MaxSize))
-		} else {
-			log.Warn().
-				Int64("actual", contentSize).
-				Int64("limit", cfg.MaxSize).
-				Msg("Generated context exceeds size limit - continuing without enforcement")
-		}
+	tmpl, err := tmplMgr.GetTemplate(templateName)
+	if err != nil {
+		return "", fmt.Errorf("failed to load template %q: %w", templateName, err)
 	}
 
-	// Write output file
-	if err := os.WriteFile(cfg.Output, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write output file '%s': %w", cfg.Output, err)
-	}
+	log.Debug().Str("template", templateName).Msg("Using custom template")
+	return tmpl.Content, nil
+}
 
-	// Copy to clipboard if enabled
-	if viper.GetBool(cfgkeys.KeyOutputClipboard) {
-		if err := clipboard.Copy(content); err != nil {
-			log.Warn().Err(err).Msg("Failed to copy to clipboard")
-		} else {
-			log.Info().Msg("Context copied to clipboard")
-		}
-	}
-
-	// Print summary with token estimate
-	contentBytes := int64(len(content))
-	estimatedTokens := tokens.EstimateFromBytes(contentBytes)
+func printGenerationSummary(result *app.GenerateResult, cfg GenerateConfig) {
 	fmt.Printf("✅ Context generated successfully!\n")
 	fmt.Printf("📁 Root path: %s\n", cfg.RootPath)
-	fmt.Printf("📄 Output file: %s\n", cfg.Output)
-	fmt.Printf("📊 Files processed: %d\n", fileCount)
-	fmt.Printf("📏 Total size: %s (~%s tokens)\n", utils.FormatBytes(contentBytes), tokens.FormatTokens(estimatedTokens))
+	fmt.Printf("📄 Output file: %s\n", result.OutputPath)
+	fmt.Printf("📊 Files processed: %d\n", result.FileCount)
+	fmt.Printf("📏 Total size: %s (~%s tokens)\n",
+		utils.FormatBytes(result.ContentSize),
+		tokens.FormatTokens(int(result.TokenEstimate)))
 	fmt.Printf("🎯 Size limit: %s\n", utils.FormatBytes(cfg.MaxSize))
-
-	// Send to Gemini if requested
-	if cfg.SendGemini {
-		if err := sendToGemini(cfg, content); err != nil {
-			log.Error().Err(err).Msg("Failed to send to Gemini")
-			fmt.Printf("❌ Gemini: %v\n", err)
-		}
-	}
-
-	return nil
 }
 
 func sendToGemini(cfg GenerateConfig, content string) error {

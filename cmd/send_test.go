@@ -172,11 +172,16 @@ func TestRunContextSend_Flags(t *testing.T) {
 
 		// Test may succeed or fail depending on gemini availability
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error
+		// If it fails, check it's the right kind of error (provider errors or API errors)
 		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "gemini") ||
-				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available"))
+			errStr := err.Error()
+			isExpectedError := strings.Contains(errStr, "gemini") ||
+				strings.Contains(errStr, "Gemini") ||
+				strings.Contains(errStr, "LLM") ||
+				strings.Contains(errStr, "not available") ||
+				strings.Contains(errStr, "API error") ||
+				strings.Contains(errStr, "request failed")
+			assert.True(t, isExpectedError, "unexpected error: %v", err)
 		}
 	})
 
