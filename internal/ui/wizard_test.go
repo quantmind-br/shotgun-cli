@@ -173,7 +173,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	}
 
 	// Completion message should schedule clipboard command
-	msg := GenerationCompleteMsg{Content: "generated", FilePath: "/tmp/prompt.md"}
+	msg := screens.GenerationCompleteMsg{Content: "generated", FilePath: "/tmp/prompt.md"}
 	model, clipboardCmd := wizard.Update(msg)
 	wizard = model.(*WizardModel)
 	if wizard.generatedFilePath != "/tmp/prompt.md" {
@@ -184,7 +184,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	}
 
 	// Simulate clipboard completion
-	model, _ = wizard.Update(ClipboardCompleteMsg{Success: true})
+	model, _ = wizard.Update(screens.ClipboardCompleteMsg{Success: true})
 	wizard = model.(*WizardModel)
 	if wizard.error != nil {
 		t.Fatalf("did not expect clipboard error, got %v", wizard.error)
@@ -202,7 +202,7 @@ func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 		t.Fatalf("expected command to be returned")
 	}
 	msg := cmd()
-	genErr, ok := msg.(GenerationErrorMsg)
+	genErr, ok := msg.(screens.GenerationErrorMsg)
 	if !ok {
 		t.Fatalf("expected GenerationErrorMsg, got %T", msg)
 	}
@@ -218,7 +218,7 @@ func TestWizardClipboardFailureStored(t *testing.T) {
 	wizard.review = screens.NewReview(map[string]bool{}, nil, nil, "", "", "")
 	wizard.generatedFilePath = "/tmp/test.md"
 
-	model, _ := wizard.Update(ClipboardCompleteMsg{Success: false, Err: fmt.Errorf("copy failed")})
+	model, _ := wizard.Update(screens.ClipboardCompleteMsg{Success: false, Err: fmt.Errorf("copy failed")})
 	wizard = model.(*WizardModel)
 	// Clipboard failure should not set error anymore (it just updates review screen)
 	if wizard.error != nil {
@@ -629,7 +629,7 @@ func TestWizardHandleGenerationError(t *testing.T) {
 	wizard.progress.Visible = true
 
 	testErr := fmt.Errorf("template rendering failed")
-	model, _ := wizard.Update(GenerationErrorMsg{Err: testErr})
+	model, _ := wizard.Update(screens.GenerationErrorMsg{Err: testErr})
 	wizard = model.(*WizardModel)
 
 	if wizard.error == nil {
@@ -657,14 +657,14 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "", "")
 
 	// Test GeminiProgressMsg
-	model, _ := wizard.Update(GeminiProgressMsg{Stage: "sending"})
+	model, _ := wizard.Update(screens.GeminiProgressMsg{Stage: "sending"})
 	wizard = model.(*WizardModel)
 	if wizard.progress.Stage != "sending" {
 		t.Errorf("expected progress stage 'sending', got %q", wizard.progress.Stage)
 	}
 
 	// Test GeminiCompleteMsg
-	model, _ = wizard.Update(GeminiCompleteMsg{
+	model, _ = wizard.Update(screens.GeminiCompleteMsg{
 		Response:   "AI response here",
 		OutputFile: "/tmp/response.md",
 		Duration:   5 * time.Second,
@@ -689,7 +689,7 @@ func TestWizardHandleGeminiError(t *testing.T) {
 	wizard.geminiSending = true
 
 	testErr := fmt.Errorf("geminiweb: connection timeout")
-	model, _ := wizard.Update(GeminiErrorMsg{Err: testErr})
+	model, _ := wizard.Update(screens.GeminiErrorMsg{Err: testErr})
 	wizard = model.(*WizardModel)
 
 	if wizard.geminiSending {

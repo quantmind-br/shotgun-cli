@@ -133,36 +133,7 @@ type GenerationProgressMsg struct {
 	Message string
 }
 
-type GenerationCompleteMsg struct {
-	Content  string
-	FilePath string
-}
-
-type GenerationErrorMsg struct {
-	Err error
-}
-
-type ClipboardCompleteMsg struct {
-	Success bool
-	Err     error
-}
-
-// Gemini integration messages
 type GeminiSendMsg struct{}
-
-type GeminiProgressMsg struct {
-	Stage string
-}
-
-type GeminiCompleteMsg struct {
-	Response   string
-	OutputFile string
-	Duration   time.Duration
-}
-
-type GeminiErrorMsg struct {
-	Err error
-}
 
 // Internal state for iterative commands
 type scanState struct {
@@ -257,23 +228,23 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.handleGenerationProgress(msg)
 		cmds = append(cmds, cmd)
 
-	case GenerationCompleteMsg:
+	case screens.GenerationCompleteMsg:
 		cmd = m.handleGenerationComplete(msg)
 		cmds = append(cmds, cmd)
 
-	case GenerationErrorMsg:
+	case screens.GenerationErrorMsg:
 		m.handleGenerationError(msg)
 
-	case ClipboardCompleteMsg:
+	case screens.ClipboardCompleteMsg:
 		m.handleClipboardComplete(msg)
 
-	case GeminiProgressMsg:
+	case screens.GeminiProgressMsg:
 		m.handleGeminiProgress(msg)
 
-	case GeminiCompleteMsg:
+	case screens.GeminiCompleteMsg:
 		m.handleGeminiComplete(msg)
 
-	case GeminiErrorMsg:
+	case screens.GeminiErrorMsg:
 		m.handleGeminiError(msg)
 
 	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
@@ -597,7 +568,7 @@ func (m *WizardModel) handleGenerationProgress(msg GenerationProgressMsg) tea.Cm
 	return nil
 }
 
-func (m *WizardModel) handleGenerationComplete(msg GenerationCompleteMsg) tea.Cmd {
+func (m *WizardModel) handleGenerationComplete(msg screens.GenerationCompleteMsg) tea.Cmd {
 	m.progress.Visible = false
 	m.generatedFilePath = msg.FilePath
 	m.generatedContent = msg.Content
@@ -605,12 +576,12 @@ func (m *WizardModel) handleGenerationComplete(msg GenerationCompleteMsg) tea.Cm
 	return m.clipboardCopyCmd(msg.Content)
 }
 
-func (m *WizardModel) handleGenerationError(msg GenerationErrorMsg) {
+func (m *WizardModel) handleGenerationError(msg screens.GenerationErrorMsg) {
 	m.error = msg.Err
 	m.progress.Visible = false
 }
 
-func (m *WizardModel) handleClipboardComplete(msg ClipboardCompleteMsg) {
+func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) {
 	if m.review != nil && m.generatedFilePath != "" {
 		m.review.SetGenerated(m.generatedFilePath, msg.Success)
 	}
@@ -660,7 +631,7 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 	return m.sendToLLMCmd(provider)
 }
 
-func (m *WizardModel) handleGeminiProgress(msg GeminiProgressMsg) {
+func (m *WizardModel) handleGeminiProgress(msg screens.GeminiProgressMsg) {
 	m.progress = Progress{
 		Stage:   msg.Stage,
 		Message: "Sending to Gemini...",
@@ -669,7 +640,7 @@ func (m *WizardModel) handleGeminiProgress(msg GeminiProgressMsg) {
 	m.progressComponent.UpdateMessage(msg.Stage, "Sending to Gemini...")
 }
 
-func (m *WizardModel) handleGeminiComplete(msg GeminiCompleteMsg) {
+func (m *WizardModel) handleGeminiComplete(msg screens.GeminiCompleteMsg) {
 	m.geminiSending = false
 	m.geminiResponseFile = msg.OutputFile
 	m.progress.Visible = false
@@ -679,7 +650,7 @@ func (m *WizardModel) handleGeminiComplete(msg GeminiCompleteMsg) {
 	}
 }
 
-func (m *WizardModel) handleGeminiError(msg GeminiErrorMsg) {
+func (m *WizardModel) handleGeminiError(msg screens.GeminiErrorMsg) {
 	m.geminiSending = false
 	m.progress.Visible = false
 
@@ -730,7 +701,7 @@ func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
 			// Progress callback - could be used for updates
 		})
 		if err != nil {
-			return GeminiErrorMsg{Err: err}
+			return screens.GeminiErrorMsg{Err: err}
 		}
 
 		outputFile := strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
@@ -742,11 +713,11 @@ func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
 
 		if saveResponse {
 			if err := os.WriteFile(outputFile, []byte(result.Response), 0600); err != nil {
-				return GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
+				return screens.GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
 			}
 		}
 
-		return GeminiCompleteMsg{
+		return screens.GeminiCompleteMsg{
 			Response:   result.Response,
 			OutputFile: outputFile,
 			Duration:   result.Duration,
@@ -957,7 +928,7 @@ func (m *WizardModel) handleStepInput(msg tea.KeyMsg) tea.Cmd {
 func (m *WizardModel) generateContext() tea.Cmd {
 	if m.template == nil || len(m.selectedFiles) == 0 {
 		return func() tea.Msg {
-			return GenerationErrorMsg{Err: fmt.Errorf("missing template or files")}
+			return screens.GenerationErrorMsg{Err: fmt.Errorf("missing template or files")}
 		}
 	}
 
@@ -994,7 +965,7 @@ func generateContextCmd(
 func (m *WizardModel) clipboardCopyCmd(content string) tea.Cmd {
 	return func() tea.Msg {
 		err := clipboard.Copy(content)
-		return ClipboardCompleteMsg{
+		return screens.ClipboardCompleteMsg{
 			Success: err == nil,
 			Err:     err,
 		}
@@ -1106,7 +1077,7 @@ func (m *WizardModel) finishScan() tea.Cmd {
 func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
 	return func() tea.Msg {
 		if m.generateState == nil {
-			return GenerationErrorMsg{Err: fmt.Errorf("generation state not initialized")}
+			return screens.GenerationErrorMsg{Err: fmt.Errorf("generation state not initialized")}
 		}
 
 		if !m.generateState.started {
@@ -1173,19 +1144,19 @@ func (m *WizardModel) finishGeneration() tea.Cmd {
 func (m *WizardModel) finalizeGeneration() tea.Msg {
 	content := m.generateState.content
 	if content == "" {
-		return GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
+		return screens.GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
 	}
 
 	if err := m.validateContentSize(content); err != nil {
-		return GenerationErrorMsg{Err: err}
+		return screens.GenerationErrorMsg{Err: err}
 	}
 
 	filePath, err := m.saveGeneratedContent(content)
 	if err != nil {
-		return GenerationErrorMsg{Err: err}
+		return screens.GenerationErrorMsg{Err: err}
 	}
 
-	return GenerationCompleteMsg{
+	return screens.GenerationCompleteMsg{
 		Content:  content,
 		FilePath: filePath,
 	}

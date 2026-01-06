@@ -84,6 +84,70 @@ func (m *ReviewModel) SetSize(width, height int) {
 
 type ClipboardCopyRequestMsg struct{}
 
+// Messages that ReviewModel can handle
+type (
+	// GenerationCompleteMsg indicates context generation finished
+	GenerationCompleteMsg struct {
+		Content  string
+		FilePath string
+	}
+
+	// GenerationErrorMsg indicates context generation failed
+	GenerationErrorMsg struct {
+		Err error
+	}
+
+	// ClipboardCompleteMsg indicates clipboard operation finished
+	ClipboardCompleteMsg struct {
+		Success bool
+		Err     error
+	}
+
+	// GeminiProgressMsg indicates Gemini send progress
+	GeminiProgressMsg struct {
+		Stage string
+	}
+
+	// GeminiCompleteMsg indicates Gemini send completed
+	GeminiCompleteMsg struct {
+		Response   string
+		OutputFile string
+		Duration   time.Duration
+	}
+
+	// GeminiErrorMsg indicates Gemini send failed
+	GeminiErrorMsg struct {
+		Err error
+	}
+)
+
+// HandleMessage processes messages specific to the Review screen.
+// Returns true if the message was handled.
+func (m *ReviewModel) HandleMessage(msg tea.Msg) (handled bool, cmd tea.Cmd) {
+	switch msg := msg.(type) {
+	case ClipboardCompleteMsg:
+		if m.generatedPath != "" {
+			m.clipboardCopied = msg.Success
+		}
+		return true, nil
+
+	case GeminiProgressMsg:
+		m.geminiSending = true
+		m.geminiStartTime = time.Now()
+		return true, nil
+
+	case GeminiCompleteMsg:
+		m.SetGeminiComplete(msg.OutputFile, msg.Duration)
+		return true, nil
+
+	case GeminiErrorMsg:
+		m.SetGeminiError(msg.Err)
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func (m *ReviewModel) Update(msg tea.Msg) tea.Cmd {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
