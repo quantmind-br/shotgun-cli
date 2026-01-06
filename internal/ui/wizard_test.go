@@ -913,3 +913,139 @@ func TestWizardParseSize(t *testing.T) {
 		})
 	}
 }
+
+func TestWizardValidationErrorMessages(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		step           int
+		expectedSubstr string
+	}{
+		{"file selection step", StepFileSelection, "file"},
+		{"template selection step", StepTemplateSelection, "template"},
+		{"task input step", StepTaskInput, "task"},
+		{"rules input step returns empty", StepRulesInput, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+			wizard.step = tt.step
+
+			msg := wizard.getValidationErrorMessage()
+
+			if tt.expectedSubstr == "" {
+				if msg != "" {
+					t.Errorf("expected empty message for step %d, got %q", tt.step, msg)
+				}
+			} else {
+				if !strings.Contains(strings.ToLower(msg), tt.expectedSubstr) {
+					t.Errorf("expected message to contain %q, got %q", tt.expectedSubstr, msg)
+				}
+			}
+		})
+	}
+}
+
+func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty file selection shows error", func(t *testing.T) {
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard.step = StepFileSelection
+		wizard.selectedFiles = map[string]bool{}
+
+		wizard.handleNextStep()
+
+		if wizard.validationError == "" {
+			t.Error("expected validation error when no files selected")
+		}
+		if !strings.Contains(strings.ToLower(wizard.validationError), "file") {
+			t.Errorf("error should mention files, got %q", wizard.validationError)
+		}
+	})
+
+	t.Run("no template selected shows error", func(t *testing.T) {
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard.step = StepTemplateSelection
+		wizard.template = nil
+
+		wizard.handleNextStep()
+
+		if wizard.validationError == "" {
+			t.Error("expected validation error when no template selected")
+		}
+		if !strings.Contains(strings.ToLower(wizard.validationError), "template") {
+			t.Errorf("error should mention template, got %q", wizard.validationError)
+		}
+	})
+
+	t.Run("empty task description shows error when required", func(t *testing.T) {
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard.step = StepTaskInput
+		wizard.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
+		wizard.taskDesc = ""
+
+		wizard.handleNextStep()
+
+		if wizard.validationError == "" {
+			t.Error("expected validation error when task empty")
+		}
+		if !strings.Contains(strings.ToLower(wizard.validationError), "task") {
+			t.Errorf("error should mention task, got %q", wizard.validationError)
+		}
+	})
+}
+
+func TestWizardValidationErrorClearedOnInput(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	wizard.step = StepFileSelection
+	wizard.validationError = "Some error"
+
+	wizard.handleStepInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+	if wizard.validationError != "" {
+		t.Errorf("expected validation error to be cleared, got %q", wizard.validationError)
+	}
+}
+
+func TestWizardValidationErrorClearedOnSuccessfulAdvance(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard.step = StepFileSelection
+	wizard.selectedFiles = map[string]bool{"/test/file.go": true}
+	wizard.validationError = "Previous error"
+
+	wizard.handleNextStep()
+
+	if wizard.validationError != "" {
+		t.Errorf("expected validation error to be cleared on successful advance, got %q", wizard.validationError)
+	}
+	if wizard.step != StepTemplateSelection {
+		t.Errorf("expected to advance to template selection, got step %d", wizard.step)
+	}
+}
+
+func TestWizardViewShowsValidationError(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	wizard.step = StepFileSelection
+	wizard.validationError = "Select at least one file to continue"
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Select at least one file") {
+		t.Error("expected view to display validation error")
+	}
+}

@@ -93,6 +93,12 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg) tea.Cmd {
 	case " ":
 		m.tree.ToggleSelection()
 		m.syncSelections()
+	case "a":
+		m.tree.SelectAllVisible()
+		m.syncSelections()
+	case "A":
+		m.tree.DeselectAllVisible()
+		m.syncSelections()
 	case "i":
 		m.tree.ToggleShowIgnored()
 	case "/":
@@ -159,15 +165,14 @@ func (m *FileSelectionModel) View() string {
 		}
 		footer = styles.RenderFooter(shortcuts)
 	} else {
-		// Line 1: Navigation and selection
 		line1 := []string{
 			"↑/↓: Navigate",
 			"←/→: Expand/Collapse",
 			"Space: Select",
+			"a/A: All/None",
 			"i: Ignored",
 			"/: Filter",
 		}
-		// Line 2: Actions and commands
 		line2 := []string{
 			"F5: Rescan",
 			"F7: Back",

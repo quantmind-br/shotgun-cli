@@ -569,3 +569,263 @@ func TestFuzzyFilterShowsAncestors(t *testing.T) {
 	assert.True(t, model.filterMatches[pkg.Path], "pkg should be visible")
 	assert.True(t, model.filterMatches[file.Path], "target.go should be visible")
 }
+
+// ============================================================================
+// Empty State Tests
+// ============================================================================
+
+func TestRenderEmptyState(t *testing.T) {
+	t.Run("filter set but no matches", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.SetFilter("nonexistent")
+		// Force visibleItems to empty (filter matches nothing)
+		model.visibleItems = nil
+
+		result := model.renderEmptyState()
+
+		assert.Contains(t, result, "No files match filter")
+		assert.Contains(t, result, "nonexistent")
+		assert.Contains(t, result, "Ctrl+C")
+	})
+
+	t.Run("all files hidden by ignore rules", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.showIgnored = false
+		model.visibleItems = nil
+
+		result := model.renderEmptyState()
+
+		assert.Contains(t, result, "All files are hidden")
+		assert.Contains(t, result, "Press 'i'")
+	})
+
+	t.Run("showIgnored true but still empty", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.showIgnored = true
+		model.visibleItems = nil
+
+		result := model.renderEmptyState()
+
+		assert.Contains(t, result, "This directory is empty")
+	})
+
+	t.Run("filter takes precedence over ignore message", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.SetFilter("myfilter")
+		model.showIgnored = false // Both conditions true
+		model.visibleItems = nil
+
+		result := model.renderEmptyState()
+
+		// Filter message should take precedence
+		assert.Contains(t, result, "No files match filter")
+		assert.Contains(t, result, "myfilter")
+	})
+}
+
+func TestViewShowsEmptyStateWhenNoVisibleItems(t *testing.T) {
+	t.Run("view returns empty state for filter no-match", func(t *testing.T) {
+		file := createTestNode("main.go", "/project/main.go", false)
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+		model.SetSize(80, 20)
+
+		// Apply filter that matches nothing
+		model.SetFilter("zzzznonexistent")
+
+		view := model.View()
+
+		assert.Contains(t, view, "No files match filter")
+		assert.Contains(t, view, "zzzznonexistent")
+	})
+
+	t.Run("view returns empty state when all files ignored", func(t *testing.T) {
+		file := createTestNode("ignored.log", "/project/ignored.log", false)
+		file.IsGitignored = true
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+		model.SetSize(80, 20)
+		model.showIgnored = false
+
+		// Manually clear visibleItems to simulate all files filtered out
+		model.visibleItems = nil
+
+		view := model.View()
+
+		assert.Contains(t, view, "All files are hidden")
+	})
+
+	t.Run("view shows tree normally when items exist", func(t *testing.T) {
+		file := createTestNode("main.go", "/project/main.go", false)
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+		model.SetSize(80, 20)
+
+		view := model.View()
+
+		// Should contain tree elements, not empty state
+		assert.NotContains(t, view, "No files match filter")
+		assert.NotContains(t, view, "All files are hidden")
+		assert.NotContains(t, view, "This directory is empty")
+	})
+}
+
+func TestEmptyStateWithCustomIgnored(t *testing.T) {
+	t.Run("custom ignored files also hidden", func(t *testing.T) {
+		file := createTestNode("node_modules", "/project/node_modules", false)
+		file.IsCustomIgnored = true
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+		model.SetSize(80, 20)
+		model.showIgnored = false
+		model.visibleItems = nil
+
+		view := model.View()
+
+		assert.Contains(t, view, "All files are hidden")
+	})
+
+	t.Run("custom ignored visible when showIgnored true", func(t *testing.T) {
+		file := createTestNode("node_modules", "/project/node_modules", false)
+		file.IsCustomIgnored = true
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+		model.SetSize(80, 20)
+		model.showIgnored = true
+		model.rebuildVisibleItems()
+
+		view := model.View()
+
+		// Should NOT show empty state
+		assert.NotContains(t, view, "All files are hidden")
+	})
+}
+
+func TestSelectAllVisible(t *testing.T) {
+	t.Run("selects all visible files", func(t *testing.T) {
+		file1 := createTestNode("a.go", "/project/a.go", false)
+		file2 := createTestNode("b.go", "/project/b.go", false)
+		file3 := createTestNode("c.go", "/project/c.go", false)
+		root := createTestNode("project", "/project", true, file1, file2, file3)
+
+		model := NewFileTree(root, nil)
+
+		model.SelectAllVisible()
+
+		selections := model.GetSelections()
+		assert.True(t, selections["/project/a.go"])
+		assert.True(t, selections["/project/b.go"])
+		assert.True(t, selections["/project/c.go"])
+	})
+
+	t.Run("skips directory nodes", func(t *testing.T) {
+		file := createTestNode("a.go", "/project/src/a.go", false)
+		dir := createTestNode("src", "/project/src", true, file)
+		root := createTestNode("project", "/project", true, dir)
+
+		model := NewFileTree(root, nil)
+		model.expanded[dir.Path] = true
+		model.rebuildVisibleItems()
+
+		model.SelectAllVisible()
+
+		selections := model.GetSelections()
+		assert.True(t, selections["/project/src/a.go"])
+		assert.False(t, selections["/project/src"])
+		assert.False(t, selections["/project"])
+	})
+
+	t.Run("respects current filter", func(t *testing.T) {
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file1.RelPath = "main.go"
+		file2 := createTestNode("readme.md", "/project/readme.md", false)
+		file2.RelPath = "readme.md"
+		root := createTestNode("project", "/project", true, file1, file2)
+		root.RelPath = "."
+
+		model := NewFileTree(root, nil)
+		model.SetFilter(".go")
+
+		model.SelectAllVisible()
+
+		selections := model.GetSelections()
+		assert.True(t, selections["/project/main.go"])
+		assert.False(t, selections["/project/readme.md"])
+	})
+
+	t.Run("handles empty visibleItems gracefully", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.SetFilter("nonexistent")
+
+		model.SelectAllVisible()
+
+		assert.Empty(t, model.GetSelections())
+	})
+
+	t.Run("is idempotent", func(t *testing.T) {
+		file := createTestNode("a.go", "/project/a.go", false)
+		root := createTestNode("project", "/project", true, file)
+
+		model := NewFileTree(root, nil)
+
+		model.SelectAllVisible()
+		model.SelectAllVisible()
+		model.SelectAllVisible()
+
+		assert.Len(t, model.GetSelections(), 1)
+	})
+}
+
+func TestDeselectAllVisible(t *testing.T) {
+	t.Run("deselects all visible files", func(t *testing.T) {
+		file1 := createTestNode("a.go", "/project/a.go", false)
+		file2 := createTestNode("b.go", "/project/b.go", false)
+		root := createTestNode("project", "/project", true, file1, file2)
+
+		model := NewFileTree(root, nil)
+		model.SelectAllVisible()
+		assert.Len(t, model.GetSelections(), 2)
+
+		model.DeselectAllVisible()
+		assert.Empty(t, model.GetSelections())
+	})
+
+	t.Run("only deselects visible items when filter active", func(t *testing.T) {
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file1.RelPath = "main.go"
+		file2 := createTestNode("readme.md", "/project/readme.md", false)
+		file2.RelPath = "readme.md"
+		root := createTestNode("project", "/project", true, file1, file2)
+		root.RelPath = "."
+
+		model := NewFileTree(root, nil)
+		model.SelectAllVisible()
+		assert.Len(t, model.GetSelections(), 2)
+
+		model.SetFilter(".go")
+		model.DeselectAllVisible()
+
+		selections := model.GetSelections()
+		assert.Len(t, selections, 1)
+		assert.True(t, selections["/project/readme.md"])
+	})
+
+	t.Run("handles empty state gracefully", func(t *testing.T) {
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.visibleItems = nil
+
+		model.DeselectAllVisible()
+		assert.Empty(t, model.GetSelections())
+	})
+}

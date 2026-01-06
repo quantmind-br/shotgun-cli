@@ -78,15 +78,23 @@ install-system: build ## Install the binary to system-wide location (requires su
 	@echo "✅ $(BINARY) installed successfully to $(INSTALL_DIR)"
 	@echo "You can now use '$(BINARY)' from anywhere"
 
-uninstall: ## Remove installed binary from system
-	@echo "Removing $(BINARY) from system..."
-	@if [ -f "$(INSTALL_DIR)/$(BINARY)" ]; then \
-		sudo rm -f $(INSTALL_DIR)/$(BINARY); \
-		echo "✅ $(BINARY) removed from $(INSTALL_DIR)"; \
-	else \
-		echo "$(BINARY) not found in $(INSTALL_DIR)"; \
+uninstall: ## Remove installed binary from system and GOPATH
+	@echo "Removing $(BINARY)..."
+	@GOPATH_BIN="$$(go env GOPATH)/bin"; \
+	removed=0; \
+	if [ -f "$$GOPATH_BIN/$(BINARY)" ]; then \
+		rm -f "$$GOPATH_BIN/$(BINARY)"; \
+		echo "✅ Removed from $$GOPATH_BIN"; \
+		removed=1; \
+	fi; \
+	if [ -f "$(INSTALL_DIR)/$(BINARY)" ]; then \
+		sudo rm -f "$(INSTALL_DIR)/$(BINARY)"; \
+		echo "✅ Removed from $(INSTALL_DIR)"; \
+		removed=1; \
+	fi; \
+	if [ $$removed -eq 0 ]; then \
+		echo "$(BINARY) not found in $$GOPATH_BIN or $(INSTALL_DIR)"; \
 	fi
-	@echo "Note: To remove from GOPATH/bin, run: rm $(shell go env GOPATH)/bin/$(BINARY)"
 
 deps: ## Download and verify module dependencies
 	$(GO) mod download

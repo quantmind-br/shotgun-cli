@@ -18,6 +18,9 @@ type TemplateSelectionModel struct {
 	height           int
 	loading          bool
 	err              error
+
+	showingFullPreview bool
+	previewScrollY     int
 }
 
 type TemplatesLoadedMsg struct {
@@ -66,6 +69,10 @@ func (m *TemplateSelectionModel) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
+	if m.showingFullPreview {
+		return m.handleModalKeyPress(keyMsg)
+	}
+
 	switch keyMsg.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -83,6 +90,11 @@ func (m *TemplateSelectionModel) Update(msg tea.Msg) tea.Cmd {
 		m.cursor = 0
 	case "end":
 		m.cursor = len(m.templates) - 1
+	case "v":
+		if m.cursor >= 0 && m.cursor < len(m.templates) {
+			m.showingFullPreview = true
+			m.previewScrollY = 0
+		}
 	}
 
 	return nil
@@ -111,6 +123,10 @@ func (m *TemplateSelectionModel) HandleMessage(msg tea.Msg) tea.Cmd {
 }
 
 func (m *TemplateSelectionModel) View() string {
+	if m.showingFullPreview {
+		return m.renderFullPreviewModal()
+	}
+
 	header := styles.RenderHeader(2, "Choose Template")
 
 	if earlyReturn := m.checkEarlyReturns(header); earlyReturn != "" {
@@ -302,23 +318,34 @@ func (m *TemplateSelectionModel) renderTemplateDetails() string {
 		content.WriteString("\n")
 	}
 
-	// Template preview (first few lines)
 	if selectedTemplate.Content != "" {
 		previewLabel := styles.TitleStyle.Render("👁 Preview")
 		content.WriteString(previewLabel)
 		content.WriteString("\n")
 
-		// Get first 5 non-empty lines
 		lines := strings.Split(selectedTemplate.Content, "\n")
+
+		usedLines := 12
+		if len(selectedTemplate.RequiredVars) > 0 {
+			usedLines += len(selectedTemplate.RequiredVars) + 2
+		}
+
+		availableHeight := m.height - usedLines
+		maxPreviewLines := 8
+		if availableHeight > maxPreviewLines {
+			maxPreviewLines = availableHeight
+			if maxPreviewLines > 15 {
+				maxPreviewLines = 15
+			}
+		}
+
 		previewLines := 0
-		maxPreviewLines := 5
 		for _, line := range lines {
 			if previewLines >= maxPreviewLines {
 				break
 			}
 			trimmed := strings.TrimSpace(line)
 			if trimmed != "" {
-				// Truncate long lines
 				if len(trimmed) > 50 {
 					trimmed = trimmed[:47] + "..."
 				}
@@ -328,9 +355,12 @@ func (m *TemplateSelectionModel) renderTemplateDetails() string {
 				previewLines++
 			}
 		}
-		if len(lines) > maxPreviewLines {
+
+		remainingLines := countNonEmptyLines(lines) - previewLines
+		if remainingLines > 0 {
 			moreLines := lipgloss.NewStyle().Foreground(styles.MutedColor).Italic(true)
-			content.WriteString(moreLines.Render(fmt.Sprintf("  ... (%d more lines)", len(lines)-maxPreviewLines)))
+			hint := moreLines.Render(fmt.Sprintf("  ... (%d more lines) [Press 'v' to view full]", remainingLines))
+			content.WriteString(hint)
 		}
 	}
 
@@ -341,9 +371,9 @@ func (m *TemplateSelectionModel) renderFooter() string {
 	line1 := []string{
 		"↑/↓: Navigate",
 		"Enter/Space: Select",
+		"v: View full",
 	}
 
-	// Determine what F8 will do based on selected template's requirements
 	nextAction := "F8: Next"
 	if m.selectedTemplate != nil {
 		requiresTask := m.selectedTemplate.HasVariable(template.VarTask)
@@ -363,4 +393,128 @@ func (m *TemplateSelectionModel) renderFooter() string {
 		"Ctrl+Q: Quit",
 	}
 	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+}
+
+func (m *TemplateSelectionModel) handleModalKeyPress(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "q":
+		m.showingFullPreview = false
+		m.previewScrollY = 0
+	case "j", "down":
+		m.scrollPreviewDown(1)
+	case "k", "up":
+		m.scrollPreviewUp(1)
+	case "pgdown", "ctrl+d":
+		m.scrollPreviewDown(m.getVisibleHeight())
+	case "pgup", "ctrl+u":
+		m.scrollPreviewUp(m.getVisibleHeight())
+	case "g", "home":
+		m.previewScrollY = 0
+	case "G", "end":
+		m.scrollToEnd()
+	}
+	return nil
+}
+
+func (m *TemplateSelectionModel) scrollPreviewDown(lines int) {
+	if m.cursor < 0 || m.cursor >= len(m.templates) {
+		return
+	}
+	tmpl := m.templates[m.cursor]
+	totalLines := len(strings.Split(tmpl.Content, "\n"))
+	maxScroll := totalLines - m.getVisibleHeight()
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+
+	m.previewScrollY += lines
+	if m.previewScrollY > maxScroll {
+		m.previewScrollY = maxScroll
+	}
+}
+
+func (m *TemplateSelectionModel) scrollPreviewUp(lines int) {
+	m.previewScrollY -= lines
+	if m.previewScrollY < 0 {
+		m.previewScrollY = 0
+	}
+}
+
+func (m *TemplateSelectionModel) getVisibleHeight() int {
+	height := m.height - 8
+	if height < 5 {
+		height = 5
+	}
+	return height
+}
+
+func (m *TemplateSelectionModel) scrollToEnd() {
+	if m.cursor < 0 || m.cursor >= len(m.templates) {
+		return
+	}
+	tmpl := m.templates[m.cursor]
+	totalLines := len(strings.Split(tmpl.Content, "\n"))
+	maxScroll := totalLines - m.getVisibleHeight()
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	m.previewScrollY = maxScroll
+}
+
+func countNonEmptyLines(lines []string) int {
+	count := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
+func (m *TemplateSelectionModel) renderFullPreviewModal() string {
+	if m.cursor < 0 || m.cursor >= len(m.templates) {
+		return "No template selected"
+	}
+
+	tmpl := m.templates[m.cursor]
+	var content strings.Builder
+
+	header := styles.RenderHeader(0, "Template: "+tmpl.Name)
+	content.WriteString(header)
+	content.WriteString("\n\n")
+
+	lines := strings.Split(tmpl.Content, "\n")
+	visibleHeight := m.getVisibleHeight()
+
+	startLine := m.previewScrollY
+	endLine := startLine + visibleHeight
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	for i := startLine; i < endLine; i++ {
+		lineContent := lines[i]
+		if len(lineContent) > m.width-4 {
+			lineContent = lineContent[:m.width-7] + "..."
+		}
+		content.WriteString(styles.CodeStyle.Render(lineContent))
+		content.WriteString("\n")
+	}
+
+	if len(lines) > visibleHeight {
+		scrollInfo := fmt.Sprintf("\n[Lines %d-%d of %d]",
+			startLine+1, endLine, len(lines))
+		content.WriteString(lipgloss.NewStyle().Foreground(styles.MutedColor).Render(scrollInfo))
+	}
+
+	content.WriteString("\n\n")
+	footer := styles.RenderFooter([]string{
+		"j/k: Scroll",
+		"PgUp/PgDn: Page",
+		"g/G: Top/Bottom",
+		"Esc/q: Close",
+	})
+	content.WriteString(footer)
+
+	return content.String()
 }

@@ -118,6 +118,24 @@ func (m *FileTreeModel) ToggleSelection() {
 	}
 }
 
+func (m *FileTreeModel) SelectAllVisible() {
+	for _, item := range m.visibleItems {
+		if !item.node.IsDir {
+			m.selections[item.path] = true
+		}
+	}
+	m.recomputeSelectionStates()
+}
+
+func (m *FileTreeModel) DeselectAllVisible() {
+	for _, item := range m.visibleItems {
+		if !item.node.IsDir {
+			delete(m.selections, item.path)
+		}
+	}
+	m.recomputeSelectionStates()
+}
+
 func (m *FileTreeModel) ToggleShowIgnored() {
 	m.showIgnored = !m.showIgnored
 	m.filterCacheValid = false // Invalidate cache since visibility rules changed
@@ -196,14 +214,33 @@ func (m *FileTreeModel) GetSelections() map[string]bool {
 	return m.selections
 }
 
+func (m *FileTreeModel) renderEmptyState() string {
+	if m.filter != "" {
+		return styles.HelpStyle.Render(
+			fmt.Sprintf("No files match filter '%s'.\n\nPress Ctrl+C to clear the filter.", m.filter),
+		)
+	}
+
+	if !m.showIgnored {
+		return styles.HelpStyle.Render(
+			"All files are hidden (gitignored or custom-ignored).\n\nPress 'i' to show ignored files.",
+		)
+	}
+
+	return styles.HelpStyle.Render("This directory is empty.")
+}
+
 func (m *FileTreeModel) View() string {
 	if m.tree == nil {
-		return "No files to display"
+		return styles.HelpStyle.Render("No files to display")
+	}
+
+	if len(m.visibleItems) == 0 {
+		return m.renderEmptyState()
 	}
 
 	var content strings.Builder
 
-	// Calculate visible range
 	maxVisible := m.height
 	if maxVisible <= 0 {
 		maxVisible = 20 // Default height

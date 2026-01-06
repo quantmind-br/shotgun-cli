@@ -419,3 +419,68 @@ func TestFormatSize(t *testing.T) {
 		})
 	}
 }
+
+func TestFileSelectionSelectAllKey(t *testing.T) {
+	t.Run("a key selects all visible files", func(t *testing.T) {
+		fileTree := &scanner.FileNode{
+			Name:  "root",
+			Path:  "/root",
+			IsDir: true,
+			Children: []*scanner.FileNode{
+				{Name: "a.go", Path: "/root/a.go", IsDir: false, Size: 100},
+				{Name: "b.go", Path: "/root/b.go", IsDir: false, Size: 200},
+			},
+		}
+		selections := make(map[string]bool)
+		model := NewFileSelection(fileTree, selections)
+		model.SetSize(100, 50)
+
+		model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+		assert.Len(t, model.selections, 2)
+		assert.True(t, model.selections["/root/a.go"])
+		assert.True(t, model.selections["/root/b.go"])
+	})
+
+	t.Run("A key deselects all visible files", func(t *testing.T) {
+		fileTree := &scanner.FileNode{
+			Name:  "root",
+			Path:  "/root",
+			IsDir: true,
+			Children: []*scanner.FileNode{
+				{Name: "a.go", Path: "/root/a.go", IsDir: false, Size: 100},
+				{Name: "b.go", Path: "/root/b.go", IsDir: false, Size: 200},
+			},
+		}
+		selections := map[string]bool{
+			"/root/a.go": true,
+			"/root/b.go": true,
+		}
+		model := NewFileSelection(fileTree, selections)
+		model.SetSize(100, 50)
+
+		model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
+
+		assert.Empty(t, model.selections)
+	})
+
+	t.Run("a key does not trigger in filter mode", func(t *testing.T) {
+		fileTree := &scanner.FileNode{
+			Name:  "root",
+			Path:  "/root",
+			IsDir: true,
+			Children: []*scanner.FileNode{
+				{Name: "a.go", Path: "/root/a.go", IsDir: false, Size: 100},
+			},
+		}
+		selections := make(map[string]bool)
+		model := NewFileSelection(fileTree, selections)
+		model.SetSize(100, 50)
+		model.filterMode = true
+
+		model.handleFilterMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+
+		assert.Equal(t, "a", model.filterBuffer)
+		assert.Empty(t, model.selections)
+	})
+}

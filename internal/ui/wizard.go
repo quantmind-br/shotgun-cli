@@ -108,6 +108,9 @@ type WizardModel struct {
 
 	geminiSending      bool
 	geminiResponseFile string
+
+	// Validation error to display when user tries to advance without completing required fields
+	validationError string
 }
 
 type ScanProgressMsg struct {
@@ -373,6 +376,10 @@ func (m *WizardModel) View() string {
 		}
 	}
 
+	if m.validationError != "" {
+		mainView += "\n" + styles.RenderWarning(m.validationError)
+	}
+
 	// Overlay progress if visible
 	if m.progress.Visible {
 		mainView += "\n" + m.progressComponent.View()
@@ -403,6 +410,8 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  ↑/↓ or k/j  Navigate up/down\n")
 	content.WriteString("  ←/→ or h/l  Collapse/Expand directory\n")
 	content.WriteString("  Space       Toggle selection (file or directory)\n")
+	content.WriteString("  a           Select all visible files\n")
+	content.WriteString("  A           Deselect all visible files\n")
 	content.WriteString("  i           Toggle showing ignored files\n")
 	content.WriteString("  /           Enter filter mode (fuzzy search)\n")
 	content.WriteString("  Ctrl+C      Clear filter\n")
@@ -414,6 +423,14 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("\n")
 	content.WriteString("  ↑/↓ or k/j  Navigate templates\n")
 	content.WriteString("  Enter       Select template\n")
+	content.WriteString("  v           View full template (opens modal)\n")
+	content.WriteString("\n")
+	content.WriteString(styles.TitleStyle.Render("  In Template Preview Modal"))
+	content.WriteString("\n")
+	content.WriteString("    j/k       Scroll up/down\n")
+	content.WriteString("    PgUp/Down Page scroll\n")
+	content.WriteString("    g/G       Jump to top/bottom\n")
+	content.WriteString("    Esc/q     Close modal\n")
 	content.WriteString("\n")
 
 	// Text input shortcuts
@@ -505,15 +522,31 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *WizardModel) handleNextStep() tea.Cmd {
 	if m.step < StepReview {
 		if m.canAdvanceStep() {
+			m.validationError = ""
 			m.step = m.getNextStep()
 
 			return m.initStep()
 		}
+		m.validationError = m.getValidationErrorMessage()
+		return nil
 	} else if m.step == StepReview {
 		return m.generateContext()
 	}
 
 	return nil
+}
+
+func (m *WizardModel) getValidationErrorMessage() string {
+	switch m.step {
+	case StepFileSelection:
+		return "Select at least one file to continue"
+	case StepTemplateSelection:
+		return "Select a template to continue"
+	case StepTaskInput:
+		return "Enter a task description to continue"
+	default:
+		return ""
+	}
 }
 
 func (m *WizardModel) handlePrevStep() tea.Cmd {
@@ -901,6 +934,8 @@ func (m *WizardModel) initStep() tea.Cmd {
 
 func (m *WizardModel) handleStepInput(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
+
+	m.validationError = ""
 
 	switch m.step {
 	case StepFileSelection:
