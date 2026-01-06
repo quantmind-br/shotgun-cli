@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/quantmind-br/shotgun-cli/internal/core/diff"
 )
 
 func TestIsDiffHeader(t *testing.T) {
@@ -30,7 +32,7 @@ func TestIsDiffHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isDiffHeader(tt.line)
+			result := diff.IsDiffHeader(tt.line)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -53,7 +55,7 @@ func TestIsGitDiffHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isGitDiffHeader(tt.line)
+			result := diff.IsGitDiffHeader(tt.line)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -113,7 +115,7 @@ func TestCanSplitHere(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := canSplitHere(tt.lines, tt.index, tt.inFileSection)
+			result := diff.CanSplitAt(tt.lines, tt.index, tt.inFileSection)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -162,7 +164,7 @@ func TestCountFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := countFiles(tt.lines)
+			result := diff.CountFiles(tt.lines)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -174,14 +176,14 @@ func TestIntelligentSplitDiff(t *testing.T) {
 		lines          []string
 		approxLines    int
 		expectedChunks int
-		validate       func(t *testing.T, chunks []DiffChunk)
+		validate       func(t *testing.T, chunks []diff.Chunk)
 	}{
 		{
 			name:           "small diff single chunk",
 			lines:          []string{"line1", "line2", "line3"},
 			approxLines:    10,
 			expectedChunks: 1,
-			validate: func(t *testing.T, chunks []DiffChunk) {
+			validate: func(t *testing.T, chunks []diff.Chunk) {
 				assert.Len(t, chunks[0].Lines, 3)
 			},
 		},
@@ -203,7 +205,7 @@ func TestIntelligentSplitDiff(t *testing.T) {
 			},
 			approxLines:    6,
 			expectedChunks: 2,
-			validate: func(t *testing.T, chunks []DiffChunk) {
+			validate: func(t *testing.T, chunks []diff.Chunk) {
 				// First chunk should contain file1
 				assert.True(t, strings.Contains(chunks[0].Lines[0], "file1"))
 				// Second chunk should contain file2
@@ -215,7 +217,7 @@ func TestIntelligentSplitDiff(t *testing.T) {
 			lines:          []string{},
 			approxLines:    10,
 			expectedChunks: 1,
-			validate: func(t *testing.T, chunks []DiffChunk) {
+			validate: func(t *testing.T, chunks []diff.Chunk) {
 				assert.Len(t, chunks[0].Lines, 0)
 			},
 		},
@@ -235,7 +237,7 @@ func TestIntelligentSplitDiff(t *testing.T) {
 			},
 			approxLines:    5,
 			expectedChunks: 2,
-			validate: func(t *testing.T, chunks []DiffChunk) {
+			validate: func(t *testing.T, chunks []diff.Chunk) {
 				// Should split at hunk boundary, not in middle of changes
 				for _, chunk := range chunks {
 					assert.NotEmpty(t, chunk.Lines)
@@ -246,7 +248,7 @@ func TestIntelligentSplitDiff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chunks := intelligentSplitDiff(tt.lines, tt.approxLines)
+			chunks := diff.IntelligentSplit(tt.lines, diff.SplitConfig{ApproxLines: tt.approxLines})
 			assert.Len(t, chunks, tt.expectedChunks)
 			if tt.validate != nil {
 				tt.validate(t, chunks)
@@ -332,7 +334,7 @@ func TestSplitDiffFileErrors(t *testing.T) {
 func TestWriteChunk(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	chunk := DiffChunk{
+	chunk := diff.Chunk{
 		Lines:     []string{"line1", "line2", "line3"},
 		FileCount: 1,
 		StartLine: 1,
@@ -340,7 +342,7 @@ func TestWriteChunk(t *testing.T) {
 
 	t.Run("with header", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "chunk-with-header.diff")
-		err := writeChunk(path, chunk, 1, 3, false)
+		err := writeDiffChunk(path, chunk, 1, 3, false)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(path) //nolint:gosec // test reading controlled file
@@ -356,7 +358,7 @@ func TestWriteChunk(t *testing.T) {
 
 	t.Run("without header", func(t *testing.T) {
 		path := filepath.Join(tmpDir, "chunk-no-header.diff")
-		err := writeChunk(path, chunk, 1, 3, true)
+		err := writeDiffChunk(path, chunk, 1, 3, true)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(path) //nolint:gosec // test reading controlled file

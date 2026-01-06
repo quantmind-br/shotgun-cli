@@ -317,12 +317,8 @@ func generateContextHeadless(cfg GenerateConfig) error {
 		return fmt.Errorf("failed to scan files: %w", err)
 	}
 
-	// Create selection map for all valid files
-	selections := make(map[string]bool)
-	collectAllSelections(tree, selections)
-
-	// Extract file list from tree
-	fileCount := countFilesInTree(tree)
+	selections := scanner.NewSelectAll(tree)
+	fileCount := tree.CountFiles()
 	log.Info().Int("files", fileCount).Msg("Files scanned")
 
 	// Initialize context generator
@@ -497,37 +493,6 @@ func sendToGemini(cfg GenerateConfig, content string) error {
 	fmt.Printf("⏱️  Response time: %s\n", gemini.FormatDuration(result.Duration))
 
 	return nil
-}
-
-func countFilesInTree(node *scanner.FileNode) int {
-	count := 0
-	if !node.IsDir {
-		return 1
-	}
-	for _, child := range node.Children {
-		count += countFilesInTree(child)
-	}
-
-	return count
-}
-
-// collectAllSelections recursively collects all non-ignored files into the selections map
-func collectAllSelections(node *scanner.FileNode, selections map[string]bool) {
-	if node == nil {
-		return
-	}
-
-	// Mark file as selected if it's not ignored
-	if !node.IsIgnored() {
-		selections[node.Path] = true
-	}
-
-	// Recursively select children
-	if node.IsDir {
-		for _, child := range node.Children {
-			collectAllSelections(child, selections)
-		}
-	}
 }
 
 // renderProgressHuman renders progress for humans

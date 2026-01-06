@@ -9,6 +9,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	"github.com/quantmind-br/shotgun-cli/internal/core/diff"
 )
 
 var diffCmd = &cobra.Command{
@@ -86,12 +88,6 @@ Examples:
 	},
 }
 
-type DiffChunk struct {
-	Lines     []string
-	FileCount int
-	StartLine int
-}
-
 func splitDiffFile(inputPath, outputDir string, approxLines int, noHeader bool) error {
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, 0o750); err != nil {
@@ -122,8 +118,7 @@ func splitDiffFile(inputPath, outputDir string, approxLines int, noHeader bool) 
 
 	log.Info().Int("totalLines", len(allLines)).Msg("Read diff file")
 
-	// Split into chunks
-	chunks := intelligentSplitDiff(allLines, approxLines)
+	chunks := diff.IntelligentSplit(allLines, diff.SplitConfig{ApproxLines: approxLines})
 
 	log.Info().Int("chunks", len(chunks)).Msg("Split into chunks")
 
@@ -134,7 +129,7 @@ func splitDiffFile(inputPath, outputDir string, approxLines int, noHeader bool) 
 		chunkFilename := fmt.Sprintf("%s-chunk-%02d.diff", inputBasename, i+1)
 		chunkPath := filepath.Join(outputDir, chunkFilename)
 
-		if err := writeChunk(chunkPath, chunk, i+1, len(chunks), noHeader); err != nil {
+		if err := writeDiffChunk(chunkPath, chunk, i+1, len(chunks), noHeader); err != nil {
 			return fmt.Errorf("failed to write chunk %d: %w", i+1, err)
 		}
 
@@ -145,114 +140,7 @@ func splitDiffFile(inputPath, outputDir string, approxLines int, noHeader bool) 
 	return nil
 }
 
-func intelligentSplitDiff(lines []string, approxLines int) []DiffChunk {
-	var chunks []DiffChunk
-	var currentChunk DiffChunk
-	currentFileLines := make([]string, 0, approxLines)
-	fileCount := 0
-	inFileSection := false
-
-	for i, line := range lines {
-		currentChunk.Lines = append(currentChunk.Lines, line)
-		currentFileLines = append(currentFileLines, line)
-
-		// Track file boundaries
-		if isDiffHeader(line) || isGitDiffHeader(line) {
-			if inFileSection && len(currentFileLines) > 1 {
-				// We've finished the previous file
-				fileCount++
-			}
-			inFileSection = true
-			currentFileLines = []string{line}
-		}
-
-		// Check if we should create a new chunk
-		shouldSplit := len(currentChunk.Lines) >= approxLines &&
-			canSplitHere(lines, i, inFileSection)
-
-		if shouldSplit {
-			currentChunk.FileCount = fileCount
-			if inFileSection && len(currentFileLines) > 1 {
-				currentChunk.FileCount++
-			}
-			chunks = append(chunks, currentChunk)
-
-			// Start new chunk
-			currentChunk = DiffChunk{StartLine: i + 1}
-			fileCount = 0
-			inFileSection = false
-			currentFileLines = []string{}
-		}
-	}
-
-	// Add final chunk if it has content
-	if len(currentChunk.Lines) > 0 {
-		if inFileSection && len(currentFileLines) > 1 {
-			fileCount++
-		}
-		currentChunk.FileCount = fileCount
-		chunks = append(chunks, currentChunk)
-	}
-
-	// Ensure we have at least one chunk
-	if len(chunks) == 0 {
-		chunks = append(chunks, DiffChunk{
-			Lines:     lines,
-			FileCount: countFiles(lines),
-			StartLine: 1,
-		})
-	}
-
-	return chunks
-}
-
-func isDiffHeader(line string) bool {
-	return strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++")
-}
-
-func isGitDiffHeader(line string) bool {
-	return strings.HasPrefix(line, "diff --git")
-}
-
-func canSplitHere(lines []string, index int, inFileSection bool) bool {
-	if index >= len(lines)-1 {
-		return false
-	}
-
-	nextLine := lines[index+1]
-
-	// Good places to split:
-	// 1. Before a new file diff starts
-	if isGitDiffHeader(nextLine) || isDiffHeader(nextLine) {
-		return true
-	}
-
-	// 2. At the end of a complete file section (after context lines)
-	if !inFileSection {
-		return true
-	}
-
-	// 3. Between files but not in the middle of a file change
-	if strings.HasPrefix(nextLine, "@@") {
-		// This is a hunk header, safe to split before it
-		return true
-	}
-
-	return false
-}
-
-func countFiles(lines []string) int {
-	count := 0
-	for _, line := range lines {
-		if isGitDiffHeader(line) || (isDiffHeader(line) && strings.HasPrefix(line, "---")) {
-			count++
-		}
-	}
-
-	return count
-}
-
-func writeChunk(path string, chunk DiffChunk, chunkNum, totalChunks int, noHeader bool) error {
+func writeDiffChunk(path string, chunk diff.Chunk, chunkNum, totalChunks int, noHeader bool) error {
 	file, err := os.Create(path) //nolint:gosec // path is constructed by the tool
 	if err != nil {
 		return fmt.Errorf("failed to create chunk file: %w", err)

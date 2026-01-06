@@ -10,15 +10,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/anthropic"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiapi"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/openai"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
@@ -723,18 +720,7 @@ func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
 		cfg.Provider = llm.ProviderGeminiWeb
 	}
 
-	switch cfg.Provider {
-	case llm.ProviderOpenAI:
-		return openai.NewClient(cfg)
-	case llm.ProviderAnthropic:
-		return anthropic.NewClient(cfg)
-	case llm.ProviderGemini:
-		return geminiapi.NewClient(cfg)
-	case llm.ProviderGeminiWeb:
-		return gemini.NewWebProvider(cfg)
-	default:
-		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
-	}
+	return app.DefaultProviderRegistry.Create(cfg)
 }
 
 func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
