@@ -2,14 +2,21 @@ package geminiapi
 
 import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/http"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/llm"
+)
+
+const (
+	defaultBaseURL   = "https://generativelanguage.googleapis.com/v1beta"
+	defaultModel     = "gemini-2.5-flash"
+	defaultMaxTokens = 8192
 )
 
 type sender struct {
 	client *llm.BaseClient
 }
 
-// NewSender creates a new GeminiAPI sender
+// NewSender creates a new Gemini API sender
 func NewSender(client *llm.BaseClient) llm.Sender {
 	return &sender{
 		client: client,
@@ -18,7 +25,11 @@ func NewSender(client *llm.BaseClient) llm.Sender {
 
 func (s *sender) BuildRequest(content string) (interface{}, error) {
 	return map[string]interface{}{
-		"contents": []string{content},
+		"contents": []Content{
+			{
+				"Parts": []string{content},
+			},
+		},
 	}
 }
 
@@ -28,25 +39,29 @@ func (s *sender) ParseResponse(response interface{}) (*llm.Result, error) {
 		return nil, fmt.Errorf("unexpected response type")
 	}
 
-	contents, ok := resp["contents"].([]interface{})
+	contents, ok := resp["candidates"].([]interface{})
 	if !ok || len(contents) == 0 {
 		return nil, fmt.Errorf("no content in response")
 	}
 
-	content := contents[0].(map[string]interface{})
-	text, ok := content["parts"].([]interface{})
-	if !ok || len(text) == 0 {
-		return nil, fmt.Errorf("no text in response")
+	content, ok := contents[0].(map[string]interface{})
+	parts, ok := content["Parts"].([]interface{})
+	if !ok || len(parts) == 0 {
+		return nil, fmt.Errorf("no parts in response")
+	}
+
+	var responseText string
+	for _, part := range parts {
+		responseText += part.Text
 	}
 
 	usage := &llm.Usage{
-		PromptTokens:     0,
-		CompletionTokens: len(text),
-		TotalTokens:      len(text),
+		CompletionTokens: len(responseText),
+		TotalTokens:      len(responseText),
 	}
 
 	return &llm.Result{
-		Response: text,
+		Response: responseText,
 		Model:    s.client.Model,
 		Provider: "Gemini",
 		Usage:    usage,
@@ -69,7 +84,13 @@ func (s *sender) GetResponseType() interface{} {
 }
 
 type geminiResponse struct {
-	Candidates []struct {
-		Content string `json:"parts"`
-	} `json:"candidates"`
+	Candidates []Candidate `json:"candidates"`
+}
+
+type Content struct {
+	Parts []Part `json:"parts"`
+}
+
+type Part struct {
+	Text string `json:"text"`
 }
