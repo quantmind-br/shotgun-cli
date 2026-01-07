@@ -45,49 +45,65 @@ const (
 	testSampleTask      = "Sample task"
 )
 
-func TestWizardInitStartsScanCommand(t *testing.T) {
-	t.Parallel()
+// wizardTestMockScanner is a test double that implements scanner.Scanner
+type wizardTestMockScanner struct {
+	scanFunc         func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error)
+	scanProgressFunc func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error)
+}
 
-	wizard := NewWizard("/tmp/project", &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
-	cmd := wizard.Init()
-	if cmd == nil {
-		t.Fatalf("expected init command to be non-nil")
+func (m *wizardTestMockScanner) Scan(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+	return m.scanFunc(rootPath, config)
+}
+
+func (m *wizardTestMockScanner) ScanWithProgress(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+	return m.scanProgressFunc(rootPath, config, progress)
+}
+
+// wizardTestMockGenerator is a test double for ContextGenerator
+type wizardTestMockGenerator struct {
+	generateFunc               func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error)
+	generateWithProgressFunc   func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error)
+	generateWithProgressExFunc func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error)
+}
+
+func (m *wizardTestMockGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+	if m.generateFunc != nil {
+		return m.generateFunc(root, selections, config)
 	}
-	msg := cmd()
-	// Init now returns a batch (spinner tick + startScanMsg)
-	batchMsg, ok := msg.(tea.BatchMsg)
-	if !ok {
-		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	return "", nil
+}
+
+func (m *wizardTestMockGenerator) GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error) {
+	if m.generateWithProgressFunc != nil {
+		return m.generateWithProgressFunc(root, selections, config, progress)
 	}
-	var foundScanMsg bool
-	for _, batchCmd := range batchMsg {
-		if batchCmd == nil {
-			continue
-		}
-		result := batchCmd()
-		if scanMsg, ok := result.(startScanMsg); ok {
-			foundScanMsg = true
-			if scanMsg.rootPath != "/tmp/project" {
-				t.Fatalf("unexpected root path: %s", scanMsg.rootPath)
-			}
-		}
+	return "", nil
+}
+
+func (m *wizardTestMockGenerator) GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error) {
+	if m.generateWithProgressExFunc != nil {
+		return m.generateWithProgressExFunc(root, selections, config, progress)
 	}
-	if !foundScanMsg {
-		t.Fatalf("expected startScanMsg in batch, but not found")
-	}
+	return "", nil
 }
 
 func TestWizardHandlesScanLifecycle(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
+	// Inject mock scanner into coordinator
+	mockSc := &wizardTestMockScanner{
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			return &scanner.FileNode{Name: "root", Path: rootPath, IsDir: true}, nil
+		},
+	}
+	wizard.scanCoordinator = NewScanCoordinator(mockSc)
 
-	var model tea.Model
 	var cmd tea.Cmd
-	model, cmd = wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
+	model, cmd := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
 	wiz := model.(*WizardModel)
-	if wiz.scanState == nil {
-		t.Fatalf("expected scan state to be initialized")
+	if wiz.scanCoordinator == nil {
+		t.Fatalf("expected scan coordinator to be initialized")
 	}
 	if cmd == nil {
 		t.Fatalf("expected iterative scan command to be scheduled")
@@ -115,278 +131,49 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 	}
 }
 
-func TestWizardFinishScan_SuccessfulCompletion(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
-
-	// Initialize scan state
-	model, _ := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
-	wiz := model.(*WizardModel)
-
-	// Simulate successful scan by setting result
-	tree := &scanner.FileNode{
-		Name:  "root",
-		Path:  "/workspace",
-		IsDir: true,
-		Children: []*scanner.FileNode{
-			{Name: "main.go", Path: "/workspace/main.go", Size: 1024},
-		},
-	}
-	wiz.scanState.result = tree
-	wiz.scanState.scanErr = nil
-
-	// Call finishScan
-	cmd := wiz.finishScan()
-	if cmd == nil {
-		t.Fatal("expected finishScan to return a command")
-	}
-
-	// Execute the command
-	msg := cmd()
-
-	// Should return ScanCompleteMsg with the tree
-	scanComplete, ok := msg.(ScanCompleteMsg)
-	if !ok {
-		t.Fatalf("expected ScanCompleteMsg, got %T", msg)
-	}
-
-	if scanComplete.Tree != tree {
-		t.Errorf("expected tree %v, got %v", tree, scanComplete.Tree)
-	}
-	if scanComplete.Tree.Name != "root" {
-		t.Errorf("expected tree name 'root', got %s", scanComplete.Tree.Name)
-	}
-}
-
-func TestWizardFinishScan_WithError(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
-
-	// Initialize scan state
-	model, _ := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
-	wiz := model.(*WizardModel)
-
-	// Simulate scan error
-	expectedErr := fmt.Errorf("permission denied: /secret")
-	wiz.scanState.scanErr = expectedErr
-
-	// Call finishScan
-	cmd := wiz.finishScan()
-	if cmd == nil {
-		t.Fatal("expected finishScan to return a command")
-	}
-
-	// Execute the command
-	msg := cmd()
-
-	// Should return ScanErrorMsg
-	scanErr, ok := msg.(ScanErrorMsg)
-	if !ok {
-		t.Fatalf("expected ScanErrorMsg, got %T", msg)
-	}
-
-	if scanErr.Err == nil {
-		t.Fatal("expected error to be set")
-	}
-	if scanErr.Err.Error() != expectedErr.Error() {
-		t.Errorf("expected error %q, got %q", expectedErr.Error(), scanErr.Err.Error())
-	}
-}
-
-func TestWizardFinishScan_NilScanState(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	// scanState is nil by default
-
-	// Call finishScan - it returns a command even with nil scanState
-	// The function doesn't guard against nil scanState, so executing it would panic
-	cmd := wizard.finishScan()
-
-	// Verify a command is returned (function doesn't check for nil state)
-	if cmd == nil {
-		t.Error("expected finishScan to return a command even with nil scanState")
-	}
-
-	// Verify that executing the command panics (this documents current behavior)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when executing finishScan command with nil scanState")
-		}
-	}()
-	_ = cmd()
-}
-
-func TestWizardFinishGeneration_NilGenerateState(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	// generateState is nil by default
-
-	// Call finishGeneration - it returns a command even with nil generateState
-	cmd := wizard.finishGeneration()
-
-	// Verify a command is returned (function doesn't check for nil state)
-	if cmd == nil {
-		t.Error("expected finishGeneration to return a command even with nil generateState")
-	}
-
-	// Verify that executing the command panics (this documents current behavior)
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic when executing finishGeneration command with nil generateState")
-		}
-	}()
-	_ = cmd()
-}
-
-func TestWizardFinishGeneration_SuccessfulGeneration(t *testing.T) {
+func TestWizardHandlesGenerationLifecycle(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-
 	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
+	mockGen := &wizardTestMockGenerator{
+		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+			return "generated content", nil
+		},
+	}
+	wizard.generateCoordinator = NewGenerateCoordinator(mockGen)
+
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic", Content: "{FILE_STRUCTURE}"}
-	wizard.taskDesc = "test task"
-	wizard.wizardConfig.Context.MaxSize = "1MB"
-
-	// Initialize generation state
-	tree := &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
-	model, _ := wizard.Update(startGenerationMsg{
-		fileTree:      tree,
-		selectedFiles: wizard.selectedFiles,
-		template:      wizard.template,
-		taskDesc:      wizard.taskDesc,
-		rules:         "",
-		rootPath:      tempDir,
-	})
-	wiz := model.(*WizardModel)
-
-	// Simulate successful generation by setting content
-	expectedContent := "# Generated Context\n\nFile Structure:\nroot/"
-	wiz.generateState.content = expectedContent
-
-	// Call finishGeneration
-	cmd := wiz.finishGeneration()
-	if cmd == nil {
-		t.Fatal("expected finishGeneration to return a command")
-	}
-
-	// Execute the command
-	msg := cmd()
-
-	// Should return GenerationCompleteMsg
-	genComplete, ok := msg.(screens.GenerationCompleteMsg)
-	if !ok {
-		t.Fatalf("expected GenerationCompleteMsg, got %T", msg)
-	}
-
-	if genComplete.Content != expectedContent {
-		t.Errorf("expected content %q, got %q", expectedContent, genComplete.Content)
-	}
-	if genComplete.FilePath == "" {
-		t.Error("expected file path to be set")
-	}
-}
-
-func TestWizardFinishGeneration_EmptyContent(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-
-	// Initialize generation state
-	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	model, _ := wizard.Update(startGenerationMsg{
-		fileTree:      tree,
-		selectedFiles: wizard.selectedFiles,
-		template:      &template.Template{Name: "basic"},
-		taskDesc:      "test task",
-		rootPath:      "/workspace",
-	})
-	wiz := model.(*WizardModel)
-
-	// Simulate generation with empty content
-	wiz.generateState.content = ""
-
-	// Call finishGeneration
-	cmd := wiz.finishGeneration()
-	if cmd == nil {
-		t.Fatal("expected finishGeneration to return a command")
-	}
-
-	// Execute the command
-	msg := cmd()
-
-	// Should return GenerationErrorMsg
-	genErr, ok := msg.(screens.GenerationErrorMsg)
-	if !ok {
-		t.Fatalf("expected GenerationErrorMsg, got %T", msg)
-	}
-
-	if genErr.Err == nil {
-		t.Fatal("expected error for empty content")
-	}
-	if !strings.Contains(genErr.Err.Error(), "no content generated") {
-		t.Errorf("expected 'no content generated' error, got %q", genErr.Err.Error())
-	}
-}
-
-func TestWizardFinishGeneration_ContentExceedsMaxSize(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.taskDesc = "test task"
 
-	// Set a small max size
-	wizard.wizardConfig.Context.MaxSize = "1KB"
-
-	// Initialize generation state
-	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	model, _ := wizard.Update(startGenerationMsg{
-		fileTree:      tree,
+	// Trigger generation
+	cmd := wizard.handleStartGeneration(startGenerationMsg{
+		fileTree:      wizard.fileTree,
 		selectedFiles: wizard.selectedFiles,
 		template:      wizard.template,
 		taskDesc:      wizard.taskDesc,
-		rootPath:      "/workspace",
+		rootPath:      tempDir,
+	})
+
+	if cmd == nil {
+		t.Fatal("expected start generation command")
+	}
+
+	// Simulate completion
+	model, _ := wizard.Update(screens.GenerationCompleteMsg{
+		Content: "generated content",
 	})
 	wiz := model.(*WizardModel)
 
-	// Simulate generation with content exceeding max size
-	largeContent := strings.Repeat("x", 2*1024) // 2KB
-	wiz.generateState.content = largeContent
-
-	// Call finishGeneration
-	cmd := wiz.finishGeneration()
-	if cmd == nil {
-		t.Fatal("expected finishGeneration to return a command")
+	if wiz.generatedContent != "generated content" {
+		t.Errorf("expected content 'generated content', got %q", wiz.generatedContent)
 	}
-
-	// Execute the command
-	msg := cmd()
-
-	// Should return GenerationErrorMsg
-	genErr, ok := msg.(screens.GenerationErrorMsg)
-	if !ok {
-		t.Fatalf("expected GenerationErrorMsg, got %T", msg)
-	}
-
-	if genErr.Err == nil {
-		t.Fatal("expected error for content exceeding max size")
-	}
-	if !strings.Contains(genErr.Err.Error(), "exceeds maximum allowed size") {
-		t.Errorf("expected size validation error, got %q", genErr.Err.Error())
+	if wiz.progress.Visible {
+		t.Error("progress should be hidden after completion")
 	}
 }
-
 func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	t.Parallel()
 
@@ -436,58 +223,6 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 	}
 	if startGen.rootPath != "/workspace" {
 		t.Fatalf("unexpected root path: %s", startGen.rootPath)
-	}
-}
-
-func TestWizardGenerationFlowUpdatesState(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = testTaskDescription
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "", "")
-	var model tea.Model
-
-	// Initialize generation state
-	model, _ = wizard.Update(startGenerationMsg{
-		fileTree:      wizard.fileTree,
-		selectedFiles: wizard.selectedFiles,
-		template:      wizard.template,
-		taskDesc:      wizard.taskDesc,
-		rules:         "",
-		rootPath:      "/workspace",
-	})
-	wizard = model.(*WizardModel)
-
-	if wizard.generateState == nil {
-		t.Fatalf("expected generation state to be initialized")
-	}
-
-	// Progress message
-	model, _ = wizard.Update(GenerationProgressMsg{Stage: "render", Message: "rendering"})
-	wizard = model.(*WizardModel)
-	if !wizard.progress.Visible {
-		t.Fatalf("expected progress visible during generation")
-	}
-
-	// Completion message should schedule clipboard command
-	msg := screens.GenerationCompleteMsg{Content: "generated", FilePath: "/tmp/prompt.md"}
-	model, clipboardCmd := wizard.Update(msg)
-	wizard = model.(*WizardModel)
-	if wizard.generatedFilePath != "/tmp/prompt.md" {
-		t.Fatalf("expected generated file path to be stored")
-	}
-	if clipboardCmd == nil {
-		t.Fatalf("expected clipboard command to be emitted")
-	}
-
-	// Simulate clipboard completion
-	model, _ = wizard.Update(screens.ClipboardCompleteMsg{Success: true})
-	wizard = model.(*WizardModel)
-	if wizard.error != nil {
-		t.Fatalf("did not expect clipboard error, got %v", wizard.error)
 	}
 }
 
@@ -573,6 +308,193 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 	wizard = model.(*WizardModel)
 	if wizard.step != StepFileSelection {
 		t.Fatalf("expected to move back to file selection")
+	}
+}
+
+func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		startStep    int
+		expectedStep int
+		setupFunc    func(*WizardModel)
+	}{
+		{
+			name:         "from file selection to template selection",
+			startStep:    StepFileSelection,
+			expectedStep: StepTemplateSelection,
+			setupFunc: func(m *WizardModel) {
+				m.selectedFiles = map[string]bool{"file.go": true}
+			},
+		},
+		{
+			name:         "from template selection to task input",
+			startStep:    StepTemplateSelection,
+			expectedStep: StepTaskInput,
+			setupFunc: func(m *WizardModel) {
+				m.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
+			},
+		},
+		{
+			name:         "from task input to rules input",
+			startStep:    StepTaskInput,
+			expectedStep: StepRulesInput,
+			setupFunc: func(m *WizardModel) {
+				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
+				m.taskDesc = "test task"
+			},
+		},
+		{
+			name:         "from rules input to review",
+			startStep:    StepRulesInput,
+			expectedStep: StepReview,
+			setupFunc: func(m *WizardModel) {
+				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
+				m.taskDesc = "test task"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+			wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+			wizard.step = tt.startStep
+			if tt.setupFunc != nil {
+				tt.setupFunc(wizard)
+			}
+
+			msg := tea.KeyMsg{Type: tea.KeyCtrlN}
+			model, _ := wizard.Update(msg)
+			result := model.(*WizardModel)
+
+			if result.step != tt.expectedStep {
+				t.Errorf("expected step %d, got %d", tt.expectedStep, result.step)
+			}
+		})
+	}
+}
+
+func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		startStep    int
+		expectedStep int
+		setupFunc    func(*WizardModel)
+	}{
+		{
+			name:         "from template selection to file selection",
+			startStep:    StepTemplateSelection,
+			expectedStep: StepFileSelection,
+			setupFunc:    nil,
+		},
+		{
+			name:         "from task input to template selection",
+			startStep:    StepTaskInput,
+			expectedStep: StepTemplateSelection,
+			setupFunc: func(m *WizardModel) {
+				m.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
+			},
+		},
+		{
+			name:         "from rules input to task input",
+			startStep:    StepRulesInput,
+			expectedStep: StepTaskInput,
+			setupFunc: func(m *WizardModel) {
+				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+			wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+			wizard.step = tt.startStep
+			if tt.setupFunc != nil {
+				tt.setupFunc(wizard)
+			}
+
+			msg := tea.KeyMsg{Type: tea.KeyCtrlP}
+			model, _ := wizard.Update(msg)
+			result := model.(*WizardModel)
+
+			if result.step != tt.expectedStep {
+				t.Errorf("expected step %d, got %d", tt.expectedStep, result.step)
+			}
+		})
+	}
+}
+
+func TestWizardKeyboardNavigation_CtrlP_FirstStep_NoOp(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepFileSelection
+
+	msg := tea.KeyMsg{Type: tea.KeyCtrlP}
+	model, _ := wizard.Update(msg)
+	result := model.(*WizardModel)
+
+	if result.step != StepFileSelection {
+		t.Errorf("expected to stay at step %d, got %d", StepFileSelection, result.step)
+	}
+}
+
+func TestWizardKeyboardNavigation_FunctionKeys_StillWork(t *testing.T) {
+	t.Parallel()
+
+	t.Run("F8 advances step", func(t *testing.T) {
+		t.Parallel()
+		wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+		wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+		wizard.step = StepFileSelection
+		wizard.selectedFiles = map[string]bool{"file.go": true}
+
+		msg := tea.KeyMsg{Type: tea.KeyF8}
+		model, _ := wizard.Update(msg)
+		result := model.(*WizardModel)
+
+		if result.step != StepTemplateSelection {
+			t.Errorf("expected step %d, got %d", StepTemplateSelection, result.step)
+		}
+	})
+
+	t.Run("F7 goes back", func(t *testing.T) {
+		t.Parallel()
+		wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+		wizard.step = StepTemplateSelection
+
+		msg := tea.KeyMsg{Type: tea.KeyF7}
+		model, _ := wizard.Update(msg)
+		result := model.(*WizardModel)
+
+		if result.step != StepFileSelection {
+			t.Errorf("expected step %d, got %d", StepFileSelection, result.step)
+		}
+	})
+}
+
+func TestWizardHelp_ShowsNewShortcuts(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.showHelp = true
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Ctrl+N") {
+		t.Error("expected help to contain 'Ctrl+N'")
+	}
+	if !strings.Contains(view, "Ctrl+P") {
+		t.Error("expected help to contain 'Ctrl+P'")
 	}
 }
 
@@ -1119,12 +1041,12 @@ func TestWizardHandleRescanRequest(t *testing.T) {
 	initialTree := wizard.fileTree
 
 	// Simulate conditions that would trigger rescan
-	wizard.scanState = nil
+	wizard.scanCoordinator = nil
 	model, cmd := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 100}})
 	wizard = model.(*WizardModel)
 
-	if wizard.scanState == nil {
-		t.Error("expected scan state to be initialized on rescan")
+	if wizard.scanCoordinator == nil {
+		t.Error("expected scan coordinator to be initialized on rescan")
 	}
 	if cmd == nil {
 		t.Error("expected scan command to be scheduled")
@@ -1623,220 +1545,6 @@ func TestValidateContentSize_BoundaryConditions(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestWizardIterativeScanCmd_NilScanState(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.scanState = nil
-
-	cmd := wizard.iterativeScanCmd()
-	msg := cmd()
-
-	scanErr, ok := msg.(ScanErrorMsg)
-	if !ok {
-		t.Fatalf("expected ScanErrorMsg, got %T", msg)
-	}
-	if scanErr.Err == nil {
-		t.Error("expected error for nil scanState")
-	}
-}
-
-func TestWizardIterativeScanCmd_StartsScan(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
-
-	progressCh := make(chan scanner.Progress, 100)
-	done := make(chan bool)
-	scanConfig := &scanner.ScanConfig{
-		MaxFiles:    10,
-		MaxFileSize: 1024 * 1024,
-	}
-
-	scanr := scanner.NewFileSystemScanner()
-	wizard.scanState = &scanState{
-		scanner:    scanr,
-		rootPath:   tempDir,
-		config:     scanConfig,
-		progressCh: progressCh,
-		done:       done,
-		started:    false,
-	}
-
-	cmd := wizard.iterativeScanCmd()
-	msg := cmd()
-
-	_, isPollMsg := msg.(pollScanMsg)
-	if !isPollMsg {
-		t.Errorf("expected pollScanMsg, got %T", msg)
-	}
-
-	if !wizard.scanState.started {
-		t.Error("expected scanState.started to be true")
-	}
-
-	// Clean up: drain any remaining progress and wait for goroutine
-	go func() {
-		for range progressCh {
-		}
-	}()
-	<-done
-}
-
-func TestWizardIterativeScanCmd_AlreadyStarted(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
-
-	progressCh := make(chan scanner.Progress, 100)
-	done := make(chan bool)
-	scanConfig := &scanner.ScanConfig{
-		MaxFiles:    10,
-		MaxFileSize: 1024 * 1024,
-	}
-
-	scanr := scanner.NewFileSystemScanner()
-	wizard.scanState = &scanState{
-		scanner:    scanr,
-		rootPath:   tempDir,
-		config:     scanConfig,
-		progressCh: progressCh,
-		done:       done,
-		started:    true, // Already started
-	}
-
-	cmd := wizard.iterativeScanCmd()
-	msg := cmd()
-
-	_, isPollMsg := msg.(pollScanMsg)
-	if !isPollMsg {
-		t.Errorf("expected pollScanMsg, got %T", msg)
-	}
-
-	// Since started was already true, no new goroutine was created
-	close(done)
-	close(progressCh)
-}
-
-func TestWizardIterativeGenerateCmd_NilGenerateState(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.generateState = nil
-
-	cmd := wizard.iterativeGenerateCmd()
-	msg := cmd()
-
-	genErr, ok := msg.(screens.GenerationErrorMsg)
-	if !ok {
-		t.Fatalf("expected GenerationErrorMsg, got %T", msg)
-	}
-	if genErr.Err == nil {
-		t.Error("expected error for nil generateState")
-	}
-}
-
-func TestWizardIterativeGenerateCmd_StartsGeneration(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
-
-	progressCh := make(chan context.GenProgress, 100)
-	done := make(chan bool)
-	fileTree := &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
-	selections := map[string]bool{tempDir: true}
-	genConfig := &context.GenerateConfig{
-		MaxFileSize:  1024 * 1024,
-		MaxTotalSize: 10 * 1024 * 1024,
-		MaxFiles:     100,
-		TemplateVars: map[string]string{
-			"TASK":         "test task",
-			"RULES":        "",
-			"CURRENT_DATE": time.Now().Format("2006-01-02"),
-		},
-	}
-
-	generator := context.NewDefaultContextGenerator()
-	wizard.generateState = &generateState{
-		generator:  generator,
-		fileTree:   fileTree,
-		selections: selections,
-		config:     genConfig,
-		rootPath:   tempDir,
-		progressCh: progressCh,
-		done:       done,
-		started:    false,
-	}
-
-	cmd := wizard.iterativeGenerateCmd()
-	msg := cmd()
-
-	_, isPollMsg := msg.(pollGenerateMsg)
-	if !isPollMsg {
-		t.Errorf("expected pollGenerateMsg, got %T", msg)
-	}
-
-	if !wizard.generateState.started {
-		t.Error("expected generateState.started to be true")
-	}
-
-	// Clean up: drain any remaining progress and wait for goroutine
-	go func() {
-		for range progressCh {
-		}
-	}()
-	<-done
-}
-
-func TestWizardIterativeGenerateCmd_AlreadyStarted(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
-
-	progressCh := make(chan context.GenProgress, 100)
-	done := make(chan bool)
-	fileTree := &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
-	selections := map[string]bool{tempDir: true}
-	genConfig := &context.GenerateConfig{
-		MaxFileSize:  1024 * 1024,
-		MaxTotalSize: 10 * 1024 * 1024,
-		MaxFiles:     100,
-		TemplateVars: map[string]string{
-			"TASK":         "test task",
-			"RULES":        "",
-			"CURRENT_DATE": time.Now().Format("2006-01-02"),
-		},
-	}
-
-	generator := context.NewDefaultContextGenerator()
-	wizard.generateState = &generateState{
-		generator:  generator,
-		fileTree:   fileTree,
-		selections: selections,
-		config:     genConfig,
-		rootPath:   tempDir,
-		progressCh: progressCh,
-		done:       done,
-		started:    true, // Already started
-	}
-
-	cmd := wizard.iterativeGenerateCmd()
-	msg := cmd()
-
-	_, isPollMsg := msg.(pollGenerateMsg)
-	if !isPollMsg {
-		t.Errorf("expected pollGenerateMsg, got %T", msg)
-	}
-
-	// Since started was already true, no new goroutine was created
-	close(done)
-	close(progressCh)
 }
 
 func TestWizardHandleStepInput_FileSelection(t *testing.T) {
@@ -2640,5 +2348,203 @@ func TestWizardWithNilService_CreatesDefault(t *testing.T) {
 
 	if wizard.contextService == nil {
 		t.Error("expected wizard to create default service when nil passed")
+	}
+}
+
+func TestWizardView_SmallScreen_WidthTooSmall(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 30
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Terminal too small") {
+		t.Error("expected small screen warning")
+	}
+	if !strings.Contains(view, "30x24") {
+		t.Error("expected current dimensions in warning")
+	}
+	if !strings.Contains(view, "40x10") {
+		t.Error("expected minimum dimensions in warning")
+	}
+}
+
+func TestWizardView_SmallScreen_HeightTooSmall(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 80
+	wizard.height = 5
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Terminal too small") {
+		t.Error("expected small screen warning")
+	}
+	if !strings.Contains(view, "80x5") {
+		t.Error("expected current dimensions in warning")
+	}
+}
+
+func TestWizardView_SmallScreen_BothTooSmall(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 20
+	wizard.height = 5
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Terminal too small") {
+		t.Error("expected small screen warning")
+	}
+	if !strings.Contains(view, "20x5") {
+		t.Error("expected current dimensions in warning")
+	}
+}
+
+func TestWizardView_SmallScreen_NormalSizeShowsContent(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 80
+	wizard.height = 24
+
+	view := wizard.View()
+
+	if strings.Contains(view, "Terminal too small") {
+		t.Error("should not show small screen warning for normal size")
+	}
+}
+
+func TestWizardView_SmallScreen_BoundaryConditions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		width         int
+		height        int
+		expectWarning bool
+	}{
+		{"exactly minimum - no warning", 40, 10, false},
+		{"one less than min width", 39, 10, true},
+		{"one less than min height", 40, 9, true},
+		{"well above minimum", 120, 40, false},
+		{"exactly one above min width", 41, 10, false},
+		{"exactly one above min height", 40, 11, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+			wizard.width = tt.width
+			wizard.height = tt.height
+
+			view := wizard.View()
+
+			if tt.expectWarning {
+				if !strings.Contains(view, "Terminal too small") {
+					t.Errorf("expected warning for %dx%d", tt.width, tt.height)
+				}
+			} else {
+				if strings.Contains(view, "Terminal too small") {
+					t.Errorf("unexpected warning for %dx%d", tt.width, tt.height)
+				}
+			}
+		})
+	}
+}
+
+func TestWizardView_SmallScreen_ZeroDimensions_NoWarning(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 0
+	wizard.height = 0
+
+	view := wizard.View()
+
+	if strings.Contains(view, "Terminal too small") {
+		t.Error("should not show small screen warning for 0x0 dimensions")
+	}
+}
+
+func TestWizard_renderSmallScreenWarning(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 30
+	wizard.height = 8
+
+	view := wizard.renderSmallScreenWarning()
+
+	if !strings.Contains(view, "Terminal too small") {
+		t.Error("expected warning text")
+	}
+	if !strings.Contains(view, "30x8") {
+		t.Error("expected current dimensions")
+	}
+	if !strings.Contains(view, "40x10") {
+		t.Error("expected minimum dimensions")
+	}
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestWizardView_SmallScreen_PrecedenceOverHelp(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+	wizard.width = 30
+	wizard.height = 8
+	wizard.showHelp = true
+
+	view := wizard.View()
+
+	if !strings.Contains(view, "Terminal too small") {
+		t.Error("small screen warning should show")
+	}
+	if strings.Contains(view, "Global Shortcuts") {
+		t.Error("help content should not show when terminal too small")
+	}
+}
+
+func TestWizard_isTerminalTooSmall(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		width    int
+		height   int
+		expected bool
+	}{
+		{"zero dimensions", 0, 0, false},
+		{"width zero only", 0, 24, false},
+		{"height zero only", 80, 0, false},
+		{"both below minimum", 20, 5, true},
+		{"width below minimum", 30, 24, true},
+		{"height below minimum", 80, 5, true},
+		{"exactly at minimum", 40, 10, false},
+		{"above minimum", 80, 24, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
+			wizard.width = tt.width
+			wizard.height = tt.height
+
+			result := wizard.isTerminalTooSmall()
+
+			if result != tt.expected {
+				t.Errorf("isTerminalTooSmall() = %v, want %v for %dx%d",
+					result, tt.expected, tt.width, tt.height)
+			}
+		})
 	}
 }

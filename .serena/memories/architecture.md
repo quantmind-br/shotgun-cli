@@ -171,7 +171,35 @@ Supported providers:
 - `ProviderGemini`: Google Gemini API
 - `ProviderGeminiWeb`: Browser-based Gemini integration
 
-## Template Priority
-1. Custom path (set via `template.custom-path` config)
-2. User directory: `~/.config/shotgun-cli/templates/`
-3. Embedded templates (fallback)
+
+## TUI Architecture
+
+The TUI Wizard uses the "Model of Models" pattern with dedicated coordinators for asynchronous operations.
+
+### Component Structure
+
+```
+internal/ui/
+├── wizard.go             # Main orchestrator (WizardModel)
+├── scan_coordinator.go   # File scanning state machine
+├── generate_coordinator.go # Context generation state machine
+├── screens/              # Individual wizard steps
+│   ├── file_selection.go
+│   ├── template_selection.go
+│   ├── task_input.go
+│   ├── rules_input.go
+│   └── review.go
+└── components/           # Reusable UI components
+    ├── progress.go
+    └── tree.go
+```
+
+### Coordinator Responsibilities
+
+- **ScanCoordinator**: Manages file system scanning, progress updates, and results
+- **GenerateCoordinator**: Manages context generation, progress updates, and content buffering
+
+Both coordinators follow the Bubble Tea command pattern:
+1. `Start()` returns a command to begin async work
+2. `Poll()` returns commands to check status
+3. `Result()` provides access to completed data

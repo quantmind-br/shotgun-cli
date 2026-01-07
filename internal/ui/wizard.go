@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
@@ -27,6 +28,9 @@ const (
 	StepTaskInput         = 3
 	StepRulesInput        = 4
 	StepReview            = 5
+
+	minTerminalWidth  = 40
+	minTerminalHeight = 10
 )
 
 // LLMConfig holds configuration for the LLM provider.
@@ -98,8 +102,8 @@ type WizardModel struct {
 
 	progressComponent *components.ProgressModel
 
-	scanState     *scanState
-	generateState *generateState
+	scanCoordinator     *ScanCoordinator
+	generateCoordinator *GenerateCoordinator
 
 	generatedFilePath string
 	generatedContent  string
@@ -135,19 +139,7 @@ type GenerationProgressMsg struct {
 
 type LLMSendMsg struct{}
 
-// Internal state for iterative commands
-type scanState struct {
-	scanner    *scanner.FileSystemScanner
-	rootPath   string
-	config     *scanner.ScanConfig
-	progressCh chan scanner.Progress
-	done       chan bool
-	started    bool
-	result     *scanner.FileNode // Store scan result to avoid double-scanning
-	scanErr    error             // Store any error from scan
-}
-
-type generateState struct {
+type generateCoordinator struct {
 	generator  context.ContextGenerator
 	fileTree   *scanner.FileNode
 	selections map[string]bool
@@ -184,13 +176,15 @@ func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *Wi
 		svc = app.NewContextService()
 	}
 	return &WizardModel{
-		step:              StepFileSelection,
-		selectedFiles:     make(map[string]bool),
-		rootPath:          rootPath,
-		scanConfig:        scanConfig,
-		wizardConfig:      wizardConfig,
-		contextService:    svc,
-		progressComponent: components.NewProgress(),
+		step:                StepFileSelection,
+		selectedFiles:       make(map[string]bool),
+		rootPath:            rootPath,
+		scanConfig:          scanConfig,
+		wizardConfig:        wizardConfig,
+		contextService:      svc,
+		progressComponent:   components.NewProgress(),
+		scanCoordinator:     NewScanCoordinator(scanner.NewFileSystemScanner()),
+		generateCoordinator: NewGenerateCoordinator(context.NewDefaultContextGenerator()),
 	}
 }
 
@@ -264,9 +258,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case pollScanMsg:
-		cmd = m.pollScan()
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if m.scanCoordinator != nil {
+			cmd = m.scanCoordinator.Poll()
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
 	case pollGenerateMsg:
@@ -292,6 +288,12 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, spinnerCmd)
 			}
 		}
+		if m.step == StepFileSelection && m.fileSelection != nil && m.fileSelection.IsLoading() {
+			spinnerCmd := m.fileSelection.Update(msg)
+			if spinnerCmd != nil {
+				cmds = append(cmds, spinnerCmd)
+			}
+		}
 	}
 
 	if len(cmds) > 0 {
@@ -302,7 +304,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *WizardModel) View() string {
-	// Show help overlay if enabled
+	if m.isTerminalTooSmall() {
+		return m.renderSmallScreenWarning()
+	}
+
 	if m.showHelp {
 		return m.renderHelp()
 	}
@@ -370,10 +375,10 @@ func (m *WizardModel) renderHelp() string {
 	// Global shortcuts
 	content.WriteString(styles.TitleStyle.Render("Global Shortcuts"))
 	content.WriteString("\n")
-	content.WriteString("  F1          Toggle this help screen\n")
-	content.WriteString("  F7          Previous step\n")
-	content.WriteString("  F8          Next step\n")
-	content.WriteString("  Ctrl+Q      Quit application\n")
+	content.WriteString("  F1              Toggle this help screen\n")
+	content.WriteString("  F7 / Ctrl+P     Previous step\n")
+	content.WriteString("  F8 / Ctrl+N     Next step\n")
+	content.WriteString("  Ctrl+Q          Quit application\n")
 	content.WriteString("\n")
 
 	// File selection shortcuts
@@ -462,10 +467,10 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Process navigation shortcuts
 	switch msg.String() {
-	case "f8", "ctrl+pgdn":
+	case "f8", "ctrl+pgdn", "ctrl+n":
 		cmd = m.handleNextStep()
 		cmds = append(cmds, cmd)
-	case "f7":
+	case "f7", "ctrl+p":
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
 	case "f9":
@@ -539,18 +544,18 @@ func (m *WizardModel) handleScanProgress(msg ScanProgressMsg) tea.Cmd {
 		Visible: true,
 	}
 	m.progressComponent.Update(msg.Current, msg.Total, msg.Stage, "")
-	if m.scanState != nil {
-		return m.iterativeScanCmd()
-	}
-
 	return nil
 }
 
 func (m *WizardModel) handleScanComplete(msg ScanCompleteMsg) {
 	m.fileTree = msg.Tree
 	m.progress.Visible = false
-	m.fileSelection = screens.NewFileSelection(msg.Tree, m.selectedFiles)
-	m.fileSelection.SetSize(m.width, m.height)
+	if m.fileSelection != nil {
+		m.fileSelection.SetFileTree(msg.Tree)
+	} else {
+		m.fileSelection = screens.NewFileSelection(msg.Tree, m.selectedFiles)
+		m.fileSelection.SetSize(m.width, m.height)
+	}
 }
 
 func (m *WizardModel) handleScanError(msg ScanErrorMsg) {
@@ -565,19 +570,33 @@ func (m *WizardModel) handleGenerationProgress(msg GenerationProgressMsg) tea.Cm
 		Visible: true,
 	}
 	m.progressComponent.UpdateMessage(msg.Stage, msg.Message)
-	if m.generateState != nil {
-		return m.iterativeGenerateCmd()
-	}
-
 	return nil
 }
 
 func (m *WizardModel) handleGenerationComplete(msg screens.GenerationCompleteMsg) tea.Cmd {
 	m.progress.Visible = false
-	m.generatedFilePath = msg.FilePath
-	m.generatedContent = msg.Content
 
-	return m.clipboardCopyCmd(msg.Content)
+	content := msg.Content
+	filePath := msg.FilePath
+
+	if filePath == "" {
+		if err := m.validateContentSize(content); err != nil {
+			m.handleGenerationError(screens.GenerationErrorMsg{Err: err})
+			return nil
+		}
+
+		var err error
+		filePath, err = m.saveGeneratedContent(content)
+		if err != nil {
+			m.handleGenerationError(screens.GenerationErrorMsg{Err: err})
+			return nil
+		}
+	}
+
+	m.generatedFilePath = filePath
+	m.generatedContent = content
+
+	return m.clipboardCopyCmd(content)
 }
 
 func (m *WizardModel) handleGenerationError(msg screens.GenerationErrorMsg) {
@@ -723,41 +742,29 @@ func (m *WizardModel) handleTemplateMessage(msg tea.Msg) tea.Cmd {
 }
 
 func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
-	m.scanState = &scanState{
-		scanner:    scanner.NewFileSystemScanner(),
-		rootPath:   msg.rootPath,
-		config:     msg.config,
-		progressCh: make(chan scanner.Progress, 100),
-		done:       make(chan bool),
-		started:    false,
+	if m.scanCoordinator == nil {
+		m.scanCoordinator = NewScanCoordinator(scanner.NewFileSystemScanner())
 	}
 
-	return m.iterativeScanCmd()
+	m.fileSelection = screens.NewFileSelection(nil, m.selectedFiles)
+	m.fileSelection.SetSize(m.width, m.height)
+
+	return tea.Batch(m.fileSelection.Init(), m.scanCoordinator.Start(msg.rootPath, msg.config))
 }
 
 func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
-	m.generateState = &generateState{
-		generator:  context.NewDefaultContextGenerator(),
-		fileTree:   msg.fileTree,
-		selections: msg.selectedFiles,
-		config: &context.GenerateConfig{
-			TemplateVars: map[string]string{
-				"TASK":           msg.taskDesc,
-				"RULES":          msg.rules,
-				"FILE_STRUCTURE": "",
-				"CURRENT_DATE":   time.Now().Format("2006-01-02"),
-			},
-			Template:       msg.template.Content,
-			IncludeTree:    m.wizardConfig.Context.IncludeTree,
-			IncludeSummary: m.wizardConfig.Context.IncludeSummary,
-		},
-		rootPath:   msg.rootPath,
-		progressCh: make(chan context.GenProgress, 100),
-		done:       make(chan bool),
-		started:    false,
+	cfg := &GenerateConfig{
+		FileTree:       msg.fileTree,
+		Selections:     msg.selectedFiles,
+		Template:       msg.template,
+		TaskDesc:       msg.taskDesc,
+		Rules:          msg.rules,
+		RootPath:       msg.rootPath,
+		IncludeTree:    m.wizardConfig.Context.IncludeTree,
+		IncludeSummary: m.wizardConfig.Context.IncludeSummary,
 	}
 
-	return m.iterativeGenerateCmd()
+	return m.generateCoordinator.Start(cfg)
 }
 
 func (m *WizardModel) handleRescanRequest() tea.Cmd {
@@ -992,164 +999,17 @@ func parseSize(sizeStr string) (int64, error) {
 
 const pollInterval = 50 * time.Millisecond
 
-func (m *WizardModel) schedulePollScan() tea.Cmd {
-	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
-		return pollScanMsg{}
-	})
-}
-
 func (m *WizardModel) schedulePollGenerate() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
 		return pollGenerateMsg{}
 	})
 }
 
-func (m *WizardModel) iterativeScanCmd() tea.Cmd {
-	return func() tea.Msg {
-		if m.scanState == nil {
-			return ScanErrorMsg{Err: fmt.Errorf("scan state not initialized")}
-		}
-
-		if !m.scanState.started {
-			m.scanState.started = true
-			go func() {
-				defer close(m.scanState.done)
-				tree, err := m.scanState.scanner.ScanWithProgress(
-					m.scanState.rootPath,
-					m.scanState.config,
-					m.scanState.progressCh,
-				)
-				m.scanState.result = tree
-				m.scanState.scanErr = err
-			}()
-		}
-
-		return pollScanMsg{}
-	}
-}
-
-func (m *WizardModel) pollScan() tea.Cmd {
-	if m.scanState == nil {
-		return nil
-	}
-
-	select {
-	case progress, ok := <-m.scanState.progressCh:
-		if !ok {
-			return m.finishScan()
-		}
-		return tea.Batch(
-			func() tea.Msg {
-				return ScanProgressMsg{
-					Current: progress.Current,
-					Total:   progress.Total,
-					Stage:   progress.Stage,
-				}
-			},
-			m.schedulePollScan(),
-		)
-	case <-m.scanState.done:
-		return m.finishScan()
-	default:
-		return m.schedulePollScan()
-	}
-}
-
-func (m *WizardModel) finishScan() tea.Cmd {
-	return func() tea.Msg {
-		if m.scanState.scanErr != nil {
-			return ScanErrorMsg{Err: m.scanState.scanErr}
-		}
-		return ScanCompleteMsg{Tree: m.scanState.result}
-	}
-}
-
-func (m *WizardModel) iterativeGenerateCmd() tea.Cmd {
-	return func() tea.Msg {
-		if m.generateState == nil {
-			return screens.GenerationErrorMsg{Err: fmt.Errorf("generation state not initialized")}
-		}
-
-		if !m.generateState.started {
-			m.generateState.started = true
-			go func() {
-				defer close(m.generateState.done)
-
-				content, err := m.generateState.generator.GenerateWithProgressEx(
-					m.generateState.fileTree,
-					m.generateState.selections,
-					*m.generateState.config,
-					func(p context.GenProgress) {
-						m.generateState.progressCh <- p
-					},
-				)
-				if err != nil {
-					m.generateState.content = ""
-					return
-				}
-
-				m.generateState.content = content
-			}()
-		}
-
-		return pollGenerateMsg{}
-	}
-}
-
 func (m *WizardModel) pollGenerate() tea.Cmd {
-	if m.generateState == nil {
+	if m.generateCoordinator == nil {
 		return nil
 	}
-
-	select {
-	case progress, ok := <-m.generateState.progressCh:
-		if !ok {
-			return m.finishGeneration()
-		}
-		if progress.Stage == "complete" {
-			return m.finishGeneration()
-		}
-		return tea.Batch(
-			func() tea.Msg {
-				return GenerationProgressMsg{
-					Stage:   progress.Stage,
-					Message: progress.Message,
-				}
-			},
-			m.schedulePollGenerate(),
-		)
-	case <-m.generateState.done:
-		return m.finishGeneration()
-	default:
-		return m.schedulePollGenerate()
-	}
-}
-
-func (m *WizardModel) finishGeneration() tea.Cmd {
-	return func() tea.Msg {
-		return m.finalizeGeneration()
-	}
-}
-
-func (m *WizardModel) finalizeGeneration() tea.Msg {
-	content := m.generateState.content
-	if content == "" {
-		return screens.GenerationErrorMsg{Err: fmt.Errorf("no content generated")}
-	}
-
-	if err := m.validateContentSize(content); err != nil {
-		return screens.GenerationErrorMsg{Err: err}
-	}
-
-	filePath, err := m.saveGeneratedContent(content)
-	if err != nil {
-		return screens.GenerationErrorMsg{Err: err}
-	}
-
-	return screens.GenerationCompleteMsg{
-		Content:  content,
-		FilePath: filePath,
-	}
+	return m.generateCoordinator.Poll()
 }
 
 func (m *WizardModel) validateContentSize(content string) error {
@@ -1174,11 +1034,30 @@ func (m *WizardModel) validateContentSize(content string) error {
 func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
 	timestamp := time.Now().Format("20060102-150405")
 	filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-	filePath := filepath.Join(m.generateState.rootPath, filename)
+	filePath := filepath.Join(m.rootPath, filename)
 
 	// #nosec G306 - Generated context files are meant to be world-readable
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 	return filePath, nil
+}
+
+func (m *WizardModel) isTerminalTooSmall() bool {
+	return m.width > 0 && m.height > 0 &&
+		(m.width < minTerminalWidth || m.height < minTerminalHeight)
+}
+
+func (m *WizardModel) renderSmallScreenWarning() string {
+	msg := fmt.Sprintf(
+		"Terminal too small (%dx%d)\n\nPlease resize to at least %dx%d",
+		m.width, m.height,
+		minTerminalWidth, minTerminalHeight,
+	)
+
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		styles.WarningStyle.Render(msg),
+	)
 }

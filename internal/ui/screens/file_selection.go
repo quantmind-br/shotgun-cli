@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
@@ -25,16 +27,24 @@ type FileSelectionModel struct {
 	fileTree   *scanner.FileNode
 	selections map[string]bool
 
-	// Filter mode state
 	filterMode   bool
 	filterBuffer string
+
+	spinner spinner.Model
+	loading bool
 }
 
 func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool) *FileSelectionModel {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(styles.PrimaryColor)
+
 	return &FileSelectionModel{
 		tree:       components.NewFileTree(fileTree, selections),
 		fileTree:   fileTree,
 		selections: selections,
+		spinner:    s,
+		loading:    fileTree == nil,
 	}
 }
 
@@ -46,7 +56,20 @@ func (m *FileSelectionModel) SetSize(width, height int) {
 	}
 }
 
+func (m *FileSelectionModel) Init() tea.Cmd {
+	if m.loading {
+		return m.spinner.Tick
+	}
+	return nil
+}
+
 func (m *FileSelectionModel) Update(msg tea.Msg) tea.Cmd {
+	if m.loading {
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return cmd
+	}
+
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok || m.tree == nil {
 		return nil
@@ -141,18 +164,22 @@ func (m *FileSelectionModel) View() string {
 		stats = styles.RenderTokenStats(0, "0 B", "0")
 	}
 
-	// Add filter status with styling
 	if m.tree != nil && m.tree.GetFilter() != "" {
 		filterLabel := styles.StatsLabelStyle.Render("Filter:")
 		filterValue := styles.StatsValueStyle.Render(m.tree.GetFilter())
-		stats += " │ " + filterLabel + " " + filterValue
+		visibleCount := m.tree.GetVisibleFileCount()
+		totalCount := m.tree.GetTotalFileCount()
+		matchCount := styles.StatsValueStyle.Render(fmt.Sprintf("(%d/%d)", visibleCount, totalCount))
+		stats += " │ " + filterLabel + " " + filterValue + " " + matchCount
 	}
 
 	var treeView string
-	if m.tree != nil {
+	if m.loading {
+		treeView = m.spinner.View() + " Scanning directory..."
+	} else if m.tree != nil {
 		treeView = m.tree.View()
 	} else {
-		treeView = "Loading file tree..."
+		treeView = "No files to display"
 	}
 
 	var footer string
@@ -201,6 +228,19 @@ func (m *FileSelectionModel) View() string {
 	content.WriteString(footer)
 
 	return content.String()
+}
+
+func (m *FileSelectionModel) SetFileTree(tree *scanner.FileNode) {
+	m.fileTree = tree
+	m.tree = components.NewFileTree(tree, m.selections)
+	m.loading = false
+	if m.tree != nil {
+		m.tree.SetSize(m.width, m.height-fileSelectionHeaderFooterHeight)
+	}
+}
+
+func (m *FileSelectionModel) IsLoading() bool {
+	return m.loading
 }
 
 func (m *FileSelectionModel) calculateSelectedSize() int64 {

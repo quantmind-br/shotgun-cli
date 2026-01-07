@@ -786,6 +786,156 @@ func TestSelectAllVisible(t *testing.T) {
 	})
 }
 
+func TestGetVisibleFileCount(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns count of visible files only", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("a.go", "/project/a.go", false)
+		file2 := createTestNode("b.go", "/project/b.go", false)
+		dir := createTestNode("src", "/project/src", true)
+		root := createTestNode("project", "/project", true, file1, file2, dir)
+
+		model := NewFileTree(root, nil)
+
+		count := model.GetVisibleFileCount()
+		assert.Equal(t, 2, count)
+	})
+
+	t.Run("excludes directories from count", func(t *testing.T) {
+		t.Parallel()
+
+		file := createTestNode("a.go", "/project/src/a.go", false)
+		dir := createTestNode("src", "/project/src", true, file)
+		root := createTestNode("project", "/project", true, dir)
+
+		model := NewFileTree(root, nil)
+		model.expanded[dir.Path] = true
+		model.rebuildVisibleItems()
+
+		count := model.GetVisibleFileCount()
+		assert.Equal(t, 1, count)
+	})
+
+	t.Run("respects filter", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file1.RelPath = "main.go"
+		file2 := createTestNode("readme.md", "/project/readme.md", false)
+		file2.RelPath = "readme.md"
+		root := createTestNode("project", "/project", true, file1, file2)
+		root.RelPath = "."
+
+		model := NewFileTree(root, nil)
+		model.SetFilter(".go")
+
+		count := model.GetVisibleFileCount()
+		assert.Equal(t, 1, count)
+	})
+
+	t.Run("returns zero when no files visible", func(t *testing.T) {
+		t.Parallel()
+
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+		model.SetFilter("nonexistent")
+
+		count := model.GetVisibleFileCount()
+		assert.Equal(t, 0, count)
+	})
+}
+
+func TestGetTotalFileCount(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns total file count ignoring filter", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file1.RelPath = "main.go"
+		file2 := createTestNode("readme.md", "/project/readme.md", false)
+		file2.RelPath = "readme.md"
+		root := createTestNode("project", "/project", true, file1, file2)
+		root.RelPath = "."
+
+		model := NewFileTree(root, nil)
+		model.SetFilter(".go")
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 2, total)
+	})
+
+	t.Run("counts nested files", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("a.go", "/project/src/a.go", false)
+		file2 := createTestNode("b.go", "/project/src/b.go", false)
+		dir := createTestNode("src", "/project/src", true, file1, file2)
+		file3 := createTestNode("main.go", "/project/main.go", false)
+		root := createTestNode("project", "/project", true, dir, file3)
+
+		model := NewFileTree(root, nil)
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 3, total)
+	})
+
+	t.Run("respects showIgnored setting", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file2 := createTestNode("ignored.log", "/project/ignored.log", false)
+		file2.IsGitignored = true
+		root := createTestNode("project", "/project", true, file1, file2)
+
+		model := NewFileTree(root, nil)
+		model.showIgnored = false
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 1, total)
+
+		model.showIgnored = true
+		total = model.GetTotalFileCount()
+		assert.Equal(t, 2, total)
+	})
+
+	t.Run("returns zero for nil tree", func(t *testing.T) {
+		t.Parallel()
+
+		model := NewFileTree(nil, nil)
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 0, total)
+	})
+
+	t.Run("returns zero for empty directory", func(t *testing.T) {
+		t.Parallel()
+
+		root := createTestNode("project", "/project", true)
+		model := NewFileTree(root, nil)
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 0, total)
+	})
+
+	t.Run("excludes custom ignored files when showIgnored false", func(t *testing.T) {
+		t.Parallel()
+
+		file1 := createTestNode("main.go", "/project/main.go", false)
+		file2 := createTestNode("node_modules", "/project/node_modules", false)
+		file2.IsCustomIgnored = true
+		root := createTestNode("project", "/project", true, file1, file2)
+
+		model := NewFileTree(root, nil)
+		model.showIgnored = false
+
+		total := model.GetTotalFileCount()
+		assert.Equal(t, 1, total)
+	})
+}
+
 func TestDeselectAllVisible(t *testing.T) {
 	t.Run("deselects all visible files", func(t *testing.T) {
 		file1 := createTestNode("a.go", "/project/a.go", false)

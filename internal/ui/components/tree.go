@@ -561,6 +561,47 @@ func (m *FileTreeModel) selectionStateFor(path string) styles.SelectionState {
 	return styles.SelectionUnselected
 }
 
+// GetVisibleFileCount returns the number of files currently visible (after filtering).
+// Only counts files, not directories.
+func (m *FileTreeModel) GetVisibleFileCount() int {
+	count := 0
+	for _, item := range m.visibleItems {
+		if !item.node.IsDir {
+			count++
+		}
+	}
+
+	return count
+}
+
+// GetTotalFileCount returns the total number of files in the tree (ignoring filter).
+// Only counts files that would be visible if there was no filter (respects showIgnored setting).
+func (m *FileTreeModel) GetTotalFileCount() int {
+	if m.tree == nil {
+		return 0
+	}
+
+	return m.countFilesInNode(m.tree)
+}
+
+// countFilesInNode recursively counts files in a node, respecting ignore settings.
+func (m *FileTreeModel) countFilesInNode(node *scanner.FileNode) int {
+	if !m.showIgnored && (node.IsGitignored || node.IsCustomIgnored) {
+		return 0
+	}
+
+	if !node.IsDir {
+		return 1
+	}
+
+	count := 0
+	for _, child := range node.Children {
+		count += m.countFilesInNode(child)
+	}
+
+	return count
+}
+
 func formatFileSize(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {

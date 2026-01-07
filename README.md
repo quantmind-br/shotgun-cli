@@ -36,6 +36,7 @@ The primary purpose of Shotgun CLI is to transform complex codebases into struct
 - [LLM Provider Configuration](#llm-provider-configuration)
 - [Config Commands](#config-commands)
 - [CMD Helper Functions](#cmd-helper-functions)
+- [TUI Wizard Usage](#tui-wizard-usage)
 - [TUI Wizard Helper Functions](#tui-wizard-helper-functions)
 - [TUI Wizard State Transitions](#tui-wizard-state-transitions)
 - [C4 Model Architecture](#c4-model-architecture)
@@ -95,9 +96,14 @@ graph TD
     
     D → F
     
+    J → SC[internal/ui/scan_coordinator]
+    J → GC[internal/ui/generate_coordinator]
     J → O
     J → L[internal/ui/screens]
     J → M[internal/ui/components]
+    
+    SC → D
+    GC → C
     
     L → M
     L → N[internal/ui/styles]
@@ -684,6 +690,91 @@ All tests use stdout/stderr capture to verify output format.
 - **LLM Types**: `internal/core/llm/`
 - **Context Commands**: "Context Commands" section
 
+## TUI Wizard Usage
+
+The TUI Wizard provides an interactive 5-step workflow for generating LLM-optimized codebase contexts. This section covers keyboard shortcuts, terminal requirements, and usage tips.
+
+### Terminal Requirements
+
+**Minimum terminal size: 40 columns x 10 rows**
+
+If your terminal window is too small, the wizard will display a warning overlay asking you to resize. The warning shows your current dimensions and the minimum required size.
+
+```
+Terminal too small
+
+Current:  30x8
+Required: 40x10
+
+Please resize your terminal
+```
+
+### Keyboard Shortcuts
+
+#### Global Navigation
+
+| Key | Action |
+|-----|--------|
+| F1 | Toggle help screen |
+| F7 / Ctrl+P | Previous step |
+| F8 / Ctrl+N | Next step |
+| Ctrl+Q | Quit application |
+
+#### File Selection (Step 1)
+
+| Key | Action |
+|-----|--------|
+| ↑/↓ or k/j | Navigate up/down |
+| ←/→ or h/l | Collapse/Expand directory |
+| Space | Toggle selection (file or directory) |
+| a | Select all visible files |
+| A | Deselect all visible files |
+| i | Toggle showing ignored files |
+| / | Enter filter mode (fuzzy search) |
+| Ctrl+C | Clear filter |
+| F5 | Rescan directory |
+
+**Filter Mode**: When a filter is active, the status bar displays the match count in the format `X/Y files` (e.g., "12/45 files"), showing how many files match the filter out of the total available files.
+
+#### Template Selection (Step 2)
+
+| Key | Action |
+|-----|--------|
+| ↑/↓ or k/j | Navigate templates |
+| Enter | Select template |
+| v | View full template (opens modal) |
+
+**Template Preview Modal**:
+
+| Key | Action |
+|-----|--------|
+| j/k | Scroll up/down |
+| PgUp/PgDown | Page scroll |
+| g/G | Jump to top/bottom |
+| Esc/q | Close modal |
+
+#### Text Input (Steps 3-4)
+
+| Key | Action |
+|-----|--------|
+| Type | Enter text |
+| Enter | New line |
+| Backspace | Delete character |
+
+#### Review (Step 5)
+
+| Key | Action |
+|-----|--------|
+| F8 | Generate context |
+| c | Copy to clipboard |
+| F9 | Send to LLM (if configured) |
+
+### Visual Feedback
+
+- **Loading Spinner**: During directory scanning, an animated spinner is displayed with "Scanning directory..." message
+- **Progress Indicators**: Progress bars show scan and generation progress with current/total counts
+- **Filter Match Count**: When filtering files, the stats bar shows "X/Y files" indicating matches vs total
+
 ## TUI Wizard Helper Functions
 
 The TUI Wizard (`internal/ui/wizard.go`) implements a 5-step interactive workflow using Bubble Tea. This section documents the key helper functions that power the wizard's internal operations.
@@ -698,121 +789,38 @@ The wizard follows the MVU (Model-View-Update) pattern from Bubble Tea, with hel
 - **Message Handling**: Processing Bubble Tea messages
 - **Validation**: Ensuring data integrity before state transitions
 
-### Key Helper Functions
+### TUI Coordinator Pattern
 
-#### Scan Lifecycle Functions
+The TUI Wizard uses the "Model of Models" pattern with dedicated coordinators for asynchronous operations. This separates the complex state management of scanning and generation from the main UI logic.
 
-##### `startScan(msg startScanMsg) tea.Cmd`
+#### ScanCoordinator
 
-**Purpose**: Initiates the file system scanning process by initializing the scan state.
+Manages the file system scanning state machine in `internal/ui/scan_coordinator.go`.
 
-**Signature**: `func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd`
+- **Start**: Initiates async scan with `Start(rootPath, config)`
+- **Poll**: Checks for progress updates via `Poll()`
+- **Result**: Returns `(*scanner.FileNode, error)` via `Result()`
+- **State**: Tracks `started`, `done`, and `progress` channels
 
-**Behavior**:
-- Creates a new `scanState` with a file system scanner
-- Configures the scanner with the provided root path and configuration
-- Returns an iterative scan command for gradual progress updates
+#### GenerateCoordinator
 
-**Error Handling**: Errors during scanning are captured in `scanState.scanErr` and returned via `ScanErrorMsg`.
+Manages the context generation state machine in `internal/ui/generate_coordinator.go`.
 
-**Example**:
-```go
-// Start scanning from command
-model, cmd := wizard.Update(startScanMsg{
-    rootPath: "/workspace",
-    config:   &scanner.ScanConfig{MaxFiles: 1000},
-})
-```
+- **Start**: Initiates async generation with `Start(config)`
+- **Poll**: Checks for progress updates via `Poll()`
+- **Result**: Returns `(string, error)` via `Result()`
+- **State**: Tracks generation progress and content buffering
 
-**Related Tests**: `TestWizardHandlesScanLifecycle`, `TestWizardFinishScan`
+#### Message Flow
 
-##### `finishScan() tea.Cmd`
+Both coordinators follow the Bubble Tea command pattern:
 
-**Purpose**: Completes the scan process and returns the appropriate result message.
+1. **Start**: `wizard.Update` calls `coordinator.Start()` → returns `tea.Cmd`
+2. **Poll**: `coordinator.Poll()` checks channels and returns `Batch(Msg, NextPoll)`
+3. **Progress**: UI receives progress messages (`ScanProgressMsg`, `GenerationProgressMsg`)
+4. **Completion**: Coordinator signals completion, UI retrieves result via `Result()`
 
-**Signature**: `func (m *WizardModel) finishScan() tea.Cmd`
-
-**Behavior**:
-- Returns `ScanErrorMsg` if `scanState.scanErr` is set
-- Returns `ScanCompleteMsg` with the result tree if successful
-
-**Error Handling**: Any scan error is propagated to the UI for display.
-
-**Example**:
-```go
-cmd := wizard.finishScan()
-msg := cmd() // Returns ScanCompleteMsg or ScanErrorMsg
-```
-
-**Related Tests**: `TestWizardFinishScan_SuccessfulCompletion`, `TestWizardFinishScan_WithError`, `TestWizardFinishScan_NilScanState`
-
-#### Generation Lifecycle Functions
-
-##### `startGeneration(msg startGenerationMsg) tea.Cmd`
-
-**Purpose**: Initiates the context generation process.
-
-**Signature**: `func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd`
-
-**Behavior**:
-- Creates a new `generateState` with the context generator
-- Stores file tree, selections, template, and task description
-- Returns an iterative generation command for progress updates
-
-**Error Handling**: Generation errors are captured and returned via `GenerationErrorMsg`.
-
-**Related Tests**: `TestWizardGenerationFlowUpdatesState`, `TestWizardGenerateContextCommand`
-
-##### `finishGeneration() tea.Cmd`
-
-**Purpose**: Completes the generation process and saves the output.
-
-**Signature**: `func (m *WizardModel) finishGeneration() tea.Cmd`
-
-**Behavior**:
-- Validates generated content is not empty
-- Validates content size against configured max size
-- Saves content to a file in the root directory
-- Returns `GenerationCompleteMsg` with file path
-
-**Error Handling**:
-- Empty content returns error "no content generated"
-- Size validation returns error with size details
-- File write errors are propagated
-
-**Example**:
-```go
-cmd := wizard.finishGeneration()
-msg := cmd() // Returns GenerationCompleteMsg or GenerationErrorMsg
-```
-
-**Related Tests**: `TestWizardFinishGeneration_SuccessfulGeneration`, `TestWizardFinishGeneration_EmptyContent`, `TestWizardFinishGeneration_ContentExceedsMaxSize`
-
-##### `validateContentSize(content string) error`
-
-**Purpose**: Validates generated content against configured size limits.
-
-**Signature**: `func (m *WizardModel) validateContentSize(content string) error`
-
-**Behavior**:
-- Checks if `Context.MaxSize` is configured (returns nil if empty)
-- Parses content and max size using `ParseSize`
-- Returns error if content exceeds max size
-
-**Error Handling**:
-- Returns nil if no max size is configured (validation disabled)
-- Returns error if max size configuration is invalid
-- Returns error with size details if content exceeds limit
-
-**Example**:
-```go
-err := wizard.validateContentSize(largeContent)
-// Error: "content size (2MB) exceeds maximum allowed size (1MB)"
-```
-
-**Related Tests**: `TestValidateContentSize` (10 scenarios), `TestValidateContentSize_InvalidMaxSize`, `TestValidateContentSize_BoundaryConditions`
-
-#### Message Handler Functions
+### Message Handler Functions
 
 ##### `handleTemplateMessage(msg tea.Msg) tea.Cmd`
 

@@ -183,3 +183,42 @@ provider, err := app.DefaultProviderRegistry.Create(llm.ProviderOpenAI, cfg)
 - `diff.IntelligentSplit` - Split large diffs preserving file boundaries
 - `scanner.CollectSelections` - Handle file tree selections
 - `config.ValidateValue(key, value)` - Validate config before saving
+
+## TUI Wizard
+
+### Keyboard Navigation
+- Standard shell shortcuts supported: Ctrl+N (next), Ctrl+P (previous)
+- Function keys still work: F7 (back), F8 (next)
+- Help screen: F1
+
+### File Selection Screen
+- Filter mode (`/`) shows match count in stats bar as "X/Y files"
+- Animated spinner during directory scan
+- Shows progress with file count during scanning
+
+### Terminal Size Handling
+- Minimum size: 40x10 (columns x rows)
+- Warning overlay displayed for small terminals
+- Check `minTerminalWidth` and `minTerminalHeight` constants in `internal/ui/wizard.go`
+
+### Testing TUI Changes
+```bash
+# Run TUI tests
+go test -v -race ./internal/ui/...
+
+# Run specific screen tests
+go test -v -run TestFileSelection ./internal/ui/screens/...
+go test -v -run TestWizard ./internal/ui/...
+```
+
+### TUI Coordinators
+The wizard uses dedicated coordinators for background operations:
+
+- **ScanCoordinator**: Manages file system scanning state (`internal/ui/scan_coordinator.go`)
+- **GenerateCoordinator**: Manages context generation state (`internal/ui/generate_coordinator.go`)
+
+**Testing Coordinators:**
+```bash
+go test -v -run TestScanCoordinator ./internal/ui/
+go test -v -run TestGenerateCoordinator ./internal/ui/
+```
