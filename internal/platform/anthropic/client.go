@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
-	platformhttp "github.com/quantmind-br/shotgun-cli/internal/platform/http"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/http"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/llm"
 )
 
 const (
