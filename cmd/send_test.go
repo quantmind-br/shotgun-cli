@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -307,4 +308,87 @@ func TestRunContextSend_StdinHandling(t *testing.T) {
 		assert.Error(t, err)
 		// Should fail due to no gemini or stdin issues
 	})
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration string
+		want     string
+	}{
+		{
+			name:     "zero duration",
+			duration: "0ms",
+			want:     "0ms",
+		},
+		{
+			name:     "milliseconds only - less than 1 second",
+			duration: "500ms",
+			want:     "500ms",
+		},
+		{
+			name:     "1 millisecond",
+			duration: "1ms",
+			want:     "1ms",
+		},
+		{
+			name:     "999 milliseconds - still less than 1 second",
+			duration: "999ms",
+			want:     "999ms",
+		},
+		{
+			name:     "exactly 1 second",
+			duration: "1s",
+			want:     "1.0s",
+		},
+		{
+			name:     "1.5 seconds",
+			duration: "1500ms",
+			want:     "1.5s",
+		},
+		{
+			name:     "2 seconds",
+			duration: "2s",
+			want:     "2.0s",
+		},
+		{
+			name:     "10 seconds",
+			duration: "10s",
+			want:     "10.0s",
+		},
+		{
+			name:     "1 minute",
+			duration: "1m",
+			want:     "60.0s",
+		},
+		{
+			name:     "1 minute 5 seconds",
+			duration: "1m5s",
+			want:     "65.0s",
+		},
+		{
+			name:     "5.5 seconds",
+			duration: "5500ms",
+			want:     "5.5s",
+		},
+		{
+			name:     "100 milliseconds",
+			duration: "100ms",
+			want:     "100ms",
+		},
+		{
+			name:     "large duration - 5 minutes",
+			duration: "5m",
+			want:     "300.0s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d, err := time.ParseDuration(tt.duration)
+			require.NoError(t, err, "failed to parse duration: %s", tt.duration)
+			got := formatDuration(d)
+			assert.Equal(t, tt.want, got, "formatDuration(%s) = %s, want %s", tt.duration, got, tt.want)
+		})
+	}
 }

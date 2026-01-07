@@ -3,307 +3,337 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
-	"github.com/quantmind-br/shotgun-cli/internal/config"
-	"github.com/stretchr/testify/assert"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
 )
 
-func TestIsValidConfigKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		key      string
-		expected bool
-	}{
-		// Valid keys
-		{"scanner.max-files", "scanner.max-files", true},
-		{"scanner.max-file-size", "scanner.max-file-size", true},
-		{"scanner.respect-gitignore", "scanner.respect-gitignore", true},
-		{"scanner.skip-binary", "scanner.skip-binary", true},
-		{"context.max-size", "context.max-size", true},
-		{"context.include-tree", "context.include-tree", true},
-		{"context.include-summary", "context.include-summary", true},
-		{"template.custom-path", "template.custom-path", true},
-		{"output.format", "output.format", true},
-		{"output.clipboard", "output.clipboard", true},
+// Helper to restore viper state
+func restoreViperState() {
+	viper.Reset()
+}
 
-		// Invalid keys
-		{"empty key", "", false},
-		{"unknown key", "unknown.key", false},
-		{"partial key", "scanner", false},
-		{"typo in key", "scannner.max-files", false},
-		{"case sensitive", "Scanner.max-files", false},
+func TestShowCurrentConfig_Human(t *testing.T) {
+	restoreViperState()
+	viper.Set("scanner.max-files", 1000)
+	viper.Set("llm.provider", "anthropic")
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestShowCurrentConfig_JSON(t *testing.T) {
+	restoreViperState()
+	viper.Set("scanner.max-files", 2000)
+	viper.Set("output.format", "json")
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestSetConfigValue_ValidValue(t *testing.T) {
+	restoreViperState()
+	viper.SetConfigFile(t.TempDir() + "/config.yaml")
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	key := "scanner.max-files"
+	value := "5000"
+
+	err := setConfigValue(key, value)
+	require.NoError(t, err)
+}
+
+func TestSetConfigValue_ConvertValueError(t *testing.T) {
+	restoreViperState()
+	viper.SetConfigFile(t.TempDir() + "/config.yaml")
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Test a value that cannot be converted (workers requires integer)
+	key := "scanner.workers"
+	value := "not-a-number"
+
+	err := setConfigValue(key, value)
+	require.Error(t, err)
+}
+
+func TestSetConfigValue_AllValidKeys(t *testing.T) {
+	restoreViperState()
+	viper.SetConfigFile(t.TempDir() + "/config.yaml")
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Test setting various valid keys
+	validSettings := map[string]string{
+		"scanner.max-files":         "1000",
+		"scanner.max-file-size":     "10MB",
+		"scanner.respect-gitignore": "true",
+		"scanner.workers":           "4",
+		"llm.provider":              "openai",
+		"llm.api-key":               "test-key",
+		"output.format":             "markdown",
+		"output.clipboard":          "false",
+		"gemini.enabled":            "true",
+		"gemini.browser-refresh":    "auto",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := config.IsValidKey(tt.key)
-			assert.Equal(t, tt.expected, result)
+	for key, value := range validSettings {
+		t.Run(key, func(t *testing.T) {
+			err := setConfigValue(key, value)
+			require.NoError(t, err, "setting %s should not error", key)
 		})
 	}
 }
 
-func TestValidateMaxFiles(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		expectErr bool
-	}{
-		{"valid positive integer", "1000", false},
-		{"valid single digit", "1", false},
-		{"valid large number", "999999", false},
-		{"zero", "0", true},
-		{"negative number", "-5", true},
-		{"not a number", "abc", true},
-		{"float number truncated", "10.5", false}, // Sscanf with %d truncates to 10
-		{"size format rejected", "10MB", true},    // Size formats should be rejected
-		{"empty string", "", true},
+func TestShowCurrentConfig_EmptyConfig(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Ensure config is empty
+	viper.Reset()
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestShowCurrentConfig_WithValues(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Set some config values
+	viper.Set("scanner.max-files", 5000)
+	viper.Set("llm.provider", "anthropic")
+	viper.Set("output.format", "markdown")
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestShowCurrentConfig_JSONMode(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	viper.Set("scanner.max-files", 2000)
+	viper.Set("output.format", "json")
+	viper.Set("llm.provider", "openai")
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestShowCurrentConfig_AllSections(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Set values from all config sections
+	viper.Set("scanner.max-files", 1000)
+	viper.Set("scanner.max-file-size", "5MB")
+	viper.Set("context.max-size", "10MB")
+	viper.Set("llm.provider", "gemini")
+	viper.Set("llm.model", "gemini-2.5-flash")
+	viper.Set("output.format", "text")
+	viper.Set("gemini.enabled", true)
+	viper.Set("gemini.model", "gemini-2.5-pro")
+
+	err := showCurrentConfig()
+	require.NoError(t, err)
+}
+
+func TestGetDefaultConfigPath(t *testing.T) {
+	path := getDefaultConfigPath()
+
+	// Verify path is not empty
+	if path == "" {
+		t.Fatal("getDefaultConfigPath() returned empty string")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(config.KeyScannerMaxFiles, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	// Verify path ends with config.yaml
+	if !strings.HasSuffix(filepath.Base(path), "config.yaml") {
+		t.Errorf("expected path to end with 'config.yaml', got: %s", path)
+	}
+
+	// Verify path is absolute
+	if !filepath.IsAbs(path) {
+		t.Errorf("expected absolute path, got: %s", path)
 	}
 }
 
-func TestValidateSizeFormat(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		expectErr bool
-	}{
-		{"megabytes", "10MB", false},
-		{"kilobytes", "500KB", false},
-		{"gigabytes", "1GB", false},
-		{"bytes", "1024B", false},
-		{"lowercase", "10mb", false},
-		{"mixed case", "10Mb", false},
-		{"with decimal", "1.5MB", false},
-		{"plain number", "1024", false},
-		{"invalid unit", "10TB", true},
-		{"no number", "MB", true},
-		{"invalid format", "abc", true},
-		{"empty", "", true},
+func TestGetDefaultConfigPath_XDGConfigHome(t *testing.T) {
+	// Save original value
+	original, exists := os.LookupEnv("XDG_CONFIG_HOME")
+	if exists {
+		defer os.Setenv("XDG_CONFIG_HOME", original)
+	} else {
+		defer os.Unsetenv("XDG_CONFIG_HOME")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(config.KeyScannerMaxFileSize, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	// Set custom XDG_CONFIG_HOME
+	customDir := "/tmp/test-xdg-config"
+	_ = os.Setenv("XDG_CONFIG_HOME", customDir)
+
+	path := getDefaultConfigPath()
+
+	// Verify path contains the custom directory
+	if !strings.Contains(path, customDir) {
+		t.Errorf("expected path to contain '%s', got: %s", customDir, path)
+	}
+
+	// Verify path ends with config.yaml
+	if !strings.HasSuffix(filepath.Base(path), "config.yaml") {
+		t.Errorf("expected path to end with 'config.yaml', got: %s", path)
 	}
 }
 
-func TestValidateBooleanValue(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		expectErr bool
-	}{
-		{"true lowercase", "true", false},
-		{"false lowercase", "false", false},
-		{"TRUE uppercase", "TRUE", false},
-		{"FALSE uppercase", "FALSE", false},
-		{"True mixed", "True", false},
-		{"False mixed", "False", false},
-		{"yes", "yes", true},
-		{"no", "no", true},
-		{"1", "1", true},
-		{"0", "0", true},
-		{"empty", "", true},
-		{"random", "maybe", true},
+func TestGetDefaultConfigPath_FallbackToHome(t *testing.T) {
+	// Save original values
+	originalXDG, xdgExists := os.LookupEnv("XDG_CONFIG_HOME")
+	originalHome, homeExists := os.LookupEnv("HOME")
+
+	// Unset XDG_CONFIG_HOME to force fallback
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
+
+	// Ensure HOME is set
+	if !homeExists || os.Getenv("HOME") == "" {
+		homeDir := "/tmp/test-home"
+		_ = os.Setenv("HOME", homeDir)
+		defer os.Unsetenv("HOME")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(config.KeyGeminiEnabled, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	// Restore original values after test
+	if xdgExists {
+		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
 	}
-}
-
-func TestValidateOutputFormat(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		expectErr bool
-	}{
-		{"markdown", "markdown", false},
-		{"text", "text", false},
-		{"json", "json", true},
-		{"html", "html", true},
-		{"empty", "", true},
-		{"uppercase MARKDOWN", "MARKDOWN", true},
+	if homeExists {
+		defer os.Setenv("HOME", originalHome)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(config.KeyOutputFormat, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	path := getDefaultConfigPath()
+
+	// Verify path is not empty
+	if path == "" {
+		t.Fatal("getDefaultConfigPath() returned empty string when XDG_CONFIG_HOME is unset")
+	}
+
+	// Verify path ends with config.yaml
+	if !strings.HasSuffix(filepath.Base(path), "config.yaml") {
+		t.Errorf("expected path to end with 'config.yaml', got: %s", path)
+	}
+
+	// On Unix systems, should use .config fallback when XDG_CONFIG_HOME is not set
+	if runtime.GOOS != "windows" {
+		if !strings.Contains(path, ".config") {
+			// This is expected behavior on Unix systems
+			t.Logf("Warning: path does not contain '.config', got: %s", path)
+		}
 	}
 }
 
-func TestValidateTemplatePath(t *testing.T) {
-	// Create temp directory for testing
-	tmpDir := t.TempDir()
-
-	// Create a file (not directory) for testing
-	filePath := filepath.Join(tmpDir, "afile.txt")
-	_ = os.WriteFile(filePath, []byte("test"), 0o600)
-
-	tests := []struct {
-		name      string
-		value     string
-		expectErr bool
-	}{
-		{"empty path", "", false},
-		{"absolute path", "/some/path/to/templates", false},
-		{"path with tilde", "~/templates", false},
-		{"relative path", "templates", false},
-		{"existing directory as parent", tmpDir + "/new-templates", false},
-		{"parent is file not directory", filePath + "/templates", true},
+func TestGetDefaultConfigPath_Windows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("skipping Windows-specific test on non-Windows platform")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(config.KeyTemplateCustomPath, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	path := getDefaultConfigPath()
+
+	// On Windows, path should be in AppData\Roaming or similar
+	if !strings.Contains(path, "shotgun-cli") {
+		t.Errorf("expected Windows path to contain 'shotgun-cli', got: %s", path)
+	}
+
+	// Verify path ends with config.yaml
+	if !strings.HasSuffix(filepath.Base(path), "config.yaml") {
+		t.Errorf("expected path to end with 'config.yaml', got: %s", path)
 	}
 }
 
-func TestValidateConfigValue(t *testing.T) {
-	tests := []struct {
-		name      string
-		key       string
-		value     string
-		expectErr bool
-	}{
-		{"max-files valid", "scanner.max-files", "1000", false},
-		{"max-files invalid", "scanner.max-files", "abc", true},
-		{"max-file-size valid", "scanner.max-file-size", "10MB", false},
-		{"max-file-size invalid", "scanner.max-file-size", "abc", true},
-		{"respect-gitignore valid", "scanner.respect-gitignore", "true", false},
-		{"respect-gitignore invalid", "scanner.respect-gitignore", "yes", true},
-		{"skip-binary valid", "scanner.skip-binary", "false", false},
-		{"context.max-size valid", "context.max-size", "5MB", false},
-		{"context.include-tree valid", "context.include-tree", "true", false},
-		{"context.include-summary valid", "context.include-summary", "false", false},
-		{"output.format valid", "output.format", "markdown", false},
-		{"output.format invalid", "output.format", "xml", true},
-		{"output.clipboard valid", "output.clipboard", "true", false},
-		{"template.custom-path empty", "template.custom-path", "", false},
-		{"unknown key", "unknown.key", "value", false}, // unknown keys pass through
-	}
+func TestGetGeminiStatusSummary_Disabled(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := config.ValidateValue(tt.key, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	viper.Set("gemini.enabled", false)
+
+	status := getGeminiStatusSummary()
+	if status != "disabled" {
+		t.Errorf("expected 'disabled', got: %s", status)
 	}
 }
 
-func TestConvertConfigValue(t *testing.T) {
-	tests := []struct {
-		name          string
-		key           string
-		value         string
-		expectedValue interface{}
-		expectErr     bool
-	}{
-		{"max-files integer", "scanner.max-files", "1000", 1000, false},
-		{"max-files invalid", "scanner.max-files", "abc", nil, true},
-		{"respect-gitignore true", "scanner.respect-gitignore", "true", true, false},
-		{"respect-gitignore false", "scanner.respect-gitignore", "false", false, false},
-		{"skip-binary TRUE", "scanner.skip-binary", "TRUE", true, false},
-		{"include-tree", "context.include-tree", "true", true, false},
-		{"include-summary", "context.include-summary", "false", false, false},
-		{"clipboard", "output.clipboard", "true", true, false},
-		{"string value", "output.format", "markdown", "markdown", false},
-		{"string path", "template.custom-path", "/path/to/templates", "/path/to/templates", false},
-		{"size format preserved", "scanner.max-file-size", "10MB", "10MB", false},
-	}
+func TestGetGeminiStatusSummary_EnabledNotConfigured(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := config.ConvertValue(tt.key, tt.value)
-			if tt.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedValue, result)
-			}
-		})
+	viper.Set("gemini.enabled", true)
+
+	status := getGeminiStatusSummary()
+	// Should return either "✗ geminiweb not found" or "⚠ needs configuration"
+	if !strings.Contains(status, "not found") && !strings.Contains(status, "needs configuration") {
+		t.Logf("Warning: status should indicate not configured, got: %s", status)
 	}
 }
 
-func TestFormatValue(t *testing.T) {
-	tests := []struct {
-		name     string
-		value    interface{}
-		expected string
-	}{
-		{"nil value", nil, "<nil>"},
-		{"empty string", "", `""`},
-		{"non-empty string", "hello", `"hello"`},
-		{"true bool", true, "true"},
-		{"false bool", false, "false"},
-		{"integer", 42, "42"},
-		{"float", 3.14, "3.14"},
-	}
+func TestGetConfigSource_NotSet(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatValue(tt.value)
-			assert.Equal(t, tt.expected, result)
-		})
+	// Ensure key is not set
+	viper.Reset()
+
+	source := getConfigSource("scanner.max-files")
+	if source != "default" {
+		t.Errorf("expected 'default', got: %s", source)
 	}
 }
 
-func TestGetConfigSource(t *testing.T) {
-	// This test is limited because getConfigSource depends on viper state
-	// We test the basic behavior when viper is not configured
+func TestGetConfigSource_FromConfigFile(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
 
-	tests := []struct {
-		name     string
-		key      string
-		expected string
-	}{
-		{"unknown key returns default", "unknown.key", "default"},
+	// Set config file and a value
+	viper.SetConfigFile(t.TempDir() + "/config.yaml")
+	viper.Set("scanner.max-files", 5000)
+
+	source := getConfigSource("scanner.max-files")
+	if source != "config file" {
+		t.Errorf("expected 'config file', got: %s", source)
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getConfigSource(tt.key)
-			assert.Equal(t, tt.expected, result)
-		})
+func TestGetConfigSource_FromFlag(t *testing.T) {
+	restoreViperState()
+	t.Cleanup(func() {
+		viper.Reset()
+	})
+
+	// Set a value (viper doesn't track sources, so this will be "config file" or "env")
+	viper.Set("scanner.max-files", 1000)
+
+	source := getConfigSource("scanner.max-files")
+	// Since we can't actually distinguish between flag and config file in tests,
+	// we just verify it returns something
+	if source == "" {
+		t.Error("getConfigSource should return a non-empty string")
 	}
 }

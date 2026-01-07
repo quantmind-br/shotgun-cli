@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 )
 
@@ -304,5 +305,202 @@ func TestConvertValue_String(t *testing.T) {
 	}
 	if val != "openai" {
 		t.Errorf("ConvertValue(llm.provider, \"openai\") = %v, want \"openai\"", val)
+	}
+}
+
+func TestValidateValue_BrowserRefresh(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		// Valid values
+		{"", false},
+		{"auto", false},
+		{"chrome", false},
+		{"firefox", false},
+		{"edge", false},
+		{"chromium", false},
+		{"opera", false},
+		// Invalid values
+		{"safari", true},
+		{"brave", true},
+		{"invalid", true},
+		{"Chrome", true},  // case sensitive
+		{"FIREFOX", true}, // case sensitive
+		{"AUTO", true},    // case sensitive
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyGeminiBrowserRefresh, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(gemini.browser-refresh, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateBrowserRefresh_Direct(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		// Valid values
+		{"", false},
+		{"auto", false},
+		{"chrome", false},
+		{"firefox", false},
+		{"edge", false},
+		{"chromium", false},
+		{"opera", false},
+		// Invalid values
+		{"safari", true},
+		{"brave", true},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := validateBrowserRefresh(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateBrowserRefresh(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidatePath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		// Empty value should be valid
+		{"empty string", "", false},
+		// Valid paths
+		{"tmp", "/tmp", false},
+		{"home", "/home/user", false},
+		{"documents", "~/Documents", false},
+		// Non-existent parent directory is ok (will be created)
+		{"nonexistent", "/nonexistent/dir/config.yaml", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validatePath(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePath(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidatePath_ExistingFile(t *testing.T) {
+	t.Parallel()
+
+	// Create a temp file
+	tmpFile, err := os.CreateTemp("", "test")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+	}()
+
+	// Parent directory exists, so no error
+	err = validatePath(tmpFile.Name())
+	if err != nil {
+		t.Errorf("validatePath(%q) should not error, got: %v", tmpFile.Name(), err)
+	}
+}
+
+func TestValidateGeminiModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		// Valid models
+		{"gemini-2.5-flash", false},
+		{"gemini-2.5-pro", false},
+		{"gemini-3.0-pro", false},
+		// Invalid models
+		{"gemini-1.5-pro", true},
+		{"gemini-1.5-flash", true},
+		{"gpt-4", true},
+		{"claude-3", true},
+		{"", true},
+		{"invalid", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := validateGeminiModel(tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateGeminiModel(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_Path(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"", false},
+		{"/tmp", false},
+		{"/home/user/config.yaml", false},
+		{"~/Documents", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyTemplateCustomPath, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(template-custom-path, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateValue_GeminiModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		value   string
+		wantErr bool
+	}{
+		{"gemini-2.5-flash", false},
+		{"gemini-2.5-pro", false},
+		{"gemini-3.0-pro", false},
+		{"gemini-1.5-pro", true},
+		{"gpt-4", true},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateValue(KeyGeminiModel, tt.value)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateValue(gemini.model, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
 	}
 }

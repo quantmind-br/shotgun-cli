@@ -10,16 +10,36 @@ shotgun-cli/
 │   ├── template.go               # Template management
 │   ├── diff.go                   # Diff splitting tools
 │   ├── config.go                 # Configuration management
+│   ├── llm.go                    # LLM provider management (NEW)
+│   ├── providers.go              # Provider registry initialization (NEW)
+│   ├── config_llm.go             # LLM configuration helpers (NEW)
 │   ├── completion.go             # Shell completion
-│   └── send.go                   # Gemini integration
+│   ├── send.go                   # Send context to LLM
+│   ├── gemini.go                 # Legacy Gemini web integration
+│   └── *_test.go                 # CLI command tests
 │
 ├── internal/
+│   ├── app/                      # Application Layer (NEW)
+│   │   ├── service.go            # ContextService - main orchestration
+│   │   ├── context.go            # Service types (GenerateConfig, GenerateResult)
+│   │   ├── providers.go          # Provider initialization
+│   │   └── *_test.go
+│   │
+│   ├── config/                   # Configuration Management (NEW)
+│   │   ├── keys.go               # Configuration key constants
+│   │   └── validator.go          # Config validation logic
+│   │
 │   ├── core/                     # Core business logic
 │   │   ├── scanner/              # File system scanning
 │   │   ├── context/              # Context generation
 │   │   ├── template/             # Template management
 │   │   ├── ignore/               # Gitignore pattern matching
-│   │   └── tokens/               # Token estimation
+│   │   ├── tokens/               # Token estimation
+│   │   ├── llm/                  # LLM provider abstraction (NEW)
+│   │   │   ├── provider.go       # Provider interface
+│   │   │   ├── config.go         # LLM config types
+│   │   │   └── registry.go       # Provider registry
+│   │   └── diff/                 # Diff splitting utilities
 │   │
 │   ├── ui/                       # TUI components (Bubble Tea)
 │   │   ├── wizard.go             # Main wizard orchestration (WizardModel)
@@ -29,7 +49,10 @@ shotgun-cli/
 │   │
 │   ├── platform/                 # Platform-specific code
 │   │   ├── clipboard/            # Cross-platform clipboard
-│   │   └── gemini/               # Gemini API integration
+│   │   ├── openai/               # OpenAI provider implementation (NEW)
+│   │   ├── anthropic/            # Anthropic provider implementation (NEW)
+│   │   ├── geminiapi/            # Gemini API provider (NEW)
+│   │   └── gemini/               # Gemini web integration (legacy)
 │   │
 │   ├── assets/                   # Embedded resources
 │   │   ├── embed.go              # go:embed directive
@@ -44,6 +67,43 @@ shotgun-cli/
 └── templates/                    # Template examples
 ```
 
+## Layered Architecture
+
+The application follows Clean Architecture/Hexagonal Architecture principles:
+
+### 1. Application Layer (`internal/app/`)
+- **ContextService**: Main orchestration service that coordinates scanning, generation, and LLM operations
+- Provides high-level API: `Generate()`, `GenerateWithProgress()`, `SendToLLM()`
+- Uses functional options pattern for dependency injection
+- Located in: `internal/app/service.go`
+
+### 2. Core/Domain Layer (`internal/core/`)
+Pure business logic with no external dependencies:
+- **scanner**: File system scanning with ignore pattern matching
+- **context**: Context generation from file trees
+- **template**: Template loading and rendering
+- **llm**: LLM provider abstraction interface
+- **tokens**: Token estimation utilities
+- **ignore**: Gitignore-style pattern engine
+- **diff**: Diff splitting utilities
+
+### 3. Infrastructure/Platform Layer (`internal/platform/`, `cmd/`)
+External system integrations:
+- **openai**: OpenAI API client
+- **anthropic**: Anthropic/Claude API client
+- **geminiapi**: Google Gemini API client
+- **gemini**: Browser-based Gemini integration
+- **clipboard**: Cross-platform clipboard operations
+
+### 4. Configuration Layer (`internal/config/`)
+- Centralized configuration key constants
+- Validation logic
+
+### 5. Presentation Layer (`cmd/`, `internal/ui/`)
+- CLI command definitions (Cobra)
+- TUI wizard (Bubble Tea)
+- User input handling
+
 ## Key Interfaces
 
 ### Scanner Interface (`internal/core/scanner/scanner.go`)
@@ -53,15 +113,6 @@ type Scanner interface {
     ScanWithProgress(rootPath string, config *ScanConfig, progress chan<- Progress) (*FileNode, error)
 }
 ```
-- `FileNode`: Tree structure representing scanned files
-- `ScanConfig`: Configuration for scanning (root path, filters)
-- `FilesystemScanner`: Main implementation
-- `Progress`: Progress updates with stages: "counting" → "scanning" → "complete"
-
-**Scanning Flow:**
-1. `countItems()` - First pass to count total files (sends "counting" stage)
-2. `walkAndBuild()` - Second pass building tree (sends "scanning" stage every 100 items)
-3. Completion - Sends "complete" stage
 
 ### Context Generator (`internal/core/context/generator.go`)
 ```go
@@ -70,46 +121,55 @@ type ContextGenerator interface {
     GenerateWithProgress(files []*scanner.FileNode, config GenerateConfig, progress chan<- GenProgress) (*ContextData, error)
 }
 ```
-- `DefaultContextGenerator`: Main implementation
-- `ContextData`: Generated context with tree and content
-- `GenerateConfig`: Size limits, include tree/summary flags
 
-### Template Manager (`internal/core/template/manager.go`)
+### LLM Provider (`internal/core/llm/provider.go`)
 ```go
-type TemplateManager interface {
-    ListTemplates() []*Template
-    GetTemplate(name string) (*Template, error)
-    RenderTemplate(name string, vars map[string]string) (string, error)
+type Provider interface {
+    Send(ctx context.Context, content string) (*Result, error)
+    SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*Result, error)
+    Name() string
+    IsAvailable() bool
+    IsConfigured() bool
+    ValidateConfig() error
 }
 ```
-- Multi-source loading: custom path > user directory > embedded
-- Template validation with required variable checking
 
-## UI Architecture (Bubble Tea)
-
-### Wizard Model (`internal/ui/wizard.go`)
-- `WizardModel`: Main orchestration model
-- Manages 5 steps: FileSelection, TemplateSelection, TaskInput, RulesInput, Review
-- Handles async operations via Bubble Tea commands
-
-### Screen Models (`internal/ui/screens/`)
-- `FileSelectionModel`: File tree with selection, filtering
-- `TemplateSelectionModel`: Template picker
-- `TaskInputModel`: Task description input
-- `RulesInputModel`: Custom rules input
-- `ReviewModel`: Preview and generation
-
-### Components (`internal/ui/components/`)
-- `FileTreeModel`: Interactive file tree with expand/collapse, selection
-- `ProgressModel`: Progress indicator
+### Context Service (`internal/app/service.go`)
+```go
+type ContextService interface {
+    Generate(ctx context.Context, cfg GenerateConfig) (*GenerateResult, error)
+    GenerateWithProgress(ctx context.Context, cfg GenerateConfig, progress ProgressCallback) (*GenerateResult, error)
+    SendToLLM(ctx context.Context, content string, provider llm.Provider) (*llm.Result, error)
+}
+```
 
 ## Data Flow
 
-1. **Scanning**: `FilesystemScanner.Scan()` → `FileNode` tree
-2. **Selection**: User selects files in TUI → selected `FileNode` list
-3. **Generation**: `ContextGenerator.Generate()` → `ContextData`
-4. **Rendering**: Template + variables → final output
-5. **Output**: Clipboard copy or file write
+1. **CLI Entry Point** → `cmd/*.go` (Cobra commands)
+2. **Service Orchestration** → `internal/app/service.go` (ContextService)
+3. **Scanning** → `FilesystemScanner.Scan()` → `FileNode` tree
+4. **Selection** → User selects files in TUI → selected `FileNode` list
+5. **Generation** → `ContextGenerator.Generate()` → `ContextData`
+6. **Rendering** → Template + variables → final output
+7. **LLM Integration** → Provider.Send() → AI response
+8. **Output** → Clipboard copy or file write
+
+## Provider Registry Pattern
+
+The LLM provider system uses a registry pattern for extensibility:
+
+```go
+// In cmd/providers.go
+providerRegistry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
+    return openai.NewClient(cfg)
+})
+```
+
+Supported providers:
+- `ProviderOpenAI`: OpenAI API (GPT-4o, GPT-4, o1, o3)
+- `ProviderAnthropic`: Anthropic API (Claude 4, Claude 3.5)
+- `ProviderGemini`: Google Gemini API
+- `ProviderGeminiWeb`: Browser-based Gemini integration
 
 ## Template Priority
 1. Custom path (set via `template.custom-path` config)

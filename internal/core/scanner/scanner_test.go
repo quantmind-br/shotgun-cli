@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/quantmind-br/shotgun-cli/internal/core/ignore"
 )
 
 func TestFileNodeBasic(t *testing.T) {
@@ -1260,7 +1263,6 @@ func TestScannerHandlesPermissionError(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	// Create a directory without read permission
 	noReadDir := filepath.Join(tempDir, "no-read")
 	err := os.Mkdir(noReadDir, 0000)
 	if err != nil {
@@ -1271,12 +1273,9 @@ func TestScannerHandlesPermissionError(t *testing.T) {
 	scanner := NewFileSystemScanner()
 	config := DefaultScanConfig()
 
-	// Scanning the parent should work but skip the unreadable directory
 	root, err := scanner.Scan(tempDir, config)
 
-	// Should not error - gracefully handles permission issues
 	if err != nil {
-		// Some systems may error, others skip silently
 		t.Logf("scan returned error (may be expected): %v", err)
 	}
 
@@ -1284,3 +1283,218 @@ func TestScannerHandlesPermissionError(t *testing.T) {
 		t.Log("root is nil - permission error prevented scan")
 	}
 }
+
+func TestHandleCountError(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewFileSystemScanner()
+
+	tests := []struct {
+		name     string
+		entry    os.DirEntry
+		expected error
+	}{
+		{
+			name:     "nil entry returns nil",
+			entry:    nil,
+			expected: nil,
+		},
+		{
+			name:     "directory entry returns SkipDir",
+			entry:    &mockDirEntry{isDir: true, name: "testdir"},
+			expected: filepath.SkipDir,
+		},
+		{
+			name:     "file entry returns nil",
+			entry:    &mockDirEntry{isDir: false, name: "testfile.txt"},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := scanner.handleCountError(tt.entry)
+			if result != tt.expected {
+				t.Errorf("handleCountError() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHandleWalkError(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewFileSystemScanner()
+
+	tests := []struct {
+		name     string
+		entry    os.DirEntry
+		expected error
+	}{
+		{
+			name:     "nil entry returns nil",
+			entry:    nil,
+			expected: nil,
+		},
+		{
+			name:     "directory entry returns SkipDir",
+			entry:    &mockDirEntry{isDir: true, name: "testdir"},
+			expected: filepath.SkipDir,
+		},
+		{
+			name:     "file entry returns nil",
+			entry:    &mockDirEntry{isDir: false, name: "testfile.txt"},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := scanner.handleWalkError(tt.entry)
+			if result != tt.expected {
+				t.Errorf("handleWalkError() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestShouldSkipLargeFile(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewFileSystemScanner()
+
+	tests := []struct {
+		name        string
+		entry       os.DirEntry
+		maxFileSize int64
+		expected    bool
+	}{
+		{
+			name:        "directory never skipped",
+			entry:       &mockDirEntry{isDir: true, name: "testdir"},
+			maxFileSize: 100,
+			expected:    false,
+		},
+		{
+			name:        "no limit never skips",
+			entry:       &mockDirEntry{isDir: false, name: "large.txt", size: 1000000},
+			maxFileSize: 0,
+			expected:    false,
+		},
+		{
+			name:        "file under limit not skipped",
+			entry:       &mockDirEntry{isDir: false, name: "small.txt", size: 50},
+			maxFileSize: 100,
+			expected:    false,
+		},
+		{
+			name:        "file at limit not skipped",
+			entry:       &mockDirEntry{isDir: false, name: "exact.txt", size: 100},
+			maxFileSize: 100,
+			expected:    false,
+		},
+		{
+			name:        "file over limit skipped",
+			entry:       &mockDirEntry{isDir: false, name: "big.txt", size: 101},
+			maxFileSize: 100,
+			expected:    true,
+		},
+		{
+			name:        "large file skipped",
+			entry:       &mockDirEntry{isDir: false, name: "huge.txt", size: 1000000},
+			maxFileSize: 1024,
+			expected:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &ScanConfig{MaxFileSize: tt.maxFileSize}
+			result := scanner.shouldSkipLargeFile(tt.entry, config)
+			if result != tt.expected {
+				t.Errorf("shouldSkipLargeFile() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestClassifyIgnoreReason(t *testing.T) {
+	t.Parallel()
+
+	scanner := NewFileSystemScanner()
+
+	tests := []struct {
+		name               string
+		reason             ignore.IgnoreReason
+		expectedGitignored bool
+		expectedCustom     bool
+	}{
+		{
+			name:               "gitignore reason",
+			reason:             ignore.IgnoreReasonGitignore,
+			expectedGitignored: true,
+			expectedCustom:     false,
+		},
+		{
+			name:               "builtin reason",
+			reason:             ignore.IgnoreReasonBuiltIn,
+			expectedGitignored: false,
+			expectedCustom:     true,
+		},
+		{
+			name:               "custom reason",
+			reason:             ignore.IgnoreReasonCustom,
+			expectedGitignored: false,
+			expectedCustom:     true,
+		},
+		{
+			name:               "explicit reason",
+			reason:             ignore.IgnoreReasonExplicit,
+			expectedGitignored: false,
+			expectedCustom:     true,
+		},
+		{
+			name:               "unknown reason",
+			reason:             ignore.IgnoreReason(99),
+			expectedGitignored: false,
+			expectedCustom:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isGitignored, isCustomIgnored := scanner.classifyIgnoreReason(tt.reason)
+			if isGitignored != tt.expectedGitignored {
+				t.Errorf("classifyIgnoreReason() isGitignored = %v, want %v", isGitignored, tt.expectedGitignored)
+			}
+			if isCustomIgnored != tt.expectedCustom {
+				t.Errorf("classifyIgnoreReason() isCustomIgnored = %v, want %v", isCustomIgnored, tt.expectedCustom)
+			}
+		})
+	}
+}
+
+type mockDirEntry struct {
+	isDir bool
+	name  string
+	size  int64
+}
+
+func (m *mockDirEntry) Name() string      { return m.name }
+func (m *mockDirEntry) IsDir() bool       { return m.isDir }
+func (m *mockDirEntry) Type() os.FileMode { return 0 }
+func (m *mockDirEntry) Info() (os.FileInfo, error) {
+	return &mockFileInfo{size: m.size, isDir: m.isDir}, nil
+}
+
+type mockFileInfo struct {
+	size  int64
+	isDir bool
+}
+
+func (m *mockFileInfo) Name() string       { return "" }
+func (m *mockFileInfo) Size() int64        { return m.size }
+func (m *mockFileInfo) Mode() os.FileMode  { return 0 }
+func (m *mockFileInfo) ModTime() time.Time { return time.Time{} }
+func (m *mockFileInfo) IsDir() bool        { return m.isDir }
+func (m *mockFileInfo) Sys() interface{}   { return nil }

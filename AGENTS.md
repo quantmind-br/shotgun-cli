@@ -62,6 +62,46 @@ The project uses a dedicated application layer in `internal/app` to orchestrate 
 
 ---
 
+## CI/CD and Testing
+
+### Automated Pipeline
+
+Every push and PR runs the following checks via GitHub Actions:
+
+1. **Tests**: All tests with race detection and coverage
+2. **Coverage**: Must be >= 85% or CI fails
+3. **Lint**: golangci-lint checks
+4. **Build**: Compilation verification
+
+### Running Tests Locally
+
+```bash
+# Run all tests
+go test ./...
+
+# Run with race detection (recommended)
+go test -race ./...
+
+# Run with coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | grep total
+```
+
+### Coverage Requirements
+
+- **Minimum threshold**: 85% (enforced by CI)
+- **Target for new code**: 90%
+- **Core packages target**: 95%
+
+Before submitting a PR:
+1. Run tests locally
+2. Check coverage meets threshold
+3. Run linter: `golangci-lint run`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed testing guidelines.
+
+---
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
