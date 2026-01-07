@@ -1,15 +1,13 @@
 package anthropic
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	platformhttp "github.com/quantmind-br/shotgun-cli/internal/platform/http"
 )
 
 const (
@@ -20,12 +18,10 @@ const (
 
 // Client implements llm.Provider for Anthropic API.
 type Client struct {
+	jsonClient *platformhttp.JSONClient
 	apiKey     string
-	baseURL    string
 	model      string
-	timeout    time.Duration
 	maxTokens  int
-	httpClient *http.Client
 }
 
 // NewClient creates a new Anthropic client.
@@ -55,14 +51,13 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:    cfg.APIKey,
-		baseURL:   baseURL,
-		model:     model,
-		timeout:   timeout,
-		maxTokens: maxTokens,
-		httpClient: &http.Client{
+		jsonClient: platformhttp.NewJSONClient(platformhttp.ClientConfig{
+			BaseURL: baseURL,
 			Timeout: timeout,
-		},
+		}),
+		apiKey:    cfg.APIKey,
+		model:     model,
+		maxTokens: maxTokens,
 	}, nil
 }
 
@@ -78,43 +73,15 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		},
 	}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	url := c.baseURL + "/v1/messages"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", anthropicVersion)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error [%d]: %s", resp.StatusCode, errResp.Error.Message)
-		}
-		return nil, fmt.Errorf("API error [%d]: %s", resp.StatusCode, string(respBody))
+	headers := map[string]string{
+		"x-api-key":         c.apiKey,
+		"anthropic-version": anthropicVersion,
 	}
 
 	var msgResp MessagesResponse
-	if err := json.Unmarshal(respBody, &msgResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := c.jsonClient.PostJSON(ctx, "/v1/messages", headers, req, &msgResp)
+	if err != nil {
+		return nil, c.handleError(err)
 	}
 
 	// Extract text from content blocks.
@@ -134,14 +101,27 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		}
 	}
 
+	rawResp, _ := json.Marshal(msgResp)
+
 	return &llm.Result{
 		Response:    responseText,
-		RawResponse: string(respBody),
+		RawResponse: string(rawResp),
 		Model:       c.model,
 		Provider:    "Anthropic",
 		Duration:    time.Since(startTime),
 		Usage:       usage,
 	}, nil
+}
+
+func (c *Client) handleError(err error) error {
+	if httpErr, ok := err.(*platformhttp.HTTPError); ok {
+		var errResp ErrorResponse
+		if json.Unmarshal(httpErr.Body, &errResp) == nil && errResp.Error.Message != "" {
+			return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, errResp.Error.Message)
+		}
+		return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, string(httpErr.Body))
+	}
+	return err
 }
 
 // SendWithProgress sends with progress callback.
