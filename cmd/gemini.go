@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/quantmind-br/shotgun-cli/internal/config"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiweb"
 )
 
 const (
@@ -66,7 +66,7 @@ func init() {
 }
 
 func runGeminiStatus(cmd *cobra.Command, args []string) error {
-	status := gemini.GetStatus()
+	status := geminiweb.GetStatus()
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 
 	if jsonOutput {
@@ -76,7 +76,7 @@ func runGeminiStatus(cmd *cobra.Command, args []string) error {
 	return printGeminiStatusHuman(status)
 }
 
-func printGeminiStatusHuman(status gemini.Status) error {
+func printGeminiStatusHuman(status geminiweb.Status) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
 	_, _ = fmt.Fprintln(w, "=== Gemini Integration Status ===")
@@ -128,7 +128,7 @@ func printGeminiStatusHuman(status gemini.Status) error {
 		printGeminiNextSteps(status)
 	case !enabled:
 		fmt.Println("💡 Gemini is configured but disabled.")
-		fmt.Println("   To enable: shotgun-cli config set gemini.enabled true")
+		fmt.Println("   To enable: shotgun-cli config set geminiweb.enabled true")
 	default:
 		fmt.Println("✅ Gemini is ready to use!")
 	}
@@ -136,7 +136,7 @@ func printGeminiStatusHuman(status gemini.Status) error {
 	return nil
 }
 
-func printGeminiNextSteps(status gemini.Status) {
+func printGeminiNextSteps(status geminiweb.Status) {
 	fmt.Println()
 	fmt.Println("📋 Next steps:")
 
@@ -145,7 +145,7 @@ func printGeminiNextSteps(status gemini.Status) {
 		fmt.Println("      go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
 		fmt.Println()
 		fmt.Println("   2. Or configure a custom path:")
-		fmt.Println("      shotgun-cli config set gemini.binary-path /path/to/geminiweb")
+		fmt.Println("      shotgun-cli config set geminiweb.binary-path /path/to/geminiweb")
 	} else if !status.Configured {
 		fmt.Println("   1. Authenticate with Google:")
 		fmt.Println("      geminiweb auto-login")
@@ -154,9 +154,9 @@ func printGeminiNextSteps(status gemini.Status) {
 	}
 }
 
-func printGeminiStatusJSON(status gemini.Status) error {
+func printGeminiStatusJSON(status geminiweb.Status) error {
 	output := struct {
-		gemini.Status
+		geminiweb.Status
 		Enabled        bool   `json:"enabled"`
 		Model          string `json:"model"`
 		Timeout        int    `json:"timeout"`
@@ -187,7 +187,7 @@ func runGeminiDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println("🔍 Running Gemini integration diagnostics...")
 	fmt.Println()
 
-	status := gemini.GetStatus()
+	status := geminiweb.GetStatus()
 	issues := []string{}
 
 	// Check 1: Binary

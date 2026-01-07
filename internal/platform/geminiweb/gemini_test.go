@@ -1,4 +1,4 @@
-package gemini
+package geminiweb
 
 import (
 	"context"

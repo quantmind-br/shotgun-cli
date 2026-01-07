@@ -18,7 +18,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiweb"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
@@ -397,20 +397,20 @@ func printGenerationSummary(result *app.GenerateResult, cfg GenerateConfig) {
 func sendToGemini(cfg GenerateConfig, content string) error {
 	// Check if Gemini is enabled
 	if !viper.GetBool(cfgkeys.KeyGeminiEnabled) {
-		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set gemini.enabled true")
+		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set geminiweb.enabled true")
 	}
 
 	// Check availability
-	if !gemini.IsAvailable() {
+	if !geminiweb.IsAvailable() {
 		return fmt.Errorf("geminiweb not found. Run 'shotgun-cli gemini doctor' for help")
 	}
 
-	if !gemini.IsConfigured() {
+	if !geminiweb.IsConfigured() {
 		return fmt.Errorf("geminiweb not configured. Run 'shotgun-cli gemini doctor' for help")
 	}
 
 	// Build gemini config
-	geminiCfg := gemini.Config{
+	geminiCfg := geminiweb.Config{
 		BinaryPath:     viper.GetString(cfgkeys.KeyGeminiBinaryPath),
 		Model:          cfg.GeminiModel,
 		Timeout:        cfg.GeminiTimeout,
@@ -418,7 +418,7 @@ func sendToGemini(cfg GenerateConfig, content string) error {
 		Verbose:        viper.GetBool(cfgkeys.KeyVerbose),
 	}
 
-	executor := gemini.NewExecutor(geminiCfg)
+	executor := geminiweb.NewExecutor(geminiCfg)
 
 	fmt.Printf("\n🤖 Sending to Gemini (%s)...\n", geminiCfg.Model)
 
@@ -444,7 +444,7 @@ func sendToGemini(cfg GenerateConfig, content string) error {
 		fmt.Printf("\n--- Gemini Response ---\n%s\n", result.Response)
 	}
 
-	fmt.Printf("⏱️  Response time: %s\n", gemini.FormatDuration(result.Duration))
+	fmt.Printf("⏱️  Response time: %s\n", geminiweb.FormatDuration(result.Duration))
 
 	return nil
 }

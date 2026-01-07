@@ -1,5 +1,5 @@
 // Package gemini provides integration with geminiweb-go for sending context to Google Gemini.
-package gemini
+package geminiweb
 
 import (
 	"fmt"

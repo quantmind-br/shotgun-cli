@@ -5,7 +5,7 @@ import (
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/anthropic"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiweb"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiapi"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/openai"
 )
@@ -33,7 +33,7 @@ func init() {
 
 	// Register GeminiWeb (legacy)
 	providerRegistry.Register(llm.ProviderGeminiWeb, func(cfg llm.Config) (llm.Provider, error) {
-		return gemini.NewWebProvider(cfg)
+		return geminiweb.NewWebProvider(cfg)
 	})
 }
 
