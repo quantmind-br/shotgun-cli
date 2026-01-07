@@ -153,7 +153,6 @@ func TestClient_NewClient_Validation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "gemini-2.5-flash", client.model)
-	assert.Equal(t, defaultBaseURL, client.baseURL)
 	assert.Equal(t, defaultMaxTokens, client.maxTokens)
 }
 

@@ -1,15 +1,13 @@
 package geminiapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	platformhttp "github.com/quantmind-br/shotgun-cli/internal/platform/http"
 )
 
 const (
@@ -19,12 +17,10 @@ const (
 
 // Client implements llm.Provider for Google Gemini API.
 type Client struct {
+	jsonClient *platformhttp.JSONClient
 	apiKey     string
-	baseURL    string
 	model      string
-	timeout    time.Duration
 	maxTokens  int
-	httpClient *http.Client
 }
 
 // NewClient creates a new Gemini API client.
@@ -54,14 +50,13 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:    cfg.APIKey,
-		baseURL:   baseURL,
-		model:     model,
-		timeout:   timeout,
-		maxTokens: maxTokens,
-		httpClient: &http.Client{
+		jsonClient: platformhttp.NewJSONClient(platformhttp.ClientConfig{
+			BaseURL: baseURL,
 			Timeout: timeout,
-		},
+		}),
+		apiKey:    cfg.APIKey,
+		model:     model,
+		maxTokens: maxTokens,
 	}, nil
 }
 
@@ -80,35 +75,12 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		},
 	}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s",
-		c.baseURL, c.model, c.apiKey)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
+	path := fmt.Sprintf("/models/%s:generateContent?key=%s", c.model, c.apiKey)
 
 	var genResp GenerateResponse
-	if err := json.Unmarshal(respBody, &genResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := c.jsonClient.PostJSON(ctx, path, nil, req, &genResp)
+	if err != nil {
+		return nil, c.handleError(err)
 	}
 
 	if genResp.Error != nil {
@@ -134,14 +106,27 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		}
 	}
 
+	rawResp, _ := json.Marshal(genResp)
+
 	return &llm.Result{
 		Response:    responseText,
-		RawResponse: string(respBody),
+		RawResponse: string(rawResp),
 		Model:       c.model,
 		Provider:    "Gemini",
 		Duration:    time.Since(startTime),
 		Usage:       usage,
 	}, nil
+}
+
+func (c *Client) handleError(err error) error {
+	if httpErr, ok := err.(*platformhttp.HTTPError); ok {
+		var genResp GenerateResponse
+		if json.Unmarshal(httpErr.Body, &genResp) == nil && genResp.Error != nil {
+			return fmt.Errorf("API error [%d]: %s", genResp.Error.Code, genResp.Error.Message)
+		}
+		return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, string(httpErr.Body))
+	}
+	return err
 }
 
 // SendWithProgress sends with progress callback.
