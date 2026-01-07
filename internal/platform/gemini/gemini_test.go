@@ -50,6 +50,7 @@ func TestValidModels(t *testing.T) {
 }
 
 func TestIsValidModel(t *testing.T) {
+	// Model validation removed - all models should now be valid
 	tests := []struct {
 		model string
 		valid bool
@@ -57,9 +58,11 @@ func TestIsValidModel(t *testing.T) {
 		{"gemini-2.5-flash", true},
 		{"gemini-2.5-pro", true},
 		{"gemini-3.0-pro", true},
-		{"gemini-invalid", false},
-		{"gpt-4", false},
-		{"", false},
+		{"gemini-3-pro-preview", true}, // Custom/preview models now allowed
+		{"gemini-invalid", true},
+		{"gpt-4", true},
+		{"", true},
+		{"any-custom-model", true},
 	}
 
 	for _, tt := range tests {

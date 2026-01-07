@@ -48,15 +48,10 @@ func ValidModels() []string {
 	}
 }
 
-// IsValidModel checks if the model name is valid.
+// IsValidModel always returns true - model validation removed to allow custom/preview models.
+// Deprecated: This function no longer validates models. Any model string is accepted.
 func IsValidModel(model string) bool {
-	for _, valid := range ValidModels() {
-		if model == valid {
-			return true
-		}
-	}
-
-	return false
+	return true
 }
 
 // FindBinary locates the geminiweb executable.

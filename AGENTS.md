@@ -6,185 +6,165 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ```bash
 bd ready              # Find available work
-bd show <id>          # View issue details
+bd show <id>          # View issue details  
 bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
-## Landing the Plane (Session Completion)
+## Build/Test/Lint Commands
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+```bash
+# Build
+make build                    # Build for current platform
+go build -o build/shotgun-cli .
 
-**MANDATORY WORKFLOW:**
+# Test
+go test ./...                 # Run all tests
+go test -race ./...           # With race detector (recommended)
+go test -v ./internal/core/scanner/...  # Single package
+go test -v -run TestMyFunc ./path/to/pkg  # Single test by name
+go test -coverprofile=coverage.out ./...  # With coverage
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+# Lint
+golangci-lint run ./...       # Run linter (uses .golangci-local.yml)
+make lint                     # Same via Makefile
+
+# Coverage
+go tool cover -func=coverage.out | grep total  # Check total %
+go tool cover -html=coverage.out -o coverage.html  # HTML report
+```
+
+**Coverage Requirement**: 85% minimum (enforced by CI). Target 90%+ for new code.
+
+## Code Style Guidelines
+
+### Imports
+Standard Go import grouping (stdlib, external, internal):
+```go
+import (
+    "context"
+    "fmt"
+    
+    "github.com/spf13/cobra"
+    
+    "github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+)
+```
+
+### Error Handling
+Always wrap errors with context using `%w`:
+```go
+if err != nil {
+    return nil, fmt.Errorf("failed to scan directory %s: %w", rootPath, err)
+}
+```
+
+### Naming Conventions
+- **Packages**: lowercase, single word (`scanner`, `template`, `llm`)
+- **Interfaces**: verb-like or -er suffix (`Scanner`, `Provider`, `ContextGenerator`)
+- **Test functions**: `TestFunctionName_Scenario`
+- **Config keys**: Use constants from `internal/config/keys.go`, not strings
+
+### Testing Patterns
+Use table-driven tests with `t.Parallel()` and `stretchr/testify`:
+```go
+func TestMyFunction_ValidInput(t *testing.T) {
+    t.Parallel()
+    tests := []struct {
+        name     string
+        input    string
+        expected string
+        wantErr  bool
+    }{
+        {name: "basic case", input: "test", expected: "result"},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            t.Parallel()
+            result, err := MyFunction(tt.input)
+            if tt.wantErr {
+                require.Error(t, err)
+                return
+            }
+            require.NoError(t, err)
+            assert.Equal(t, tt.expected, result)
+        })
+    }
+}
+```
+
+### Logging
+Use `zerolog` for structured logging. Never use `fmt.Println` or stdlib `log`:
+```go
+log.Debug().Str("path", path).Msg("scanning directory")
+```
+
+## Architecture Rules
+
+**Clean Architecture layers** - respect boundaries:
+```
+cmd/                    → Presentation (CLI commands, composition root)
+internal/ui/            → Presentation (TUI wizard, Bubble Tea MVU)
+internal/app/           → Application (orchestration, ContextService)
+internal/core/          → Domain (scanner, template, llm, ignore, tokens)
+internal/platform/      → Infrastructure (gemini, clipboard, openai, anthropic)
+```
+
+**Key rules**:
+- `internal/core` must NOT import from `cmd`, `ui`, `app`, or `platform`
+- Pass config via dependency injection, not global Viper access in core
+- Use interfaces from core packages (`Scanner`, `Provider`, `ContextGenerator`)
+- Create LLM providers via `app.DefaultProviderRegistry.Create()`
+
+### Adding a New LLM Provider
+1. Implement `llm.Provider` interface in `internal/platform/<provider>/`
+2. Register in `internal/app/providers.go`
+
+## Linting Configuration
+**Max line length**: 120 chars | **Max cyclomatic complexity**: 25  
+**Enabled**: govet, errcheck, staticcheck, goconst, misspell, gocyclo, gosec, lll, prealloc, unconvert, unparam, unused
+
+## Session Completion
+
+**Work is NOT complete until `git push` succeeds.**
+
+1. File issues for remaining work: `bd create "..." --description="..." -p 2`
+2. Run quality gates: `go test -race ./... && golangci-lint run`
+3. Update issue status: `bd close <id>` or `bd update <id> --status ...`
+4. **PUSH TO REMOTE** (MANDATORY):
    ```bash
-   git pull --rebase
-   bd sync
-   git push
+   git pull --rebase && bd sync && git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-
-
-
-## Architecture & Application Logic
-
-### Application Service Layer
-
-The project uses a dedicated application layer in `internal/app` to orchestrate business logic shared between CLI and TUI.
-
-*   **`ContextService` (internal/app/context.go)**: The primary orchestrator for context generation.
-    *   `Generate(ctx, cfg)`: Synchronous generation (used by CLI).
-    *   `GenerateWithProgress(ctx, cfg, callback)`: Async generation with progress updates (used by TUI).
-    *   `SendToLLM(ctx, content, provider)`: Standardized way to send content to an LLM.
-
-*   **`DefaultProviderRegistry` (internal/app/providers.go)**: Centralized registry for LLM providers.
-    *   To add a new provider: Implement `llm.Provider`, then register it in `internal/app/providers.go`.
-    *   Both CLI and TUI consume this registry to create providers.
-
-### Core Logic Additions
-
-*   **`internal/core/diff`**: Pure business logic for git diff operations. Use `diff.IntelligentSplit` to split large diffs while preserving file boundaries.
-*   **`internal/core/scanner`**: Use `scanner.CollectSelections` or `scanner.NewSelectAll` for handling file selections in a tree.
-
----
-
-## CI/CD and Testing
-
-### Automated Pipeline
-
-Every push and PR runs the following checks via GitHub Actions:
-
-1. **Tests**: All tests with race detection and coverage
-2. **Coverage**: Must be >= 85% or CI fails
-3. **Lint**: golangci-lint checks
-4. **Build**: Compilation verification
-
-### Running Tests Locally
-
-```bash
-# Run all tests
-go test ./...
-
-# Run with race detection (recommended)
-go test -race ./...
-
-# Run with coverage
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | grep total
-```
-
-### Coverage Requirements
-
-- **Minimum threshold**: 85% (enforced by CI)
-- **Target for new code**: 90%
-- **Core packages target**: 95%
-
-Before submitting a PR:
-1. Run tests locally
-2. Check coverage meets threshold
-3. Run linter: `golangci-lint run`
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed testing guidelines.
-
----
-
-<!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
-
-### Why bd?
-
-- Dependency-aware: Track blockers and relationships between issues
-- Git-friendly: Auto-syncs to JSONL for version control
-- Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
-
-### Quick Start
-
-**Check for ready work:**
+**Use bd for ALL task tracking. Do NOT use markdown TODOs or task lists.**
 
 ```bash
-bd ready --json
+bd ready --json                          # Check ready work
+bd create "Title" -t task -p 2 --json    # Create issue
+bd update bd-42 --status in_progress     # Claim work
+bd close bd-42 --reason "Completed"      # Complete work
 ```
 
-**Create new issues:**
+**Types**: `bug`, `feature`, `task`, `epic`, `chore`  
+**Priorities**: `0`=Critical, `1`=High, `2`=Medium (default), `3`=Low, `4`=Backlog
 
-```bash
-bd create "Issue title" --description="Detailed context" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" --description="What this issue is about" -p 1 --deps discovered-from:bd-123 --json
+## Key Application Services
+
+### ContextService (`internal/app/context.go`)
+- `Generate(ctx, cfg)` - Synchronous (CLI)
+- `GenerateWithProgress(ctx, cfg, callback)` - Async with progress (TUI)
+- `SendToLLM(ctx, content, provider)` - Send to LLM provider
+
+### ProviderRegistry (`internal/app/providers.go`)
+```go
+provider, err := app.DefaultProviderRegistry.Create(llm.ProviderOpenAI, cfg)
 ```
 
-**Claim and update:**
-
-```bash
-bd update bd-42 --status in_progress --json
-bd update bd-42 --priority 1 --json
-```
-
-**Complete work:**
-
-```bash
-bd close bd-42 --reason "Completed" --json
-```
-
-### Issue Types
-
-- `bug` - Something broken
-- `feature` - New functionality
-- `task` - Work item (tests, docs, refactoring)
-- `epic` - Large feature with subtasks
-- `chore` - Maintenance (dependencies, tooling)
-
-### Priorities
-
-- `0` - Critical (security, data loss, broken builds)
-- `1` - High (major features, important bugs)
-- `2` - Medium (default, nice-to-have)
-- `3` - Low (polish, optimization)
-- `4` - Backlog (future ideas)
-
-### Workflow for AI Agents
-
-1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task**: `bd update <id> --status in_progress`
-3. **Work on it**: Implement, test, document
-4. **Discover new work?** Create linked issue:
-   - `bd create "Found bug" --description="Details about what was found" -p 1 --deps discovered-from:<parent-id>`
-5. **Complete**: `bd close <id> --reason "Done"`
-
-### Auto-Sync
-
-bd automatically syncs with git:
-
-- Exports to `.beads/issues.jsonl` after changes (5s debounce)
-- Imports from JSONL when newer (e.g., after `git pull`)
-- No manual export/import needed!
-
-### Important Rules
-
-- ✅ Use bd for ALL task tracking
-- ✅ Always use `--json` flag for programmatic use
-- ✅ Link discovered work with `discovered-from` dependencies
-- ✅ Check `bd ready` before asking "what should I work on?"
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
-
-For more details, see README.md and docs/QUICKSTART.md.
-
-<!-- END BEADS INTEGRATION -->
+### Core Utilities
+- `diff.IntelligentSplit` - Split large diffs preserving file boundaries
+- `scanner.CollectSelections` - Handle file tree selections
+- `config.ValidateValue(key, value)` - Validate config before saving

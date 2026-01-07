@@ -22,6 +22,7 @@ func TestValidModels(t *testing.T) {
 }
 
 func TestIsKnownModel(t *testing.T) {
+	// Model validation removed - all models should now be valid
 	tests := []struct {
 		name    string
 		model   string
@@ -47,25 +48,25 @@ func TestIsKnownModel(t *testing.T) {
 			want:    true,
 		},
 		{
-			name:    "unknown model - gpt-5",
+			name:    "any model - gpt-5",
 			model:   "gpt-5",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
-			name:    "unknown model - claude",
+			name:    "any model - claude",
 			model:   "claude",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
 			name:    "empty model",
 			model:   "",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
-			name:    "custom endpoint accepts any",
+			name:    "custom endpoint",
 			model:   "custom-gpt-model",
 			baseURL: "https://custom.openai.com/v1",
 			want:    true,

@@ -11,7 +11,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/gemini"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
@@ -59,7 +58,7 @@ func NewReview(
 		taskDesc:        taskDesc,
 		rules:           rules,
 		maxSizeStr:      maxSizeStr,
-		geminiAvailable: gemini.IsAvailable() && gemini.IsConfigured(),
+		geminiAvailable: false, // Will be set by SetLLMAvailable()
 		viewport:        viewport.New(0, 0),
 	}
 	m.totalBytes, m.totalTokens = m.calculateStats()
@@ -72,6 +71,11 @@ func NewReview(
 }
 
 const footerHeight = 4
+
+// SetLLMAvailable sets whether LLM provider is available for sending.
+func (m *ReviewModel) SetLLMAvailable(available bool) {
+	m.geminiAvailable = available
+}
 
 func (m *ReviewModel) SetSize(width, height int) {
 	m.width = width

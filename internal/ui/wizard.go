@@ -628,7 +628,15 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 		m.review.SetGeminiSending(true)
 	}
 
-	return m.sendToLLMCmd(provider)
+	// Show progress indicator
+	m.progress = Progress{
+		Stage:   "sending",
+		Message: "Sending to LLM...",
+		Visible: true,
+	}
+	m.progressComponent.UpdateMessage("sending", "Sending to LLM...")
+
+	return tea.Batch(m.sendToLLMCmd(provider), m.progressComponent.Init())
 }
 
 func (m *WizardModel) handleGeminiProgress(msg screens.GeminiProgressMsg) {
@@ -692,6 +700,15 @@ func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
 	}
 
 	return app.DefaultProviderRegistry.Create(cfg)
+}
+
+// isLLMAvailable checks if any LLM provider is available and configured.
+func (m *WizardModel) isLLMAvailable() bool {
+	provider, err := m.createLLMProvider()
+	if err != nil {
+		return false
+	}
+	return provider.IsAvailable() && provider.ValidateConfig() == nil
 }
 
 func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
@@ -885,6 +902,7 @@ func (m *WizardModel) initStep() tea.Cmd {
 			m.taskDesc, m.rules, m.wizardConfig.Context.MaxSize,
 		)
 		m.review.SetSize(m.width, m.height)
+		m.review.SetLLMAvailable(m.isLLMAvailable())
 	}
 	return nil
 }

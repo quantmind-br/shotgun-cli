@@ -18,6 +18,7 @@ func TestValidModels(t *testing.T) {
 }
 
 func TestIsKnownModel(t *testing.T) {
+	// Model validation removed - all models should now be valid
 	tests := []struct {
 		name    string
 		model   string
@@ -37,31 +38,31 @@ func TestIsKnownModel(t *testing.T) {
 			want:    true,
 		},
 		{
-			name:    "known model - gemini-1.5-flash",
-			model:   "gemini-1.5-flash",
+			name:    "custom preview model",
+			model:   "gemini-3-pro-preview",
 			baseURL: "",
 			want:    true,
 		},
 		{
-			name:    "unknown model - gpt-4",
+			name:    "any model - gpt-4",
 			model:   "gpt-4",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
-			name:    "unknown model - claude",
+			name:    "any model - claude",
 			model:   "claude",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
 			name:    "empty model",
 			model:   "",
 			baseURL: "",
-			want:    false,
+			want:    true,
 		},
 		{
-			name:    "custom endpoint accepts any",
+			name:    "custom endpoint",
 			model:   "custom-gemini",
 			baseURL: "https://custom.gemini.com/v1",
 			want:    true,

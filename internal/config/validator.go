@@ -78,7 +78,7 @@ func ValidateValue(key, value string) error {
 	case KeyTemplateCustomPath, KeyGeminiBinaryPath:
 		return validatePath(value)
 	case KeyGeminiModel:
-		return validateGeminiModel(value)
+		return nil // Model can be any string, allows custom/preview models
 	case KeyGeminiTimeout, KeyLLMTimeout:
 		return validateTimeout(value)
 	case KeyGeminiBrowserRefresh:
@@ -202,17 +202,6 @@ func validatePath(value string) error {
 		}
 	}
 	return nil
-}
-
-// validateGeminiModel validates Gemini model configuration values.
-func validateGeminiModel(value string) error {
-	validModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.0-pro"}
-	for _, model := range validModels {
-		if value == model {
-			return nil
-		}
-	}
-	return fmt.Errorf("expected one of: %s", strings.Join(validModels, ", "))
 }
 
 // validateTimeout validates timeout configuration values.

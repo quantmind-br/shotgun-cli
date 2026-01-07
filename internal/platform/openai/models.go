@@ -16,18 +16,8 @@ func ValidModels() []string {
 	}
 }
 
-// IsKnownModel checks if it's a known model.
-// Returns true for any model if base-url is custom.
+// IsKnownModel always returns true - model validation removed to allow custom/preview models.
+// Deprecated: This function no longer validates models. Any model string is accepted.
 func IsKnownModel(model, baseURL string) bool {
-	// If using custom endpoint, accept any model.
-	if baseURL != "" && baseURL != "https://api.openai.com/v1" {
-		return true
-	}
-
-	for _, known := range ValidModels() {
-		if model == known {
-			return true
-		}
-	}
-	return false
+	return true
 }

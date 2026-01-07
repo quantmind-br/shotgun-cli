@@ -217,14 +217,13 @@ func runGeminiDoctor(cmd *cobra.Command, args []string) error {
 		issues = append(issues, "Gemini integration is disabled in configuration")
 	}
 
-	// Check 4: Model validity
+	// Check 4: Model configuration
 	fmt.Print("Checking model... ")
 	model := viper.GetString(config.KeyGeminiModel)
-	if gemini.IsValidModel(model) {
+	if model != "" {
 		fmt.Printf("✓ %s\n", model)
 	} else {
-		fmt.Printf("✗ invalid model: %s\n", model)
-		issues = append(issues, fmt.Sprintf("Invalid model: %s (valid: %v)", model, gemini.ValidModels()))
+		fmt.Println("⚠ not set (will use default)")
 	}
 
 	// Check 5: Timeout
