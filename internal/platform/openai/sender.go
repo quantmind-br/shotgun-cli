@@ -1,24 +1,29 @@
 package openai
 
 import (
+	"context"
+
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/http"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/llm"
 )
 
 type sender struct {
 	client *llm.BaseClient
+	model  string
 }
 
 // NewSender creates a new OpenAI sender
-func NewSender(client *llm.BaseClient) llm.Sender {
+func NewSender(client *llm.BaseClient, model string) llm.Sender {
 	return &sender{
 		client: client,
+		model:  model,
 	}
 }
 
 func (s *sender) BuildRequest(content string) (interface{}, error) {
 	return map[string]interface{}{
-		"model": s.client.Model,
+		"model": s.model,
 		"messages": []map[string]interface{}{
 			{
 				"role":    "user",
@@ -50,22 +55,13 @@ func (s *sender) ParseResponse(response interface{}) (*llm.Result, error) {
 		return nil, fmt.Errorf("no content in message")
 	}
 
-	usage := &llm.Usage{}
-	if usageRaw, ok := message["usage"].(map[string]interface{}); ok {
-		if pt, ok := usageRaw["prompt_tokens"].(float64); ok {
-			usage.PromptTokens = int(pt)
-		}
-		if ct, ok := usageRaw["completion_tokens"].(float64); ok {
-			usage.CompletionTokens = int(ct)
-		}
-		if tt, ok := usageRaw["total_tokens"].(float64); ok {
-			usage.TotalTokens = int(tt)
-		}
+	usage := &llm.Usage{
+		CompletionTokens: len(content),
 	}
 
 	return &llm.Result{
 		Response: content,
-		Model:    s.client.Model,
+		Model:    s.model,
 		Provider: "OpenAI",
 		Usage:    usage,
 	}
@@ -77,8 +73,7 @@ func (s *sender) GetEndpoint() string {
 
 func (s *sender) GetHeaders() map[string]string {
 	return map[string]string{
-		"Content-Type":  "application/json",
-		"Authorization": "Bearer " + s.client.APIKey,
+		"Content-Type": "application/json",
 	}
 }
 
@@ -87,10 +82,13 @@ func (s *sender) GetResponseType() interface{} {
 }
 
 type chatCompletionResponse struct {
-	Choices []struct {
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
+	Choices []Choice `json:"choices"`
+}
+
+type Choice struct {
+	Message Message `json:"message"`
+}
+
+type Message struct {
+	Content string `json:"content"`
 }
