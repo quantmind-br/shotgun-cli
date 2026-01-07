@@ -1,7 +1,11 @@
 package anthropic
 
 import (
+	"context"
+
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/anthropic"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/http"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/llm"
 )
 
@@ -37,9 +41,20 @@ func (s *sender) ParseResponse(response interface{}) (*llm.Result, error) {
 		return nil, fmt.Errorf("unexpected response type")
 	}
 
-	content, ok := resp["content"].(string)
+	choices, ok := resp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+
+	choice := choices[0].(map[string]interface{})
+	message, ok := choice["message"].(string)
 	if !ok {
-		return nil, fmt.Errorf("no content in response")
+		return nil, fmt.Errorf("no message in choice")
+	}
+
+	content, ok := message["content"].(string)
+	if !ok {
+		return nil, fmt.Errorf("no content in message")
 	}
 
 	usage := &llm.Usage{
@@ -73,5 +88,12 @@ func (s *sender) GetResponseType() interface{} {
 }
 
 type anthropicResponse struct {
-	Content string `json:"content"`
+	Choices []Choice `json:"choices"`
+}
+
+type Choice struct {
+	Message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"message"`
 }
