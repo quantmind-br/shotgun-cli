@@ -9,66 +9,88 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/platform/openai"
 )
 
-type Client struct {
-	*llm.BaseClient
-	sender *sender
+type sender struct {
+	client *llm.BaseClient
+	model  string
 }
 
-// NewClient creates a new OpenAI client
-func NewClient(cfg llm.Config) (*Client, error) {
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("api key is required")
+// NewSender creates a new OpenAI sender
+func NewSender(client *llm.BaseClient) llm.Sender {
+	return &sender{
+		client: client,
+		model: "gpt-4o",
 	}
+}
 
-	timeout := time.Duration(cfg.Timeout) * time.Second
-	if timeout == 0 {
-		timeout = 300 * time.Second
-	}
-
-	baseClient := llm.NewBaseClient(
-		&http.JSONClient{
-			Timeout: timeout,
+func (s *sender) BuildRequest(content string) (interface{}, error) {
+	return map[string]interface{}{
+		"model":    s.model,
+		"messages": []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": content,
+			},
 		},
-		llm.Config{
-			APIKey:       cfg.APIKey,
-			Model:        cfg.Model,
-			MaxTokens:    cfg.MaxTokens,
-			ProviderName: "OpenAI",
-			BaseURL:      cfg.BaseURL,
-		},
-	)
-
-	sender := &sender{
-		client: baseClient,
-		model:  cfg.Model,
 	}
-
-	return &Client{
-		BaseClient: baseClient,
-		sender:     sender,
 	}
 }
 
-func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) {
-	return c.BaseClient.Send(ctx, content)
+func (s *sender) ParseResponse(response interface{}) (*llm.Result, error) {
+	resp, ok := response.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	choices, ok := resp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return nil, fmt.Errorf("no choices in response")
+	}
+
+	choice := choices[0].(map[string]interface{})
+	message, ok := choice["message"].(string)
+	if !ok {
+		return nil, fmt.Errorf("no message in choice")
+	}
+
+	content, ok := message["content"].(string)
+	if !ok {
+		return nil, fmt.Errorf("no content in message")
+	}
+
+	usage := &llm.Usage{
+		CompletionTokens: len(content),
+	}
+
+	return &llm.Result{
+		Response:    content,
+		Model:    s.model,
+			Provider:    "OpenAI",
+		Usage:    usage,
+	}
 }
 
-func (c *Client) SendWithProgress(ctx context.Context, content string, progress llm.ProgressCallback) (*llm.Result, error) {
-	return c.BaseClient.SendWithProgress(ctx, content, progress)
+func (s *sender) GetEndpoint() string {
+	return "/v1/chat/completions"
 }
 
-func (c *Client) Name() string {
-	return "OpenAI"
+func (s *sender) GetHeaders() map[string]string {
+	return map[string]string{
+		"Content-Type": "application/json",
+		"Authorization": "Bearer " + s.client.APIKey,
+	}
 }
 
-func (c *Client) IsAvailable() bool {
-	return c.BaseClient.IsAvailable()
+func (s *sender) GetResponseType() interface{} {
+	return &openaiResponse{}
 }
 
-func (c *Client) IsConfigured() bool {
-	return c.BaseClient.IsConfigured()
+type openaiResponse struct {
+	Choices []Choice `json:"choices"`
 }
 
-func (c *Client) ValidateConfig() error {
-	return c.BaseClient.ValidateConfig()
+type Choice struct {
+	Message struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
 }
