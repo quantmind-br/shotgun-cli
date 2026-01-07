@@ -72,6 +72,57 @@ func (c *JSONClient) PostJSON(ctx context.Context, path string, headers map[stri
 	return nil
 }
 
+// PostJSONWithProgress posts JSON with progress reporting
+func (c *JSONClient) PostJSONWithProgress(ctx context.Context, path string, headers map[string]string, body interface{}, target interface{}, progressFn ProgressCallback) ([]byte, error) {
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	url := c.baseURL + path
+	req, err := nethttp.NewRequestWithContext(ctx, nethttp.MethodPost, url, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != nethttp.StatusOK {
+		return respBody, &HTTPError{StatusCode: resp.StatusCode, Body: respBody}
+	}
+
+	if err := json.Unmarshal(respBody, target); err != nil {
+		return respBody, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if progressFn != nil {
+		// Calculate content size for progress
+		contentSize := len(jsonBody)
+		progressFn("uploading", fmt.Sprintf("sending %d bytes", contentSize), int64(contentSize), int64(contentSize))
+	}
+
+	return respBody, nil
+}
+
+// ProgressCallback is a function type for progress reporting
+type ProgressCallback func(stage string, message string, current, total int64)
+
 type HTTPError struct {
 	StatusCode int
 	Body       []byte
