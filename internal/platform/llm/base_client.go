@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/http",
+	"github.com/quantmind-br/shotgun-cli/internal/platform/http"
 )
 
 // BaseClient provides common functionality for HTTP-based LLM providers using composition pattern
