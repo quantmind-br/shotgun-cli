@@ -56,7 +56,7 @@ Shotgun CLI implements a **Clean Architecture/Hexagonal Architecture** pattern w
 1. **Presentation/Adapter Layer** (`cmd`, `internal/ui`): Handles user interaction through CLI commands and interactive TUI wizard
 2. **Application Layer** (`internal/app`): Orchestrates business logic and provides a unified API (`ContextService`) for presentation layers
 3. **Core/Domain Layer** (`internal/core`): Contains pure business logic for context generation, file scanning, template management, and token estimation
-4. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (LLM providers, clipboard operations)
+4. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (LLM providers, `http` client, `geminiweb`, clipboard operations)
 
 ### Technology Stack and Frameworks
 
@@ -133,6 +133,26 @@ graph TD
 - **Template Method Pattern**: Standardized template rendering process
 - **Layered Architecture**: Clear separation between presentation, business logic, and infrastructure
 - **Factory Pattern**: Template manager and scanner creation
+
+### Platform Layer Architecture
+
+The Platform layer provides a standardized way for LLM providers to communicate with external APIs.
+
+#### Shared HTTP Client
+
+Most LLM providers use the shared `JSONClient` located in `internal/platform/http/client.go`. This client provides:
+
+- **Standardized Requests**: Using `PostJSON()` for consistent API interaction
+- **Error Handling**: Standardized `HTTPError` type that captures status codes and response bodies
+- **Configuration**: Unified timeout and base URL handling
+
+#### Provider Implementation
+
+By using the shared client, LLM providers (OpenAI, Anthropic, GeminiAPI) only need to implement:
+1. **Request Building**: Constructing the provider-specific JSON request structure
+2. **Response Mapping**: Defining the target structure for JSON unmarshaling
+3. **Error Handling**: Mapping `HTTPError` to provider-specific error messages
+4. **Authentication**: Setting the required headers (e.g., `Authorization`, `x-api-key`)
 
 ## LLM Provider Configuration
 

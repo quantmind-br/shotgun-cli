@@ -54,6 +54,8 @@ func (m *ProgressModel) Update(current, total int64, stage, message string) {
 }
 
 func (m *ProgressModel) UpdateMessage(stage, message string) {
+	m.current = 0
+	m.total = 0
 	m.stage = stage
 	m.message = message
 	m.visible = true
@@ -112,10 +114,10 @@ func (m *ProgressModel) View() string {
 	content.WriteString(m.centerLine(topBorder))
 	content.WriteString("\n")
 
-	// Title with spinner
+	// Title
 	title := lipgloss.NewStyle().Foreground(titleColor).Bold(true).Render("Processing")
 	titleLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
-		m.padCenter(m.spinner.View()+" "+title, modalWidth-2) +
+		m.padCenter(title, modalWidth-2) +
 		lipgloss.NewStyle().Foreground(borderColor).Render("│")
 	content.WriteString(m.centerLine(titleLine))
 	content.WriteString("\n")
@@ -167,21 +169,12 @@ func (m *ProgressModel) View() string {
 		content.WriteString(m.centerLine(statsLine))
 		content.WriteString("\n")
 	} else if m.message != "" {
-		// Show message if no progress totals
-		truncated := m.truncate(m.message, modalWidth-4)
-		messageStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
-		padding := strings.Repeat(" ", modalWidth-4-len(truncated))
-		messageLine := lipgloss.NewStyle().Foreground(borderColor).Render("│ ") +
-			messageStyled + padding +
-			lipgloss.NewStyle().Foreground(borderColor).Render(" │")
-		content.WriteString(m.centerLine(messageLine))
-		content.WriteString("\n")
-
-		// Activity indicator using spinner
-		activityLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
-			m.padCenter(m.spinner.View(), modalWidth-2) +
+		truncated := m.truncate(m.message, modalWidth-6)
+		messageWithSpinner := m.spinner.View() + " " + lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
+		messageLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
+			m.padCenter(messageWithSpinner, modalWidth-2) +
 			lipgloss.NewStyle().Foreground(borderColor).Render("│")
-		content.WriteString(m.centerLine(activityLine))
+		content.WriteString(m.centerLine(messageLine))
 		content.WriteString("\n")
 	}
 

@@ -625,7 +625,7 @@ func (m *WizardModel) handleSendToLLM() tea.Cmd {
 		Message: "Sending to LLM...",
 		Visible: true,
 	}
-	m.progressComponent.UpdateMessage("sending", "Sending to LLM...")
+	m.progressComponent.UpdateMessage("", "Sending to LLM...")
 
 	return tea.Batch(m.sendToLLMCmd(), m.progressComponent.Init())
 }
@@ -636,7 +636,7 @@ func (m *WizardModel) handleLLMProgress(msg screens.LLMProgressMsg) {
 		Message: "Sending to LLM...",
 		Visible: true,
 	}
-	m.progressComponent.UpdateMessage(msg.Stage, "Sending to LLM...")
+	m.progressComponent.UpdateMessage("", "Sending to LLM...")
 }
 
 func (m *WizardModel) handleLLMComplete(msg screens.LLMCompleteMsg) {

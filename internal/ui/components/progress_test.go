@@ -44,6 +44,20 @@ func TestProgressUpdateMessage(t *testing.T) {
 	assert.True(t, p.visible)
 }
 
+func TestProgressUpdateMessage_ResetsCurrentAndTotal(t *testing.T) {
+	t.Parallel()
+	p := NewProgress()
+	p.Update(42, -1, "scanning", "")
+
+	p.UpdateMessage("sending", "Sending to LLM...")
+
+	assert.Equal(t, int64(0), p.current, "current should be reset to 0")
+	assert.Equal(t, int64(0), p.total, "total should be reset to 0")
+	assert.Equal(t, "sending", p.stage)
+	assert.Equal(t, "Sending to LLM...", p.message)
+	assert.True(t, p.visible)
+}
+
 func TestProgressHide(t *testing.T) {
 	p := NewProgress()
 	p.Update(10, 100, "scanning", "")

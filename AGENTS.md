@@ -108,7 +108,7 @@ cmd/                    → Presentation (CLI commands, composition root)
 internal/ui/            → Presentation (TUI wizard, Bubble Tea MVU)
 internal/app/           → Application (orchestration, ContextService)
 internal/core/          → Domain (scanner, template, llm, ignore, tokens)
-internal/platform/      → Infrastructure (gemini, clipboard, openai, anthropic)
+internal/platform/      → Infrastructure (geminiweb, http, clipboard, openai, anthropic)
 ```
 
 **Key rules**:
@@ -116,10 +116,26 @@ internal/platform/      → Infrastructure (gemini, clipboard, openai, anthropic
 - Pass config via dependency injection, not global Viper access in core
 - Use interfaces from core packages (`Scanner`, `Provider`, `ContextGenerator`)
 - Create LLM providers via `app.DefaultProviderRegistry.Create()`
+- Use `app.CLIConfig` from `internal/app/config.go` for CLI flag parsing
+- Use `app.GenerateConfig` from `internal/app/context.go` for service layer configuration
 
 ### Adding a New LLM Provider
 1. Implement `llm.Provider` interface in `internal/platform/<provider>/`
 2. Register in `internal/app/providers.go`
+
+### Shared HTTP Client
+Most providers use the shared `JSONClient` in `internal/platform/http/` for standardized API calls.
+
+**Usage Example:**
+```go
+var response TargetStruct
+err := c.jsonClient.PostJSON(ctx, "/endpoint", headers, requestBody, &response)
+if err != nil {
+    return nil, c.handleError(err) // Map platformhttp.HTTPError to provider error
+}
+```
+
+> **Note**: The browser-based Gemini integration is located in the `geminiweb` package.
 
 ## Linting Configuration
 **Max line length**: 120 chars | **Max cyclomatic complexity**: 25  
