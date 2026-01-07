@@ -100,8 +100,8 @@ func TestWizardFinishScan_SuccessfulCompletion(t *testing.T) {
 
 	// Simulate successful scan by setting result
 	tree := &scanner.FileNode{
-		Name: "root",
-		Path: "/workspace",
+		Name:  "root",
+		Path:  "/workspace",
 		IsDir: true,
 		Children: []*scanner.FileNode{
 			{Name: "main.go", Path: "/workspace/main.go", Size: 1024},
@@ -1729,8 +1729,8 @@ func TestWizardIterativeGenerateCmd_StartsGeneration(t *testing.T) {
 		MaxTotalSize: 10 * 1024 * 1024,
 		MaxFiles:     100,
 		TemplateVars: map[string]string{
-			"TASK":     "test task",
-			"RULES":    "",
+			"TASK":         "test task",
+			"RULES":        "",
 			"CURRENT_DATE": time.Now().Format("2006-01-02"),
 		},
 	}
@@ -1782,8 +1782,8 @@ func TestWizardIterativeGenerateCmd_AlreadyStarted(t *testing.T) {
 		MaxTotalSize: 10 * 1024 * 1024,
 		MaxFiles:     100,
 		TemplateVars: map[string]string{
-			"TASK":     "test task",
-			"RULES":    "",
+			"TASK":         "test task",
+			"RULES":        "",
 			"CURRENT_DATE": time.Now().Format("2006-01-02"),
 		},
 	}
@@ -2335,11 +2335,7 @@ func TestWizardHandleSendToGemini_WithValidProvider(t *testing.T) {
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
 	cmd := wizard.handleSendToGemini()
-	// Command may be nil if provider is not available/configured
-	if cmd != nil {
-		// If not nil, should be a valid command
-	}
-	// Check that geminiSending flag is set appropriately
+	_ = cmd
 }
 
 func TestWizardHandleRescanRequest_FileSelectionStep(t *testing.T) {

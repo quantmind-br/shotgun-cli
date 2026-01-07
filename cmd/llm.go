@@ -61,15 +61,15 @@ func runLLMStatus(cmd *cobra.Command, args []string) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintln(w, "=== LLM Configuration ===")
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "Provider:\t%s\n", cfg.Provider)
-	fmt.Fprintf(w, "Model:\t%s\n", cfg.Model)
-	fmt.Fprintf(w, "Base URL:\t%s\n", displayURL(cfg.BaseURL, cfg.Provider))
-	fmt.Fprintf(w, "API Key:\t%s\n", cfg.MaskAPIKey())
-	fmt.Fprintf(w, "Timeout:\t%ds\n", cfg.Timeout)
+	_, _ = fmt.Fprintln(w, "=== LLM Configuration ===")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintf(w, "Provider:\t%s\n", cfg.Provider)
+	_, _ = fmt.Fprintf(w, "Model:\t%s\n", cfg.Model)
+	_, _ = fmt.Fprintf(w, "Base URL:\t%s\n", displayURL(cfg.BaseURL, cfg.Provider))
+	_, _ = fmt.Fprintf(w, "API Key:\t%s\n", cfg.MaskAPIKey())
+	_, _ = fmt.Fprintf(w, "Timeout:\t%ds\n", cfg.Timeout)
 
-	w.Flush()
+	_ = w.Flush()
 
 	// Test provider
 	fmt.Println()

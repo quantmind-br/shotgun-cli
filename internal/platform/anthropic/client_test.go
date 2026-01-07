@@ -37,7 +37,7 @@ func TestClient_Send_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -71,7 +71,7 @@ func TestClient_Send_MultipleContentBlocks(t *testing.T) {
 				{Type: "text", Text: "Second part."},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -94,7 +94,7 @@ func TestClient_Send_APIError(t *testing.T) {
 		resp.Error.Message = "Invalid API key"
 
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -145,7 +145,7 @@ func TestClient_SendWithProgress(t *testing.T) {
 			ID:      "msg_test",
 			Content: []ContentBlock{{Type: "text", Text: "Hello!"}},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

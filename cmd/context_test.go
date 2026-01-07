@@ -269,11 +269,11 @@ func TestRenderProgressHuman_WithTotal(t *testing.T) {
 
 	renderProgressHuman(p)
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	// Verify output contains expected elements
@@ -308,11 +308,11 @@ func TestRenderProgressHuman_WithoutTotal(t *testing.T) {
 
 	renderProgressHuman(p)
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	// Verify output contains expected elements
@@ -360,11 +360,11 @@ func TestRenderProgressHuman_DifferentStages(t *testing.T) {
 
 			renderProgressHuman(p)
 
-			w.Close()
+			_ = w.Close()
 			os.Stderr = oldStderr
 
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			output := buf.String()
 
 			if !strings.Contains(output, "["+s.stage+"]") {
@@ -436,11 +436,11 @@ func TestRenderProgressJSON(t *testing.T) {
 
 			renderProgressJSON(tt.progress)
 
-			w.Close()
+			_ = w.Close()
 			os.Stderr = oldStderr
 
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			output := strings.TrimSpace(buf.String())
 
 			if !strings.Contains(output, tt.wantJSON) {
@@ -514,11 +514,11 @@ func TestRenderProgress(t *testing.T) {
 
 			renderProgress(tt.mode, tt.progress)
 
-			w.Close()
+			_ = w.Close()
 			os.Stderr = oldStderr
 
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			output := strings.TrimSpace(buf.String())
 
 			if tt.wantContain == "" {
@@ -569,11 +569,11 @@ func TestPrintGenerationSummary(t *testing.T) {
 
 	printGenerationSummary(result, cfg)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "Context generated successfully") {
@@ -770,11 +770,11 @@ func TestClearProgressLine(t *testing.T) {
 
 	clearProgressLine(ProgressHuman)
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if output == "" {
@@ -789,11 +789,11 @@ func TestClearProgressLine_NoOutput(t *testing.T) {
 
 	clearProgressLine(ProgressJSON)
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if output != "" {

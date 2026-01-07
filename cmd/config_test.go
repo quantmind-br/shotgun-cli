@@ -177,9 +177,9 @@ func TestGetDefaultConfigPath_XDGConfigHome(t *testing.T) {
 	// Save original value
 	original, exists := os.LookupEnv("XDG_CONFIG_HOME")
 	if exists {
-		defer os.Setenv("XDG_CONFIG_HOME", original)
+		defer func() { _ = os.Setenv("XDG_CONFIG_HOME", original) }()
 	} else {
-		defer os.Unsetenv("XDG_CONFIG_HOME")
+		defer func() { _ = os.Unsetenv("XDG_CONFIG_HOME") }()
 	}
 
 	// Set custom XDG_CONFIG_HOME
@@ -211,15 +211,15 @@ func TestGetDefaultConfigPath_FallbackToHome(t *testing.T) {
 	if !homeExists || os.Getenv("HOME") == "" {
 		homeDir := "/tmp/test-home"
 		_ = os.Setenv("HOME", homeDir)
-		defer os.Unsetenv("HOME")
+		defer func() { _ = os.Unsetenv("HOME") }()
 	}
 
 	// Restore original values after test
 	if xdgExists {
-		defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
 	}
 	if homeExists {
-		defer os.Setenv("HOME", originalHome)
+		defer func() { _ = os.Setenv("HOME", originalHome) }()
 	}
 
 	path := getDefaultConfigPath()

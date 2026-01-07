@@ -28,8 +28,8 @@ func TestGenerateConfig_Validate_NonExistentPath(t *testing.T) {
 func TestGenerateConfig_Validate_FileNotDirectory(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-file-*.txt")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_ = tmpFile.Close()
 
 	cfg := GenerateConfig{
 		RootPath: tmpFile.Name(),

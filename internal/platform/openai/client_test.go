@@ -37,7 +37,7 @@ func TestClient_Send_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -68,7 +68,7 @@ func TestClient_Send_APIError(t *testing.T) {
 		resp.Error.Type = "invalid_request_error"
 
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -95,7 +95,7 @@ func TestClient_Send_EmptyChoices(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -162,7 +162,7 @@ func TestClient_SendWithProgress(t *testing.T) {
 				{Message: Message{Role: "assistant", Content: "Hello!"}},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

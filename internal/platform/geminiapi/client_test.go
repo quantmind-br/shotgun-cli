@@ -38,7 +38,7 @@ func TestClient_Send_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -76,7 +76,7 @@ func TestClient_Send_MultipleParts(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -101,7 +101,7 @@ func TestClient_Send_APIError(t *testing.T) {
 				Status:  "INVALID_ARGUMENT",
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -123,7 +123,7 @@ func TestClient_Send_NoCandidates(t *testing.T) {
 		resp := GenerateResponse{
 			Candidates: []Candidate{},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -140,7 +140,6 @@ func TestClient_Send_NoCandidates(t *testing.T) {
 }
 
 func TestClient_NewClient_Validation(t *testing.T) {
-	// Missing API key
 	_, err := NewClient(llm.Config{
 		Model:   "gemini-2.5-flash",
 		Timeout: 30,
@@ -148,7 +147,6 @@ func TestClient_NewClient_Validation(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "api key is required")
 
-	// Valid config
 	client, err := NewClient(llm.Config{
 		APIKey:  "test-key",
 		Timeout: 30,
@@ -174,7 +172,7 @@ func TestClient_SendWithProgress(t *testing.T) {
 				{Content: Content{Parts: []Part{{Text: "Hello!"}}}},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

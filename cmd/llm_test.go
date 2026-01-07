@@ -160,11 +160,11 @@ func TestRunLLMStatus_OpenAI_Configured(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestRunLLMStatus_OpenAI_Configured(t *testing.T) {
 	assert.Contains(t, output, "Provider:  openai")
 	assert.Contains(t, output, "Model:     gpt-4o")
 	assert.Contains(t, output, "Timeout:   60s")
-	assert.Contains(t, output, "sk-t") // masked API key prefix
+	assert.Contains(t, output, "sk-t")
 }
 
 func TestRunLLMStatus_Anthropic_WithCustomURL(t *testing.T) {
@@ -190,11 +190,11 @@ func TestRunLLMStatus_Anthropic_WithCustomURL(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -217,11 +217,11 @@ func TestRunLLMStatus_Gemini_DefaultBaseURL(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -244,14 +244,13 @@ func TestRunLLMStatus_GeminiWeb(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	// Should not error, even if binary doesn't exist
 	_ = err
 	assert.Contains(t, output, "Provider:  geminiweb")
 	assert.Contains(t, output, "gemini-2.0-pro")
@@ -270,14 +269,13 @@ func TestRunLLMStatus_MissingAPIKey(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	// Should not error, but show not ready status
 	_ = err
 	assert.Contains(t, output, "Not ready")
 }
@@ -294,11 +292,11 @@ func TestRunLLMStatus_InvalidProvider(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMStatus(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	_ = err
@@ -317,11 +315,11 @@ func TestRunLLMDoctor_OpenAI(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -329,7 +327,7 @@ func TestRunLLMDoctor_OpenAI(t *testing.T) {
 	assert.Contains(t, output, "Checking provider...")
 	assert.Contains(t, output, "Checking API key...")
 	assert.Contains(t, output, "Checking model...")
-	assert.Contains(t, output, "Found") // Should find issues
+	assert.Contains(t, output, "Found")
 }
 
 func TestRunLLMDoctor_OpenAI_Configured(t *testing.T) {
@@ -346,18 +344,18 @@ func TestRunLLMDoctor_OpenAI_Configured(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
 	assert.Contains(t, output, "Checking provider... openai")
 	assert.Contains(t, output, "Checking API key... configured")
 	assert.Contains(t, output, "Checking model... gpt-4o")
-	assert.Contains(t, output, "No issues found") // Everything is configured
+	assert.Contains(t, output, "No issues found")
 }
 
 func TestRunLLMDoctor_Anthropic(t *testing.T) {
@@ -374,11 +372,11 @@ func TestRunLLMDoctor_Anthropic(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -386,7 +384,7 @@ func TestRunLLMDoctor_Anthropic(t *testing.T) {
 	assert.Contains(t, output, "Checking provider... anthropic")
 	assert.Contains(t, output, "Checking API key... configured")
 	assert.Contains(t, output, "Checking model... claude-sonnet-4-20250514")
-	assert.Contains(t, output, "No issues found") // Everything is configured
+	assert.Contains(t, output, "No issues found")
 }
 
 func TestRunLLMDoctor_Gemini(t *testing.T) {
@@ -403,11 +401,11 @@ func TestRunLLMDoctor_Gemini(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -415,7 +413,7 @@ func TestRunLLMDoctor_Gemini(t *testing.T) {
 	assert.Contains(t, output, "Checking provider... gemini")
 	assert.Contains(t, output, "Checking API key... configured")
 	assert.Contains(t, output, "Checking model... gemini-2.5-flash")
-	assert.Contains(t, output, "No issues found") // Everything is configured
+	assert.Contains(t, output, "No issues found")
 }
 
 func TestRunLLMDoctor_GeminiWeb(t *testing.T) {
@@ -432,20 +430,18 @@ func TestRunLLMDoctor_GeminiWeb(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
 	assert.Contains(t, output, "Running diagnostics for geminiweb")
 	assert.Contains(t, output, "Checking provider... geminiweb")
 	assert.Contains(t, output, "Checking model... gemini-2.0-pro")
-	// GeminiWeb doesn't check API key
 	assert.NotContains(t, output, "Checking API key")
-	// Binary likely doesn't exist, so there should be issues
 	assert.Contains(t, output, "Next steps:")
 }
 
@@ -461,14 +457,13 @@ func TestRunLLMDoctor_InvalidProvider(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	// Should not error, but show issues
 	_ = err
 	assert.Contains(t, output, "Running diagnostics for invalid-provider")
 	assert.Contains(t, output, "Found")
@@ -488,11 +483,11 @@ func TestRunLLMDoctor_NoAPIKey(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMDoctor(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -513,11 +508,11 @@ func TestRunLLMList(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMList(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
@@ -556,11 +551,11 @@ func TestRunLLMList_CurrentProviderMarker(t *testing.T) {
 			cmd := &cobra.Command{}
 			err := runLLMList(cmd, []string{})
 
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			output := buf.String()
 
 			require.NoError(t, err)
@@ -580,15 +575,14 @@ func TestRunLLMList_ProviderDescriptions(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runLLMList(cmd, []string{})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	require.NoError(t, err)
-	// Check each provider's description
 	assert.Contains(t, output, "GPT-4o, GPT-4, o1, o3")
 	assert.Contains(t, output, "Claude 4, Claude 3.5")
 	assert.Contains(t, output, "Gemini 2.5, Gemini 2.0")
@@ -638,10 +632,10 @@ func TestGetProviderRegistry_CreatesProvider(t *testing.T) {
 	registry := GetProviderRegistry()
 
 	tests := []struct {
-		name      string
-		provider  llm.ProviderType
-		model     string
-		apiKey    string
+		name     string
+		provider llm.ProviderType
+		model    string
+		apiKey   string
 	}{
 		{"OpenAI", llm.ProviderOpenAI, "gpt-4o", "sk-test"},
 		{"Anthropic", llm.ProviderAnthropic, "claude-sonnet-4-20250514", "sk-ant-test"},
