@@ -1,18 +1,44 @@
 package ui
 
 import (
+	gocontext "context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 )
+
+type mockContextService struct {
+	sendToLLMWithProgressFunc func(ctx gocontext.Context, content string, cfg app.LLMSendConfig, progress app.LLMProgressCallback) (*llm.Result, error)
+}
+
+func (m *mockContextService) Generate(ctx gocontext.Context, cfg app.GenerateConfig) (*app.GenerateResult, error) {
+	return nil, nil
+}
+
+func (m *mockContextService) GenerateWithProgress(ctx gocontext.Context, cfg app.GenerateConfig, progress app.ProgressCallback) (*app.GenerateResult, error) {
+	return nil, nil
+}
+
+func (m *mockContextService) SendToLLM(ctx gocontext.Context, content string, provider llm.Provider) (*llm.Result, error) {
+	return nil, nil
+}
+
+func (m *mockContextService) SendToLLMWithProgress(ctx gocontext.Context, content string, cfg app.LLMSendConfig, progress app.LLMProgressCallback) (*llm.Result, error) {
+	if m.sendToLLMWithProgressFunc != nil {
+		return m.sendToLLMWithProgressFunc(ctx, content, cfg, progress)
+	}
+	return &llm.Result{Response: "mock response", Duration: 100 * time.Millisecond}, nil
+}
 
 const (
 	testTaskDescription = "Implement feature"
@@ -22,7 +48,7 @@ const (
 func TestWizardInitStartsScanCommand(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/project", &scanner.ScanConfig{MaxFiles: 10}, nil)
+	wizard := NewWizard("/tmp/project", &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
 	cmd := wizard.Init()
 	if cmd == nil {
 		t.Fatalf("expected init command to be non-nil")
@@ -54,7 +80,7 @@ func TestWizardInitStartsScanCommand(t *testing.T) {
 func TestWizardHandlesScanLifecycle(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
 
 	var model tea.Model
 	var cmd tea.Cmd
@@ -92,7 +118,7 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 func TestWizardFinishScan_SuccessfulCompletion(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
 
 	// Initialize scan state
 	model, _ := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
@@ -136,7 +162,7 @@ func TestWizardFinishScan_SuccessfulCompletion(t *testing.T) {
 func TestWizardFinishScan_WithError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 5}, nil, nil)
 
 	// Initialize scan state
 	model, _ := wizard.Update(startScanMsg{rootPath: "/workspace", config: &scanner.ScanConfig{MaxFiles: 5}})
@@ -172,7 +198,7 @@ func TestWizardFinishScan_WithError(t *testing.T) {
 func TestWizardFinishScan_NilScanState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	// scanState is nil by default
 
 	// Call finishScan - it returns a command even with nil scanState
@@ -196,7 +222,7 @@ func TestWizardFinishScan_NilScanState(t *testing.T) {
 func TestWizardFinishGeneration_NilGenerateState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	// generateState is nil by default
 
 	// Call finishGeneration - it returns a command even with nil generateState
@@ -221,7 +247,7 @@ func TestWizardFinishGeneration_SuccessfulGeneration(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil)
+	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic", Content: "{FILE_STRUCTURE}"}
@@ -270,7 +296,7 @@ func TestWizardFinishGeneration_SuccessfulGeneration(t *testing.T) {
 func TestWizardFinishGeneration_EmptyContent(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 
@@ -314,7 +340,7 @@ func TestWizardFinishGeneration_EmptyContent(t *testing.T) {
 func TestWizardFinishGeneration_ContentExceedsMaxSize(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -364,7 +390,7 @@ func TestWizardFinishGeneration_ContentExceedsMaxSize(t *testing.T) {
 func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -393,7 +419,7 @@ func TestWizardCanAdvanceStepLogic(t *testing.T) {
 func TestWizardGenerateContextCommand(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -416,7 +442,7 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -468,7 +494,7 @@ func TestWizardGenerationFlowUpdatesState(t *testing.T) {
 func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.selectedFiles["main.go"] = true
 
 	cmd := wizard.generateContext()
@@ -488,7 +514,7 @@ func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 func TestWizardClipboardFailureStored(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.review = screens.NewReview(map[string]bool{}, nil, nil, "", "", "")
 	wizard.generatedFilePath = "/tmp/test.md"
 
@@ -503,7 +529,7 @@ func TestWizardClipboardFailureStored(t *testing.T) {
 func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -530,7 +556,7 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 func TestWizardKeyboardNavigation(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -551,7 +577,7 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 }
 
 func TestWizardHelpToggle(t *testing.T) {
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 
 	// Initially help should be hidden
 	if wizard.showHelp {
@@ -586,7 +612,7 @@ func TestWizardHelpToggle(t *testing.T) {
 func TestWizardSkipStepsNoTaskNoRules(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that has neither TASK nor RULES
@@ -610,7 +636,7 @@ func TestWizardSkipStepsNoTaskNoRules(t *testing.T) {
 func TestWizardSkipStepsNoTaskHasRules(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that has RULES but not TASK
@@ -634,7 +660,7 @@ func TestWizardSkipStepsNoTaskHasRules(t *testing.T) {
 func TestWizardSkipStepsHasTaskNoRules(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that has TASK but not RULES
@@ -659,7 +685,7 @@ func TestWizardSkipStepsHasTaskNoRules(t *testing.T) {
 func TestWizardNoSkipWhenBothRequired(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that has both TASK and RULES
@@ -692,7 +718,7 @@ func TestWizardNoSkipWhenBothRequired(t *testing.T) {
 func TestWizardBackwardNavigationSkipsCorrectly(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template with no TASK and no RULES
@@ -717,7 +743,7 @@ func TestWizardBackwardNavigationSkipsCorrectly(t *testing.T) {
 func TestWizardBackwardFromRulesWithNoTask(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template with RULES but no TASK
@@ -742,7 +768,7 @@ func TestWizardBackwardFromRulesWithNoTask(t *testing.T) {
 func TestWizardRequiresTaskInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 
 	// No template set
 	if wizard.requiresTaskInput() {
@@ -771,7 +797,7 @@ func TestWizardRequiresTaskInput(t *testing.T) {
 func TestWizardRequiresRulesInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 
 	// No template set
 	if wizard.requiresRulesInput() {
@@ -800,7 +826,7 @@ func TestWizardRequiresRulesInput(t *testing.T) {
 func TestWizardCanAdvanceWithoutTaskWhenNotRequired(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that does NOT require TASK
@@ -822,7 +848,7 @@ func TestWizardCanAdvanceWithoutTaskWhenNotRequired(t *testing.T) {
 func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	// Template that requires TASK
@@ -852,7 +878,7 @@ func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
 func TestWizardHandleWindowResize(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
 
@@ -878,7 +904,7 @@ func TestWizardHandleWindowResize(t *testing.T) {
 func TestWizardHandleScanError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.progress.Visible = true // Simulate progress being shown
 
 	testErr := fmt.Errorf("permission denied: /secret")
@@ -899,7 +925,7 @@ func TestWizardHandleScanError(t *testing.T) {
 func TestWizardHandleGenerationError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.progress.Visible = true
 
 	testErr := fmt.Errorf("template rendering failed")
@@ -920,7 +946,7 @@ func TestWizardHandleGenerationError(t *testing.T) {
 func TestWizardGeminiLifecycle(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
@@ -931,24 +957,24 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "", "")
 
 	// Test GeminiProgressMsg
-	model, _ := wizard.Update(screens.GeminiProgressMsg{Stage: "sending"})
+	model, _ := wizard.Update(screens.LLMProgressMsg{Stage: "sending"})
 	wizard = model.(*WizardModel)
 	if wizard.progress.Stage != "sending" {
 		t.Errorf("expected progress stage 'sending', got %q", wizard.progress.Stage)
 	}
 
 	// Test GeminiCompleteMsg
-	model, _ = wizard.Update(screens.GeminiCompleteMsg{
+	model, _ = wizard.Update(screens.LLMCompleteMsg{
 		Response:   "AI response here",
 		OutputFile: "/tmp/response.md",
 		Duration:   5 * time.Second,
 	})
 	wizard = model.(*WizardModel)
 
-	if wizard.geminiResponseFile != "/tmp/response.md" {
-		t.Errorf("expected response file '/tmp/response.md', got %q", wizard.geminiResponseFile)
+	if wizard.llmResponseFile != "/tmp/response.md" {
+		t.Errorf("expected response file '/tmp/response.md', got %q", wizard.llmResponseFile)
 	}
-	if wizard.geminiSending {
+	if wizard.llmSending {
 		t.Error("geminiSending should be false after completion")
 	}
 }
@@ -956,17 +982,17 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 func TestWizardHandleGeminiError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.step = StepReview
 	wizard.review = screens.NewReview(map[string]bool{}, wizard.fileTree, nil, "", "", "")
-	wizard.geminiSending = true
+	wizard.llmSending = true
 
 	testErr := fmt.Errorf("geminiweb: connection timeout")
-	model, _ := wizard.Update(screens.GeminiErrorMsg{Err: testErr})
+	model, _ := wizard.Update(screens.LLMErrorMsg{Err: testErr})
 	wizard = model.(*WizardModel)
 
-	if wizard.geminiSending {
+	if wizard.llmSending {
 		t.Error("geminiSending should be false after error")
 	}
 	// Error is handled by review screen, check that no panic occurred
@@ -975,7 +1001,7 @@ func TestWizardHandleGeminiError(t *testing.T) {
 func TestWizardHandleTemplateMessage(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.step = StepTemplateSelection
@@ -1013,7 +1039,7 @@ func TestWizardHandleTemplateMessage_WrongStep(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+			wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 			wizard.step = tt.step
 
 			// Create a template selection (should be ignored due to wrong step)
@@ -1037,7 +1063,7 @@ func TestWizardHandleTemplateMessage_WrongStep(t *testing.T) {
 func TestWizardHandleTemplateMessage_NilTemplateSelection(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepTemplateSelection
 	// templateSelection is nil by default
 
@@ -1057,7 +1083,7 @@ func TestWizardHandleTemplateMessage_NilTemplateSelection(t *testing.T) {
 func TestWizardHandleTemplateMessage_CorrectStepWithSelection(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.step = StepTemplateSelection
@@ -1083,7 +1109,7 @@ func TestWizardHandleTemplateMessage_CorrectStepWithSelection(t *testing.T) {
 func TestWizardHandleRescanRequest(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 100}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 100}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.step = StepFileSelection
@@ -1109,7 +1135,7 @@ func TestWizardHandleRescanRequest(t *testing.T) {
 func TestWizardViewRendersFileSelectionStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
 	wizard.step = StepFileSelection
@@ -1130,7 +1156,7 @@ func TestWizardViewRendersFileSelectionStep(t *testing.T) {
 func TestWizardViewRendersTemplateSelectionStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.step = StepTemplateSelection
 	wizard.templateSelection = screens.NewTemplateSelection() // Will use default templates
@@ -1147,7 +1173,7 @@ func TestWizardViewRendersTemplateSelectionStep(t *testing.T) {
 func TestWizardViewRendersTaskInputStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
 	wizard.step = StepTaskInput
@@ -1165,7 +1191,7 @@ func TestWizardViewRendersTaskInputStep(t *testing.T) {
 func TestWizardViewRendersRulesInputStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.template = &template.Template{Name: "basic", Content: "Rules: {RULES}"}
 	wizard.step = StepRulesInput
@@ -1183,7 +1209,7 @@ func TestWizardViewRendersRulesInputStep(t *testing.T) {
 func TestWizardViewRendersReviewStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.selectedFiles["main.go"] = true
 	wizard.template = &template.Template{Name: "basic"}
@@ -1203,7 +1229,7 @@ func TestWizardViewRendersReviewStep(t *testing.T) {
 func TestWizardViewWithError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.error = fmt.Errorf("test error message")
 	wizard.width = 80
 	wizard.height = 24
@@ -1218,7 +1244,7 @@ func TestWizardViewWithError(t *testing.T) {
 func TestWizardViewWithProgress(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.progress.Visible = true
 	wizard.progress.Stage = "scanning"
 	wizard.progress.Current = 50
@@ -1329,7 +1355,7 @@ func TestWizardValidationErrorMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+			wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 			wizard.step = tt.step
 
 			msg := wizard.getValidationErrorMessage()
@@ -1351,7 +1377,7 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty file selection shows error", func(t *testing.T) {
-		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepFileSelection
 		wizard.selectedFiles = map[string]bool{}
 
@@ -1366,7 +1392,7 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	})
 
 	t.Run("no template selected shows error", func(t *testing.T) {
-		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepTemplateSelection
 		wizard.template = nil
 
@@ -1381,7 +1407,7 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	})
 
 	t.Run("empty task description shows error when required", func(t *testing.T) {
-		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepTaskInput
 		wizard.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
 		wizard.taskDesc = ""
@@ -1400,7 +1426,7 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 func TestWizardValidationErrorClearedOnInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
 	wizard.step = StepFileSelection
@@ -1416,7 +1442,7 @@ func TestWizardValidationErrorClearedOnInput(t *testing.T) {
 func TestWizardValidationErrorClearedOnSuccessfulAdvance(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepFileSelection
 	wizard.selectedFiles = map[string]bool{"/test/file.go": true}
 	wizard.validationError = "Previous error"
@@ -1434,7 +1460,7 @@ func TestWizardValidationErrorClearedOnSuccessfulAdvance(t *testing.T) {
 func TestWizardViewShowsValidationError(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
 	wizard.step = StepFileSelection
@@ -1526,7 +1552,7 @@ func TestValidateContentSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a minimal wizard model
-			model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{})
+			model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{}, nil)
 			model.wizardConfig.Context.MaxSize = tt.maxSize
 
 			err := model.validateContentSize(tt.content)
@@ -1549,7 +1575,7 @@ func TestValidateContentSize(t *testing.T) {
 }
 
 func TestValidateContentSize_InvalidMaxSize(t *testing.T) {
-	model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{})
+	model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{}, nil)
 	model.wizardConfig.Context.MaxSize = "invalid-size"
 
 	err := model.validateContentSize("test content")
@@ -1580,7 +1606,7 @@ func TestValidateContentSize_BoundaryConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{})
+			model := NewWizard("/tmp/test", &scanner.ScanConfig{}, &WizardConfig{}, nil)
 			model.wizardConfig.Context.MaxSize = tt.maxSize
 
 			content := strings.Repeat("x", tt.contentSize)
@@ -1602,7 +1628,7 @@ func TestValidateContentSize_BoundaryConditions(t *testing.T) {
 func TestWizardIterativeScanCmd_NilScanState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.scanState = nil
 
 	cmd := wizard.iterativeScanCmd()
@@ -1621,7 +1647,7 @@ func TestWizardIterativeScanCmd_StartsScan(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil)
+	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
 
 	progressCh := make(chan scanner.Progress, 100)
 	done := make(chan bool)
@@ -1664,7 +1690,7 @@ func TestWizardIterativeScanCmd_AlreadyStarted(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil)
+	wizard := NewWizard(tempDir, &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
 
 	progressCh := make(chan scanner.Progress, 100)
 	done := make(chan bool)
@@ -1699,7 +1725,7 @@ func TestWizardIterativeScanCmd_AlreadyStarted(t *testing.T) {
 func TestWizardIterativeGenerateCmd_NilGenerateState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.generateState = nil
 
 	cmd := wizard.iterativeGenerateCmd()
@@ -1718,7 +1744,7 @@ func TestWizardIterativeGenerateCmd_StartsGeneration(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil)
+	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
 
 	progressCh := make(chan context.GenProgress, 100)
 	done := make(chan bool)
@@ -1771,7 +1797,7 @@ func TestWizardIterativeGenerateCmd_AlreadyStarted(t *testing.T) {
 	t.Parallel()
 
 	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil)
+	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
 
 	progressCh := make(chan context.GenProgress, 100)
 	done := make(chan bool)
@@ -1816,7 +1842,7 @@ func TestWizardIterativeGenerateCmd_AlreadyStarted(t *testing.T) {
 func TestWizardHandleStepInput_FileSelection(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
 	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
 	wizard.step = StepFileSelection
@@ -1836,7 +1862,7 @@ func TestWizardHandleStepInput_FileSelection(t *testing.T) {
 func TestWizardHandleStepInput_TemplateSelection(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.templateSelection = screens.NewTemplateSelection()
 	wizard.step = StepTemplateSelection
 	wizard.validationError = "Some error"
@@ -1855,7 +1881,7 @@ func TestWizardHandleStepInput_TemplateSelection(t *testing.T) {
 func TestWizardHandleStepInput_TaskInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.taskInput = screens.NewTaskInput("initial task")
 	wizard.step = StepTaskInput
 	wizard.validationError = "Some error"
@@ -1877,7 +1903,7 @@ func TestWizardHandleStepInput_TaskInput(t *testing.T) {
 func TestWizardHandleStepInput_RulesInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.rulesInput = screens.NewRulesInput("initial rules")
 	wizard.step = StepRulesInput
 	wizard.validationError = "Some error"
@@ -1899,7 +1925,7 @@ func TestWizardHandleStepInput_RulesInput(t *testing.T) {
 func TestWizardHandleStepInput_Review(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
 	wizard.template = &template.Template{Name: "basic"}
 	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, "task", "", "")
@@ -1935,7 +1961,7 @@ func TestWizardHandleStepInput_NilSubModels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+			wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 			wizard.step = tt.step
 			wizard.validationError = "Some error"
 
@@ -1958,7 +1984,7 @@ func TestWizardHandleStepInput_NilSubModels(t *testing.T) {
 func TestWizardClipboardCopyCmd_Success(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	content := "test content for clipboard"
 
 	cmd := wizard.clipboardCopyCmd(content)
@@ -1976,7 +2002,7 @@ func TestWizardClipboardCopyCmd_Success(t *testing.T) {
 func TestWizardClipboardCopyCmd_EmptyContent(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	content := ""
 
 	cmd := wizard.clipboardCopyCmd(content)
@@ -1995,7 +2021,7 @@ func TestWizardClipboardCopyCmd_EmptyContent(t *testing.T) {
 func TestWizardClipboardCopyCmd_LargeContent(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	content := strings.Repeat("x", 10000) // 10KB of content
 
 	cmd := wizard.clipboardCopyCmd(content)
@@ -2015,10 +2041,11 @@ func TestWizardClipboardCopyCmd_LargeContent(t *testing.T) {
 // LLM Integration Tests
 // ============================================================================
 
-func TestWizardCreateLLMProvider_OpenAI(t *testing.T) {
+func TestWizardBuildLLMSendConfig_OpenAI(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "openai",
@@ -2028,21 +2055,24 @@ func TestWizardCreateLLMProvider_OpenAI(t *testing.T) {
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "openai" {
+		t.Errorf("expected provider 'openai', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "OpenAI" {
-			t.Errorf("expected provider name 'OpenAI', got '%s'", provider.Name())
-		}
+	if cfg.APIKey != "sk-test-key" {
+		t.Errorf("expected APIKey 'sk-test-key', got '%s'", cfg.APIKey)
+	}
+	if cfg.Model != "gpt-4o" {
+		t.Errorf("expected model 'gpt-4o', got '%s'", cfg.Model)
 	}
 }
 
-func TestWizardCreateLLMProvider_Anthropic(t *testing.T) {
+func TestWizardBuildLLMSendConfig_Anthropic(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "anthropic",
@@ -2052,21 +2082,21 @@ func TestWizardCreateLLMProvider_Anthropic(t *testing.T) {
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "anthropic" {
+		t.Errorf("expected provider 'anthropic', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "Anthropic" {
-			t.Errorf("expected provider name 'Anthropic', got '%s'", provider.Name())
-		}
+	if cfg.APIKey != "sk-ant-test-key" {
+		t.Errorf("expected APIKey 'sk-ant-test-key', got '%s'", cfg.APIKey)
 	}
 }
 
-func TestWizardCreateLLMProvider_Gemini(t *testing.T) {
+func TestWizardBuildLLMSendConfig_Gemini(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "gemini",
@@ -2076,21 +2106,21 @@ func TestWizardCreateLLMProvider_Gemini(t *testing.T) {
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "gemini" {
+		t.Errorf("expected provider 'gemini', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "Gemini" {
-			t.Errorf("expected provider name 'Gemini', got '%s'", provider.Name())
-		}
+	if cfg.Model != "gemini-2.5-flash" {
+		t.Errorf("expected model 'gemini-2.5-flash', got '%s'", cfg.Model)
 	}
 }
 
-func TestWizardCreateLLMProvider_GeminiWeb(t *testing.T) {
+func TestWizardBuildLLMSendConfig_GeminiWeb(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider:   "geminiweb",
@@ -2100,24 +2130,24 @@ func TestWizardCreateLLMProvider_GeminiWeb(t *testing.T) {
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "geminiweb" {
+		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "GeminiWeb" {
-			t.Errorf("expected provider name 'GeminiWeb', got '%s'", provider.Name())
-		}
+	if cfg.BinaryPath != "/path/to/geminiweb" {
+		t.Errorf("expected BinaryPath '/path/to/geminiweb', got '%s'", cfg.BinaryPath)
 	}
 }
 
-func TestWizardCreateLLMProvider_GeminiWeb_LegacyConfig(t *testing.T) {
+func TestWizardBuildLLMSendConfig_GeminiWeb_LegacyConfig(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
-			Provider: "", // Empty should trigger GeminiWeb from legacy config
+			Provider: "",
 		},
 		Gemini: GeminiConfig{
 			BinaryPath: "/path/to/geminiweb",
@@ -2126,140 +2156,113 @@ func TestWizardCreateLLMProvider_GeminiWeb_LegacyConfig(t *testing.T) {
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "geminiweb" {
+		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "GeminiWeb" {
-			t.Errorf("expected provider name 'GeminiWeb', got '%s'", provider.Name())
-		}
+	if cfg.Model != "gemini-2.5-pro" {
+		t.Errorf("expected model 'gemini-2.5-pro', got '%s'", cfg.Model)
+	}
+	if cfg.BinaryPath != "/path/to/geminiweb" {
+		t.Errorf("expected BinaryPath '/path/to/geminiweb', got '%s'", cfg.BinaryPath)
 	}
 }
 
-func TestWizardCreateLLMProvider_GeminiWeb_MixedConfig(t *testing.T) {
+func TestWizardBuildLLMSendConfig_GeminiWeb_MixedConfig(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider:   "geminiweb",
-			Model:      "llm-model", // LLM config model
+			Model:      "llm-model",
 			Timeout:    60,
-			BinaryPath: "", // Empty - should use Gemini config
+			BinaryPath: "",
 		},
 		Gemini: GeminiConfig{
 			BinaryPath: "/path/to/geminiweb",
-			Model:      "gemini-2.5-pro", // Should be used as fallback
+			Model:      "gemini-2.5-pro",
 			Timeout:    300,
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err != nil {
-		t.Logf("Provider creation returned error (may be expected): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "geminiweb" {
+		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
 	}
-	if provider != nil {
-		if provider.Name() != "GeminiWeb" {
-			t.Errorf("expected provider name 'GeminiWeb', got '%s'", provider.Name())
-		}
+	if cfg.Model != "llm-model" {
+		t.Errorf("expected model 'llm-model' (from LLM config), got '%s'", cfg.Model)
+	}
+	if cfg.BinaryPath != "/path/to/geminiweb" {
+		t.Errorf("expected BinaryPath from legacy config, got '%s'", cfg.BinaryPath)
 	}
 }
 
-func TestWizardCreateLLMProvider_InvalidProvider(t *testing.T) {
+func TestWizardBuildLLMSendConfig_SaveResponse(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
-			Provider: "invalid-provider",
+			Provider:     "openai",
+			SaveResponse: true,
 		},
 	}
 
-	provider, err := wizard.createLLMProvider()
-	if err == nil {
-		t.Error("expected error for invalid provider, got nil")
+	cfg := wizard.buildLLMSendConfig()
+
+	if !cfg.SaveResponse {
+		t.Error("expected SaveResponse to be true")
 	}
-	if provider != nil {
-		t.Error("expected nil provider for invalid provider")
+	if cfg.OutputPath != "/tmp/test_response.md" {
+		t.Errorf("expected OutputPath '/tmp/test_response.md', got '%s'", cfg.OutputPath)
 	}
 }
 
-func TestWizardCreateLLMProvider_NoConfig(t *testing.T) {
+func TestWizardBuildLLMSendConfig_NoConfig(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
-	// Set wizardConfig to empty struct instead of nil to avoid panic
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{}
 
-	provider, err := wizard.createLLMProvider()
-	// Should not panic, but may error or return nil
-	if err != nil {
-		t.Logf("Provider creation returned error (expected for empty config): %v", err)
+	cfg := wizard.buildLLMSendConfig()
+
+	if cfg.Provider != "geminiweb" {
+		t.Errorf("expected default provider 'geminiweb', got '%s'", cfg.Provider)
 	}
-	_ = provider // May be nil
 }
 
 func TestWizardSendToLLMCmd_ReturnsCommand(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.generatedContent = "test content to send"
 	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
-			SaveResponse: false, // Don't actually save
+			SaveResponse: false,
 		},
 	}
 
-	// Create a mock provider or skip if provider creation fails
-	provider, err := wizard.createLLMProvider()
-	if err != nil || provider == nil {
-		t.Skip("Skipping test - provider not available")
-		return
-	}
-
-	cmd := wizard.sendToLLMCmd(provider)
+	cmd := wizard.sendToLLMCmd()
 	if cmd == nil {
 		t.Fatal("expected non-nil command")
 	}
-	// Don't execute the command as it would make an actual LLM call
-}
-
-func TestWizardSendToLLMCmd_SavesResponse(t *testing.T) {
-	t.Parallel()
-
-	tempDir := t.TempDir()
-	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil)
-	wizard.generatedContent = "test content to send"
-	wizard.generatedFilePath = tempDir + "/test.md"
-	wizard.wizardConfig = &WizardConfig{
-		LLM: LLMConfig{
-			SaveResponse: true,
-		},
-	}
-
-	provider, err := wizard.createLLMProvider()
-	if err != nil || provider == nil {
-		t.Skip("Skipping test - provider not available")
-		return
-	}
-
-	cmd := wizard.sendToLLMCmd(provider)
-	if cmd == nil {
-		t.Fatal("expected non-nil command")
-	}
-	// Don't execute the command as it would make an actual LLM call
 }
 
 func TestWizardHandleSendToGemini_NotReviewStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepFileSelection // Not review step
 	wizard.generatedContent = "some content"
 
-	cmd := wizard.handleSendToGemini()
+	cmd := wizard.handleSendToLLM()
 	if cmd != nil {
 		t.Error("expected nil command when not on review step")
 	}
@@ -2268,11 +2271,11 @@ func TestWizardHandleSendToGemini_NotReviewStep(t *testing.T) {
 func TestWizardHandleSendToGemini_NoGeneratedContent(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview
 	wizard.generatedContent = "" // No content
 
-	cmd := wizard.handleSendToGemini()
+	cmd := wizard.handleSendToLLM()
 	if cmd != nil {
 		t.Error("expected nil command when no generated content")
 	}
@@ -2281,10 +2284,10 @@ func TestWizardHandleSendToGemini_NoGeneratedContent(t *testing.T) {
 func TestWizardHandleSendToGemini_AlreadySending(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview
 	wizard.generatedContent = "some content"
-	wizard.geminiSending = true // Already sending
+	wizard.llmSending = true // Already sending
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "openai",
@@ -2292,36 +2295,39 @@ func TestWizardHandleSendToGemini_AlreadySending(t *testing.T) {
 		},
 	}
 
-	cmd := wizard.handleSendToGemini()
+	cmd := wizard.handleSendToLLM()
 	if cmd != nil {
 		t.Error("expected nil command when already sending")
 	}
 }
 
-func TestWizardHandleSendToGemini_ProviderCreationError(t *testing.T) {
+func TestWizardHandleSendToGemini_ReturnsCommandForValidInput(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview
 	wizard.generatedContent = "some content"
+	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
-			Provider: "invalid-provider", // Will cause creation error
+			Provider: "openai",
 		},
 	}
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
-	cmd := wizard.handleSendToGemini()
-	if cmd != nil {
-		t.Error("expected nil command when provider creation fails")
+	cmd := wizard.handleSendToLLM()
+	if cmd == nil {
+		t.Error("expected non-nil command for valid input")
 	}
-	// Error should be set on review model
+	if !wizard.llmSending {
+		t.Error("expected llmSending to be true after handleSendToLLM")
+	}
 }
 
 func TestWizardHandleSendToGemini_WithValidProvider(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview
 	wizard.generatedContent = "test content"
 	wizard.generatedFilePath = "/tmp/test.md"
@@ -2334,14 +2340,14 @@ func TestWizardHandleSendToGemini_WithValidProvider(t *testing.T) {
 	}
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
-	cmd := wizard.handleSendToGemini()
+	cmd := wizard.handleSendToLLM()
 	_ = cmd
 }
 
 func TestWizardHandleRescanRequest_FileSelectionStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{MaxFiles: 10}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{MaxFiles: 10}, nil, nil)
 	wizard.step = StepFileSelection
 	wizard.rootPath = "/tmp/test"
 
@@ -2362,7 +2368,7 @@ func TestWizardHandleRescanRequest_FileSelectionStep(t *testing.T) {
 func TestWizardHandleRescanRequest_NotFileSelectionStep(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview // Not file selection step
 	wizard.rootPath = "/tmp/test"
 
@@ -2385,7 +2391,7 @@ func TestWizardHandleRescanRequest_AllSteps(t *testing.T) {
 
 	for _, step := range steps {
 		t.Run(fmt.Sprintf("step_%d", step), func(t *testing.T) {
-			wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+			wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 			wizard.step = step
 			wizard.rootPath = "/tmp/test"
 
@@ -2407,7 +2413,7 @@ func TestWizardHandleRescanRequest_AllSteps(t *testing.T) {
 func TestWizardGeminiSendingFlagLifecycle(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepReview
 	wizard.generatedContent = "test content"
 	wizard.wizardConfig = &WizardConfig{
@@ -2420,16 +2426,16 @@ func TestWizardGeminiSendingFlagLifecycle(t *testing.T) {
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
 	// Initial state
-	if wizard.geminiSending {
+	if wizard.llmSending {
 		t.Error("expected geminiSending to be false initially")
 	}
 
 	// After handleSendToGemini (may or may not set flag depending on provider availability)
-	_ = wizard.handleSendToGemini()
+	_ = wizard.handleSendToLLM()
 
 	// Simulate completion
-	wizard.geminiSending = false
-	if wizard.geminiSending {
+	wizard.llmSending = false
+	if wizard.llmSending {
 		t.Error("expected geminiSending to be false after completion")
 	}
 }
@@ -2437,15 +2443,15 @@ func TestWizardGeminiSendingFlagLifecycle(t *testing.T) {
 func TestWizardHandleGeminiProgress(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
 	wizard.progressComponent = components.NewProgress()
 
-	msg := screens.GeminiProgressMsg{
+	msg := screens.LLMProgressMsg{
 		Stage: "sending",
 	}
 
 	// This should not panic
-	wizard.handleGeminiProgress(msg)
+	wizard.handleLLMProgress(msg)
 
 	if !wizard.progress.Visible {
 		t.Error("expected progress to be visible after progress message")
@@ -2455,48 +2461,184 @@ func TestWizardHandleGeminiProgress(t *testing.T) {
 func TestWizardHandleGeminiComplete(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
-	wizard.geminiSending = true
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.llmSending = true
 	wizard.progress.Visible = true
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
-	msg := screens.GeminiCompleteMsg{
+	msg := screens.LLMCompleteMsg{
 		Response:   "test response",
 		OutputFile: "/tmp/test_response.md",
 		Duration:   time.Second,
 	}
 
-	wizard.handleGeminiComplete(msg)
+	wizard.handleLLMComplete(msg)
 
-	if wizard.geminiSending {
+	if wizard.llmSending {
 		t.Error("expected geminiSending to be false after completion")
 	}
 	if wizard.progress.Visible {
 		t.Error("expected progress to be invisible after completion")
 	}
-	if wizard.geminiResponseFile != msg.OutputFile {
-		t.Errorf("expected geminiResponseFile to be %s, got %s", msg.OutputFile, wizard.geminiResponseFile)
+	if wizard.llmResponseFile != msg.OutputFile {
+		t.Errorf("expected geminiResponseFile to be %s, got %s", msg.OutputFile, wizard.llmResponseFile)
 	}
 }
 
 func TestWizardHandleGeminiError_ClearsState(t *testing.T) {
 	t.Parallel()
 
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
-	wizard.geminiSending = true
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.llmSending = true
 	wizard.progress.Visible = true
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
 
-	msg := screens.GeminiErrorMsg{
+	msg := screens.LLMErrorMsg{
 		Err: fmt.Errorf("test error"),
 	}
 
-	wizard.handleGeminiError(msg)
+	wizard.handleLLMError(msg)
 
-	if wizard.geminiSending {
+	if wizard.llmSending {
 		t.Error("expected geminiSending to be false after error")
 	}
 	if wizard.progress.Visible {
 		t.Error("expected progress to be invisible after error")
+	}
+}
+
+func TestWizardHandleSendToLLM_DelegatesToService(t *testing.T) {
+	t.Parallel()
+
+	var receivedContent string
+	var receivedCfg app.LLMSendConfig
+	mockSvc := &mockContextService{
+		sendToLLMWithProgressFunc: func(ctx gocontext.Context, content string, cfg app.LLMSendConfig, progress app.LLMProgressCallback) (*llm.Result, error) {
+			receivedContent = content
+			receivedCfg = cfg
+			return &llm.Result{Response: "test response", Duration: 50 * time.Millisecond}, nil
+		},
+	}
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, mockSvc)
+	wizard.step = StepReview
+	wizard.generatedContent = "test content to send"
+	wizard.generatedFilePath = "/tmp/test.md"
+	wizard.wizardConfig = &WizardConfig{
+		LLM: LLMConfig{
+			Provider:     "openai",
+			APIKey:       "sk-test-key",
+			SaveResponse: true,
+		},
+	}
+	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
+
+	cmd := wizard.handleSendToLLM()
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	var foundCompleteMsg bool
+	for _, batchCmd := range batchMsg {
+		if batchCmd == nil {
+			continue
+		}
+		result := batchCmd()
+		if completeMsg, ok := result.(screens.LLMCompleteMsg); ok {
+			foundCompleteMsg = true
+			if completeMsg.Response != "test response" {
+				t.Errorf("expected response 'test response', got '%s'", completeMsg.Response)
+			}
+		}
+	}
+
+	if !foundCompleteMsg {
+		t.Error("expected LLMCompleteMsg in batch")
+	}
+	if receivedContent != "test content to send" {
+		t.Errorf("expected content 'test content to send', got '%s'", receivedContent)
+	}
+	if receivedCfg.Provider != "openai" {
+		t.Errorf("expected provider 'openai', got '%s'", receivedCfg.Provider)
+	}
+}
+
+func TestWizardHandleSendToLLM_ServiceError(t *testing.T) {
+	t.Parallel()
+
+	mockSvc := &mockContextService{
+		sendToLLMWithProgressFunc: func(ctx gocontext.Context, content string, cfg app.LLMSendConfig, progress app.LLMProgressCallback) (*llm.Result, error) {
+			return nil, fmt.Errorf("service error: connection failed")
+		},
+	}
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, mockSvc)
+	wizard.step = StepReview
+	wizard.generatedContent = "test content"
+	wizard.generatedFilePath = "/tmp/test.md"
+	wizard.wizardConfig = &WizardConfig{
+		LLM: LLMConfig{
+			Provider: "openai",
+		},
+	}
+	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
+
+	cmd := wizard.handleSendToLLM()
+	if cmd == nil {
+		t.Fatal("expected non-nil command")
+	}
+
+	msg := cmd()
+	batchMsg, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", msg)
+	}
+
+	var foundErrorMsg bool
+	for _, batchCmd := range batchMsg {
+		if batchCmd == nil {
+			continue
+		}
+		result := batchCmd()
+		if errMsg, ok := result.(screens.LLMErrorMsg); ok {
+			foundErrorMsg = true
+			if errMsg.Err == nil {
+				t.Error("expected error to be set")
+			}
+			if !strings.Contains(errMsg.Err.Error(), "connection failed") {
+				t.Errorf("expected error to contain 'connection failed', got '%s'", errMsg.Err.Error())
+			}
+		}
+	}
+
+	if !foundErrorMsg {
+		t.Error("expected LLMErrorMsg in batch")
+	}
+}
+
+func TestWizardWithMockService(t *testing.T) {
+	t.Parallel()
+
+	mockSvc := &mockContextService{}
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, mockSvc)
+
+	if wizard.contextService != mockSvc {
+		t.Error("expected wizard to use injected mock service")
+	}
+}
+
+func TestWizardWithNilService_CreatesDefault(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+
+	if wizard.contextService == nil {
+		t.Error("expected wizard to create default service when nil passed")
 	}
 }

@@ -53,8 +53,9 @@ The primary purpose of Shotgun CLI is to transform complex codebases into struct
 Shotgun CLI implements a **Clean Architecture/Hexagonal Architecture** pattern with clear separation of concerns across three main layers:
 
 1. **Presentation/Adapter Layer** (`cmd`, `internal/ui`): Handles user interaction through CLI commands and interactive TUI wizard
-2. **Core/Domain Layer** (`internal/core`): Contains pure business logic for context generation, file scanning, template management, and token estimation
-3. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (Gemini AI API, clipboard operations)
+2. **Application Layer** (`internal/app`): Orchestrates business logic and provides a unified API (`ContextService`) for presentation layers
+3. **Core/Domain Layer** (`internal/core`): Contains pure business logic for context generation, file scanning, template management, and token estimation
+4. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (LLM providers, clipboard operations)
 
 ### Technology Stack and Frameworks
 
@@ -71,12 +72,18 @@ Shotgun CLI implements a **Clean Architecture/Hexagonal Architecture** pattern w
 ```mermaid
 graph TD
     A[main.go] → B[cmd]
-    B → C[internal/core/context]
-    B → D[internal/core/scanner]
-    B → E[internal/core/template]
+    B → O[internal/app]
+    O → C[internal/core/context]
+    O → D[internal/core/scanner]
+    O → E[internal/core/template]
+    O → H[internal/platform/llm]
+    
+    B → C
+    B → D
+    B → E
     B → F[internal/core/ignore]
     B → G[internal/core/tokens]
-    B → H[internal/platform/gemini]
+    B → H
     B → I[internal/platform/clipboard]
     B → J[internal/ui/wizard]
     B → K[internal/utils]
@@ -88,11 +95,7 @@ graph TD
     
     D → F
     
-    J → C
-    J → D
-    J → E
-    J → H
-    J → I
+    J → O
     J → L[internal/ui/screens]
     J → M[internal/ui/components]
     
@@ -103,6 +106,7 @@ graph TD
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
+    style O fill:#fff9c4
     style C fill:#e8f5e8
     style D fill:#e8f5e8
     style E fill:#e8f5e8
@@ -1149,7 +1153,7 @@ The TUI provides integrated LLM functionality that allows users to send generate
 
 ### LLM Integration Architecture
 
-The LLM integration follows a layered architecture:
+The LLM integration follows a layered architecture where the UI delegates orchestration to the application layer:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1160,26 +1164,19 @@ The LLM integration follows a layered architecture:
 │                           │                                     │
 │                           ▼                                     │
 │  ┌──────────────────────────────────────────────────────┐      │
-│  │           createLLMProvider()                        │      │
-│  │  • Reads wizard LLM config                           │      │
-│  │  • Creates provider from registry                    │      │
-│  │  • Returns Provider interface                        │      │
+│  │           handleSendToLLM()                          │      │
+│  │  • Validates wizard state                            │      │
+│  │  • Prepares LLMSendConfig                            │      │
+│  │  • Calls svc.SendToLLMWithProgress()                 │      │
 │  └──────────────────────────────────────────────────────┘      │
 │                           │                                     │
 │                           ▼                                     │
 │  ┌──────────────────────────────────────────────────────┐      │
-│  │           handleSendToGemini()                       │      │
-│  │  • Validates provider is available & configured      │      │
-│  │  • Sets geminiSending flag                           │      │
-│  │  • Returns sendToLLMCmd()                            │      │
-│  └──────────────────────────────────────────────────────┘      │
-│                           │                                     │
-│                           ▼                                     │
-│  ┌──────────────────────────────────────────────────────┐      │
-│  │           sendToLLMCmd(provider)                     │      │
-│  │  • Executes provider.SendWithProgress()              │      │
-│  │  • Saves response if configured                      │      │
-│  │  • Returns GeminiCompleteMsg or GeminiErrorMsg      │      │
+│  │           app.ContextService                         │      │
+│  │  • Orchestrates provider creation                    │      │
+│  │  • Handles progress reporting via callback           │      │
+│  │  • Manages response saving                           │      │
+│  │  • Returns LLMCompleteMsg or LLMErrorMsg            │      │
 │  └──────────────────────────────────────────────────────┘      │
 │                           │                                     │
 │                           ▼                                     │
@@ -1224,48 +1221,34 @@ gemini:
 
 ### LLM Integration Message Flow
 
+> **Note**: Message types were renamed in a recent refactoring to be provider-agnostic.
+
 | Message | Type | Source | Handler | Purpose |
 |---------|------|--------|---------|---------|
-| `GeminiProgressMsg` | Internal | Provider | `handleGeminiProgress` | Update progress UI |
-| `GeminiCompleteMsg` | Internal | Provider | `handleGeminiComplete` | Store response, update UI |
-| `GeminiErrorMsg` | Internal | Provider | `handleGeminiError` | Display error, update UI |
+| `LLMProgressMsg` | Internal | Service | `handleLLMProgress` | Update progress UI |
+| `LLMCompleteMsg` | Internal | Service | `handleLLMComplete` | Store response, update UI |
+| `LLMErrorMsg` | Internal | Service | `handleLLMError` | Display error, update UI |
 | `RescanRequestMsg` | Key User | Review | `handleRescanRequest` | Trigger new scan |
 
-### Provider Creation
+### Service Delegation
 
-The `createLLMProvider()` function handles provider creation from wizard configuration:
+The wizard now delegates all LLM operations to the `app.ContextService`. The `NewWizard` constructor accepts this service as a dependency.
 
 ```go
-func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
-    cfg := llm.Config{
-        Provider: m.wizardConfig.LLM.Provider,
-        APIKey:   m.wizardConfig.LLM.APIKey,
-        Model:    m.wizardConfig.LLM.Model,
-        Timeout:  m.wizardConfig.LLM.Timeout,
-    }
-    cfg.WithDefaults()
-    
-    // Merge legacy GeminiWeb config if needed
-    if cfg.Provider == llm.ProviderGeminiWeb || cfg.Provider == "" {
-        cfg.Model = m.wizardConfig.Gemini.Model
-        cfg.BinaryPath = m.wizardConfig.Gemini.BinaryPath
-        // ... more fields
-    }
-    
-    return app.DefaultProviderRegistry.Create(cfg)
-}
+// Using ContextService for LLM operations in the wizard
+svc := app.NewContextService()
+wizard := wizard.NewWizard(rootPath, scanConfig, templateMgr, svc)
 ```
 
 ### Send Flow
 
 1. **User Action**: User presses "Send to LLM" on review screen
-2. **Validation**: `handleSendToGemini()` validates:
+2. **Validation**: `handleSendToLLM()` validates:
    - Wizard is on review step
    - Generated content exists
    - Not already sending
-   - Provider is available and configured
-3. **Execution**: `sendToLLMCmd()` executes:
-   - Calls `provider.SendWithProgress()` with content
+3. **Execution**: `svc.SendToLLMWithProgress()` is called:
+   - Orchestrates the entire send process
    - Progress callback updates UI during send
    - On success: Saves response (if configured)
    - Returns completion message with response file path
@@ -1274,57 +1257,52 @@ func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
 
 | Function | Test Coverage | Test Cases |
 |----------|---------------|------------|
-| `createLLMProvider` | 100% | 7 cases (all providers, invalid, empty) |
-| `sendToLLMCmd` | 100% | 2 cases (returns command, saves response) |
-| `handleSendToGemini` | 100% | 5 cases (step validation, states, errors) |
+| `handleSendToLLM` | 100% | 5 cases (step validation, states, errors) |
 | `handleRescanRequest` | 100% | 3 cases (file selection, other steps, all steps) |
-| `handleGeminiProgress` | 100% | 1 case |
-| `handleGeminiComplete` | 100% | 1 case |
-| `handleGeminiError` | 100% | 2 cases |
+| `handleLLMProgress` | 100% | 1 case |
+| `handleLLMComplete` | 100% | 1 case |
+| `handleLLMError` | 100% | 2 cases |
 
 ### Error Handling
 
-The LLM integration handles various error scenarios:
+The LLM integration handles various error scenarios through the service layer:
 
-| Error | Handler | User Experience |
+| Error | Source | User Experience |
 |-------|---------|-----------------|
-| Invalid provider | `createLLMProvider` | Returns error, displayed in review |
-| Provider unavailable | `handleSendToGemini` | Error shown, send prevented |
-| Not configured | `handleSendToGemini` | Error shown, send prevented |
-| Send timeout | `sendToLLMCmd` | Returns `GeminiErrorMsg` |
-| Save failure | `sendToLLMCmd` | Returns error with context |
+| Invalid provider | Service | Returns error, displayed in review |
+| Provider unavailable | Service | Error shown, send prevented |
+| Not configured | Service | Error shown, send prevented |
+| Send timeout | Service | Returns `LLMErrorMsg` |
+| Save failure | Service | Returns error with context |
 
 ### Testing Examples
 
-#### Provider Creation Test
+#### Service Usage Example
 
 ```go
-func TestWizardCreateLLMProvider_OpenAI(t *testing.T) {
-    wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
-    wizard.wizardConfig = &WizardConfig{
-        LLM: LLMConfig{
-            Provider: "openai",
-            APIKey:   "sk-test-key",
-            Model:    "gpt-4o",
-        },
-    }
-    
-    provider, err := wizard.createLLMProvider()
-    if provider != nil {
-        assert.Equal(t, "OpenAI", provider.Name())
-    }
-}
+// Using ContextService for LLM operations
+svc := app.NewContextService()
+result, err := svc.SendToLLMWithProgress(ctx, content, app.LLMSendConfig{
+    Provider:     llm.ProviderOpenAI,
+    APIKey:       "your-api-key",
+    Model:        "gpt-4o",
+    SaveResponse: true,
+    OutputPath:   "./response.md",
+}, func(stage string) {
+    fmt.Printf("Progress: %s\n", stage)
+})
 ```
 
 #### Send Handler Test
 
 ```go
-func TestWizardHandleSendToGemini_NotReviewStep(t *testing.T) {
-    wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil)
+func TestWizardHandleSendToLLM_NotReviewStep(t *testing.T) {
+    svc := &mockContextService{}
+    wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, svc)
     wizard.step = StepFileSelection  // Wrong step
     wizard.generatedContent = "content"
     
-    cmd := wizard.handleSendToGemini()
+    cmd := wizard.handleSendToLLM()
     assert.Nil(t, cmd)  // Should return nil for wrong step
 }
 ```
@@ -1332,8 +1310,8 @@ func TestWizardHandleSendToGemini_NotReviewStep(t *testing.T) {
 ### Cross-References
 
 - **LLM Package**: `internal/core/llm/`
-- **Provider Registry**: `internal/core/llm/registry.go`
-- **Wizard LLM Tests**: `internal/ui/wizard_test.go` (TestWizardCreateLLMProvider_*)
+- **Application Service**: `internal/app/context.go`
+- **Wizard LLM Tests**: `internal/ui/wizard_test.go`
 - **LLM Commands Documentation**: "LLM Diagnostic Commands" section
 
 ## C4 Model Architecture

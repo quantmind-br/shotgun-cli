@@ -85,9 +85,10 @@ type WizardModel struct {
 	height        int
 	showHelp      bool
 
-	rootPath     string
-	scanConfig   *scanner.ScanConfig
-	wizardConfig *WizardConfig
+	rootPath       string
+	scanConfig     *scanner.ScanConfig
+	wizardConfig   *WizardConfig
+	contextService app.ContextService
 
 	fileSelection     *screens.FileSelectionModel
 	templateSelection *screens.TemplateSelectionModel
@@ -103,10 +104,9 @@ type WizardModel struct {
 	generatedFilePath string
 	generatedContent  string
 
-	geminiSending      bool
-	geminiResponseFile string
+	llmSending      bool
+	llmResponseFile string
 
-	// Validation error to display when user tries to advance without completing required fields
 	validationError string
 }
 
@@ -133,7 +133,7 @@ type GenerationProgressMsg struct {
 	Message string
 }
 
-type GeminiSendMsg struct{}
+type LLMSendMsg struct{}
 
 // Internal state for iterative commands
 type scanState struct {
@@ -176,9 +176,12 @@ type startGenerationMsg struct {
 	rootPath      string
 }
 
-func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *WizardConfig) *WizardModel {
+func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *WizardConfig, svc app.ContextService) *WizardModel {
 	if wizardConfig == nil {
 		wizardConfig = &WizardConfig{}
+	}
+	if svc == nil {
+		svc = app.NewContextService()
 	}
 	return &WizardModel{
 		step:              StepFileSelection,
@@ -186,6 +189,7 @@ func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *Wi
 		rootPath:          rootPath,
 		scanConfig:        scanConfig,
 		wizardConfig:      wizardConfig,
+		contextService:    svc,
 		progressComponent: components.NewProgress(),
 	}
 }
@@ -238,14 +242,14 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.ClipboardCompleteMsg:
 		m.handleClipboardComplete(msg)
 
-	case screens.GeminiProgressMsg:
-		m.handleGeminiProgress(msg)
+	case screens.LLMProgressMsg:
+		m.handleLLMProgress(msg)
 
-	case screens.GeminiCompleteMsg:
-		m.handleGeminiComplete(msg)
+	case screens.LLMCompleteMsg:
+		m.handleLLMComplete(msg)
 
-	case screens.GeminiErrorMsg:
-		m.handleGeminiError(msg)
+	case screens.LLMErrorMsg:
+		m.handleLLMError(msg)
 
 	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
 		cmd = m.handleTemplateMessage(msg)
@@ -414,7 +418,7 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("\n")
 	content.WriteString("  F8          Generate context\n")
 	content.WriteString("  c           Copy to clipboard\n")
-	content.WriteString("  F9          Send to Gemini (if configured)\n")
+	content.WriteString("  F9          Send to LLM (if configured)\n")
 	content.WriteString("\n")
 
 	footer := styles.RenderFooter([]string{"F1: Close Help", "Ctrl+Q: Quit"})
@@ -465,8 +469,8 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
 	case "f9":
-		// Send to Gemini (only on review screen after generation)
-		cmd = m.handleSendToGemini()
+		// Send to LLM (only on review screen after generation)
+		cmd = m.handleSendToLLM()
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -587,48 +591,16 @@ func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) 
 	}
 }
 
-func (m *WizardModel) handleSendToGemini() tea.Cmd {
-	// Only allow on review screen after generation
-	if m.step != StepReview || m.generatedContent == "" {
+func (m *WizardModel) handleSendToLLM() tea.Cmd {
+	if m.step != StepReview || m.generatedContent == "" || m.llmSending {
 		return nil
 	}
 
-	// Check if already sending
-	if m.geminiSending {
-		return nil
-	}
-
-	// Create provider based on configuration
-	provider, err := m.createLLMProvider()
-	if err != nil {
-		if m.review != nil {
-			m.review.SetGeminiError(err)
-		}
-		return nil
-	}
-
-	// Check availability
-	if !provider.IsAvailable() {
-		if m.review != nil {
-			m.review.SetGeminiError(fmt.Errorf("%s not available", provider.Name()))
-		}
-		return nil
-	}
-
-	// Validate config
-	if err := provider.ValidateConfig(); err != nil {
-		if m.review != nil {
-			m.review.SetGeminiError(err)
-		}
-		return nil
-	}
-
-	m.geminiSending = true
+	m.llmSending = true
 	if m.review != nil {
-		m.review.SetGeminiSending(true)
+		m.review.SetLLMSending(true)
 	}
 
-	// Show progress indicator
 	m.progress = Progress{
 		Stage:   "sending",
 		Message: "Sending to LLM...",
@@ -636,40 +608,39 @@ func (m *WizardModel) handleSendToGemini() tea.Cmd {
 	}
 	m.progressComponent.UpdateMessage("sending", "Sending to LLM...")
 
-	return tea.Batch(m.sendToLLMCmd(provider), m.progressComponent.Init())
+	return tea.Batch(m.sendToLLMCmd(), m.progressComponent.Init())
 }
 
-func (m *WizardModel) handleGeminiProgress(msg screens.GeminiProgressMsg) {
+func (m *WizardModel) handleLLMProgress(msg screens.LLMProgressMsg) {
 	m.progress = Progress{
 		Stage:   msg.Stage,
-		Message: "Sending to Gemini...",
+		Message: "Sending to LLM...",
 		Visible: true,
 	}
-	m.progressComponent.UpdateMessage(msg.Stage, "Sending to Gemini...")
+	m.progressComponent.UpdateMessage(msg.Stage, "Sending to LLM...")
 }
 
-func (m *WizardModel) handleGeminiComplete(msg screens.GeminiCompleteMsg) {
-	m.geminiSending = false
-	m.geminiResponseFile = msg.OutputFile
+func (m *WizardModel) handleLLMComplete(msg screens.LLMCompleteMsg) {
+	m.llmSending = false
+	m.llmResponseFile = msg.OutputFile
 	m.progress.Visible = false
 
 	if m.review != nil {
-		m.review.SetGeminiComplete(msg.OutputFile, msg.Duration)
+		m.review.SetLLMComplete(msg.OutputFile, msg.Duration)
 	}
 }
 
-func (m *WizardModel) handleGeminiError(msg screens.GeminiErrorMsg) {
-	m.geminiSending = false
+func (m *WizardModel) handleLLMError(msg screens.LLMErrorMsg) {
+	m.llmSending = false
 	m.progress.Visible = false
 
 	if m.review != nil {
-		m.review.SetGeminiError(msg.Err)
+		m.review.SetLLMError(msg.Err)
 	}
 }
 
-// createLLMProvider creates an LLM provider based on wizard configuration.
-func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
-	cfg := llm.Config{
+func (m *WizardModel) buildLLMSendConfig() app.LLMSendConfig {
+	cfg := app.LLMSendConfig{
 		Provider:       llm.ProviderType(m.wizardConfig.LLM.Provider),
 		APIKey:         m.wizardConfig.LLM.APIKey,
 		BaseURL:        m.wizardConfig.LLM.BaseURL,
@@ -679,10 +650,6 @@ func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
 		BrowserRefresh: m.wizardConfig.LLM.BrowserRefresh,
 	}
 
-	// Apply defaults if not set
-	cfg.WithDefaults()
-
-	// For GeminiWeb, use legacy config if LLM config is not set
 	if cfg.Provider == llm.ProviderGeminiWeb || cfg.Provider == "" {
 		if cfg.Model == "" {
 			cfg.Model = m.wizardConfig.Gemini.Model
@@ -699,44 +666,49 @@ func (m *WizardModel) createLLMProvider() (llm.Provider, error) {
 		cfg.Provider = llm.ProviderGeminiWeb
 	}
 
-	return app.DefaultProviderRegistry.Create(cfg)
+	saveResponse := m.wizardConfig.LLM.SaveResponse
+	if !saveResponse {
+		saveResponse = m.wizardConfig.Gemini.SaveResponse
+	}
+	cfg.SaveResponse = saveResponse
+	cfg.OutputPath = strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
+
+	return cfg
 }
 
-// isLLMAvailable checks if any LLM provider is available and configured.
 func (m *WizardModel) isLLMAvailable() bool {
-	provider, err := m.createLLMProvider()
+	cfg := m.buildLLMSendConfig()
+	llmCfg := llm.Config{
+		Provider:       cfg.Provider,
+		APIKey:         cfg.APIKey,
+		BaseURL:        cfg.BaseURL,
+		Model:          cfg.Model,
+		Timeout:        cfg.Timeout,
+		BinaryPath:     cfg.BinaryPath,
+		BrowserRefresh: cfg.BrowserRefresh,
+	}
+	llmCfg.WithDefaults()
+
+	provider, err := app.DefaultProviderRegistry.Create(llmCfg)
 	if err != nil {
 		return false
 	}
 	return provider.IsAvailable() && provider.ValidateConfig() == nil
 }
 
-func (m *WizardModel) sendToLLMCmd(provider llm.Provider) tea.Cmd {
+func (m *WizardModel) sendToLLMCmd() tea.Cmd {
 	return func() tea.Msg {
+		cfg := m.buildLLMSendConfig()
 		ctx := gocontext.Background()
-		result, err := provider.SendWithProgress(ctx, m.generatedContent, func(stage string) {
-			// Progress callback - could be used for updates
-		})
+
+		result, err := m.contextService.SendToLLMWithProgress(ctx, m.generatedContent, cfg, nil)
 		if err != nil {
-			return screens.GeminiErrorMsg{Err: err}
+			return screens.LLMErrorMsg{Err: err}
 		}
 
-		outputFile := strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
-
-		saveResponse := m.wizardConfig.LLM.SaveResponse
-		if !saveResponse {
-			saveResponse = m.wizardConfig.Gemini.SaveResponse
-		}
-
-		if saveResponse {
-			if err := os.WriteFile(outputFile, []byte(result.Response), 0600); err != nil {
-				return screens.GeminiErrorMsg{Err: fmt.Errorf("failed to save response: %w", err)}
-			}
-		}
-
-		return screens.GeminiCompleteMsg{
+		return screens.LLMCompleteMsg{
 			Response:   result.Response,
-			OutputFile: outputFile,
+			OutputFile: cfg.OutputPath,
 			Duration:   result.Duration,
 		}
 	}

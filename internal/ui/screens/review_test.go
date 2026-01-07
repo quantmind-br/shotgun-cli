@@ -596,43 +596,43 @@ func TestReview_SetGeminiStates(t *testing.T) {
 	m := NewReview(nil, nil, nil, "", "", "")
 
 	// Test SetGeminiSending
-	m.SetGeminiSending(true)
-	if !m.geminiSending {
+	m.SetLLMSending(true)
+	if !m.llmSending {
 		t.Fatalf("expected geminiSending to be true")
 	}
-	if m.geminiError != nil {
+	if m.llmError != nil {
 		t.Fatalf("expected geminiError to be nil after SetGeminiSending")
 	}
 
 	// Test SetGeminiComplete
 	duration := 5 * time.Second
-	m.SetGeminiComplete("/tmp/output.txt", duration)
-	if m.geminiSending {
+	m.SetLLMComplete("/tmp/output.txt", duration)
+	if m.llmSending {
 		t.Fatalf("expected geminiSending to be false after SetGeminiComplete")
 	}
-	if !m.geminiComplete {
+	if !m.llmComplete {
 		t.Fatalf("expected geminiComplete to be true")
 	}
-	if m.geminiOutputFile != "/tmp/output.txt" {
-		t.Fatalf("expected geminiOutputFile to be '/tmp/output.txt', got %s", m.geminiOutputFile)
+	if m.llmOutputFile != "/tmp/output.txt" {
+		t.Fatalf("expected geminiOutputFile to be '/tmp/output.txt', got %s", m.llmOutputFile)
 	}
-	if m.geminiDuration != duration {
-		t.Fatalf("expected geminiDuration to be %v, got %v", duration, m.geminiDuration)
+	if m.llmDuration != duration {
+		t.Fatalf("expected geminiDuration to be %v, got %v", duration, m.llmDuration)
 	}
-	if m.geminiError != nil {
+	if m.llmError != nil {
 		t.Fatalf("expected geminiError to be nil after SetGeminiComplete")
 	}
 
 	// Test SetGeminiError
 	testErr := errors.New("test error")
-	m.SetGeminiError(testErr)
-	if m.geminiSending {
+	m.SetLLMError(testErr)
+	if m.llmSending {
 		t.Fatalf("expected geminiSending to be false after SetGeminiError")
 	}
-	if m.geminiComplete {
+	if m.llmComplete {
 		t.Fatalf("expected geminiComplete to be false after SetGeminiError")
 	}
-	if m.geminiError != testErr { //nolint:errorlint // testing exact error identity
+	if m.llmError != testErr { //nolint:errorlint // testing exact error identity
 		t.Fatalf("expected geminiError to be testErr")
 	}
 }
@@ -659,12 +659,12 @@ func TestReview_ViewGeminiSending(t *testing.T) {
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
-	m.SetGeminiSending(true)
+	m.SetLLMSending(true)
 
 	view := m.View()
 
-	if !strings.Contains(view, "Sending to Gemini...") {
-		t.Fatalf("expected 'Sending to Gemini...' in view during sending")
+	if !strings.Contains(view, "Sending to LLM...") {
+		t.Fatalf("expected 'Sending to LLM...' in view during sending")
 	}
 }
 
@@ -690,7 +690,7 @@ func TestReview_ViewGeminiComplete(t *testing.T) {
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
-	m.SetGeminiComplete("/tmp/gemini-output.txt", 3*time.Second)
+	m.SetLLMComplete("/tmp/gemini-output.txt", 3*time.Second)
 
 	view := m.View()
 
@@ -722,7 +722,7 @@ func TestReview_ViewGeminiError(t *testing.T) {
 	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
 	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
-	m.SetGeminiError(errors.New("gemini connection failed"))
+	m.SetLLMError(errors.New("gemini connection failed"))
 
 	view := m.View()
 
@@ -757,18 +757,18 @@ func TestReview_ViewGeminiStatus(t *testing.T) {
 	m.SetSize(80, 40)
 	m.SetGenerated("/tmp/test.md", true)
 
-	// Test view with no gemini state
-	// The actual behavior depends on whether gemini is available in the test environment
+	// Test view with no LLM state
+	// The actual behavior depends on whether LLM is available in the test environment
 	view := m.View()
 
-	// Check for Gemini Integration section (should always be present)
-	if !strings.Contains(view, "Gemini Integration:") {
-		t.Fatalf("expected 'Gemini Integration:' section in view")
+	// Check for LLM Integration section (should always be present)
+	if !strings.Contains(view, "LLM Integration:") {
+		t.Fatalf("expected 'LLM Integration:' section in view")
 	}
 
-	// If gemini is available, we should see "Send to Gemini" or "Ready"
+	// If LLM is available, we should see "Send to LLM" or "Ready"
 	// If not available, we should see "Not configured"
-	// We just verify the section exists, regardless of gemini availability
+	// We just verify the section exists, regardless of LLM availability
 }
 
 func TestReview_ViewSizeLimit(t *testing.T) {

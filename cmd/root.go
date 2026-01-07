@@ -104,7 +104,7 @@ func launchTUIWizard() {
 		},
 	}
 
-	wizard := ui.NewWizard(rootPath, scanConfig, wizardConfig)
+	wizard := ui.NewWizard(rootPath, scanConfig, wizardConfig, nil)
 
 	// Configure Bubble Tea program
 	program := tea.NewProgram(

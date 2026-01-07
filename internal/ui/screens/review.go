@@ -32,13 +32,13 @@ type ReviewModel struct {
 	maxSizeBytes int64
 	maxSizeStr   string
 
-	geminiAvailable  bool
-	geminiSending    bool
-	geminiStartTime  time.Time
-	geminiComplete   bool
-	geminiOutputFile string
-	geminiDuration   time.Duration
-	geminiError      error
+	llmAvailable  bool
+	llmSending    bool
+	llmStartTime  time.Time
+	llmComplete   bool
+	llmOutputFile string
+	llmDuration   time.Duration
+	llmError      error
 
 	viewport      viewport.Model
 	viewportReady bool
@@ -52,14 +52,14 @@ func NewReview(
 	maxSizeStr string,
 ) *ReviewModel {
 	m := &ReviewModel{
-		selectedFiles:   selectedFiles,
-		fileTree:        fileTree,
-		template:        tmpl,
-		taskDesc:        taskDesc,
-		rules:           rules,
-		maxSizeStr:      maxSizeStr,
-		geminiAvailable: false, // Will be set by SetLLMAvailable()
-		viewport:        viewport.New(0, 0),
+		selectedFiles: selectedFiles,
+		fileTree:      fileTree,
+		template:      tmpl,
+		taskDesc:      taskDesc,
+		rules:         rules,
+		maxSizeStr:    maxSizeStr,
+		llmAvailable:  false, // Will be set by SetLLMAvailable()
+		viewport:      viewport.New(0, 0),
 	}
 	m.totalBytes, m.totalTokens = m.calculateStats()
 
@@ -74,7 +74,7 @@ const footerHeight = 4
 
 // SetLLMAvailable sets whether LLM provider is available for sending.
 func (m *ReviewModel) SetLLMAvailable(available bool) {
-	m.geminiAvailable = available
+	m.llmAvailable = available
 }
 
 func (m *ReviewModel) SetSize(width, height int) {
@@ -107,20 +107,20 @@ type (
 		Err     error
 	}
 
-	// GeminiProgressMsg indicates Gemini send progress
-	GeminiProgressMsg struct {
+	// LLMProgressMsg indicates LLM send progress
+	LLMProgressMsg struct {
 		Stage string
 	}
 
-	// GeminiCompleteMsg indicates Gemini send completed
-	GeminiCompleteMsg struct {
+	// LLMCompleteMsg indicates LLM send completed
+	LLMCompleteMsg struct {
 		Response   string
 		OutputFile string
 		Duration   time.Duration
 	}
 
-	// GeminiErrorMsg indicates Gemini send failed
-	GeminiErrorMsg struct {
+	// LLMErrorMsg indicates LLM send failed
+	LLMErrorMsg struct {
 		Err error
 	}
 )
@@ -135,17 +135,17 @@ func (m *ReviewModel) HandleMessage(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 		}
 		return true, nil
 
-	case GeminiProgressMsg:
-		m.geminiSending = true
-		m.geminiStartTime = time.Now()
+	case LLMProgressMsg:
+		m.llmSending = true
+		m.llmStartTime = time.Now()
 		return true, nil
 
-	case GeminiCompleteMsg:
-		m.SetGeminiComplete(msg.OutputFile, msg.Duration)
+	case LLMCompleteMsg:
+		m.SetLLMComplete(msg.OutputFile, msg.Duration)
 		return true, nil
 
-	case GeminiErrorMsg:
-		m.SetGeminiError(msg.Err)
+	case LLMErrorMsg:
+		m.SetLLMError(msg.Err)
 		return true, nil
 	}
 
@@ -287,8 +287,8 @@ func (m *ReviewModel) buildScrollableContent() string {
 func (m *ReviewModel) renderFixedFooter() string {
 	if m.generated {
 		line1 := []string{"↑/↓: Scroll", "c: Copy"}
-		if m.geminiAvailable && !m.geminiSending && !m.geminiComplete {
-			line1 = append(line1, "F9: Gemini")
+		if m.llmAvailable && !m.llmSending && !m.llmComplete {
+			line1 = append(line1, "F9: LLM")
 		}
 		line2 := []string{"F1: Help", "Ctrl+Q: Exit"}
 		return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
@@ -326,7 +326,7 @@ func (m *ReviewModel) renderGenerationStatusContent() string {
 	}
 	view.WriteString("\n\n")
 
-	view.WriteString(m.renderGeminiStatus())
+	view.WriteString(m.renderLLMStatus())
 
 	return view.String()
 }
@@ -416,33 +416,33 @@ func (m *ReviewModel) renderSizeLimitSection() string {
 	return section.String()
 }
 
-func (m *ReviewModel) renderGeminiStatus() string {
+func (m *ReviewModel) renderLLMStatus() string {
 	var status strings.Builder
 
-	geminiIcon := lipgloss.NewStyle().Foreground(styles.Nord15).Render("🤖")
-	geminiLabel := styles.TitleStyle.Render("Gemini Integration:")
-	status.WriteString(geminiIcon + " " + geminiLabel)
+	llmIcon := lipgloss.NewStyle().Foreground(styles.Nord15).Render("🤖")
+	llmLabel := styles.TitleStyle.Render("LLM Integration:")
+	status.WriteString(llmIcon + " " + llmLabel)
 	status.WriteString("\n")
 
-	if m.geminiSending {
+	if m.llmSending {
 		sendingStyle := lipgloss.NewStyle().Foreground(styles.PrimaryColor)
-		elapsed := time.Since(m.geminiStartTime).Round(time.Second)
-		status.WriteString("  " + sendingStyle.Render(fmt.Sprintf("⏳ Sending to Gemini... (%s)", elapsed)))
-	} else if m.geminiComplete {
+		elapsed := time.Since(m.llmStartTime).Round(time.Second)
+		status.WriteString("  " + sendingStyle.Render(fmt.Sprintf("⏳ Sending to LLM... (%s)", elapsed)))
+	} else if m.llmComplete {
 		// Complete state
 		successIcon := lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("✔")
-		pathStyled := styles.PathStyle.Render(m.geminiOutputFile)
+		pathStyled := styles.PathStyle.Render(m.llmOutputFile)
 		status.WriteString("  " + successIcon + " Response saved to: " + pathStyled)
 		status.WriteString("\n")
 
-		durationStyled := styles.StatsValueStyle.Render(m.formatDuration(m.geminiDuration))
+		durationStyled := styles.StatsValueStyle.Render(m.formatDuration(m.llmDuration))
 		status.WriteString("  ⏱ Response time: " + durationStyled)
-	} else if m.geminiError != nil {
+	} else if m.llmError != nil {
 		// Error state
 		errorIcon := lipgloss.NewStyle().Foreground(styles.ErrorColor).Render("✖")
-		errorText := styles.ErrorStyle.Render(m.geminiError.Error())
+		errorText := styles.ErrorStyle.Render(m.llmError.Error())
 		status.WriteString("  " + errorIcon + " Error: " + errorText)
-	} else if m.geminiAvailable {
+	} else if m.llmAvailable {
 		// Ready state
 		readyStyle := lipgloss.NewStyle().Foreground(styles.AccentColor)
 		status.WriteString("  " + readyStyle.Render("● Ready"))
@@ -464,29 +464,29 @@ func (m *ReviewModel) SetGenerated(filePath string, clipboardSuccess bool) {
 	m.clipboardCopied = clipboardSuccess
 }
 
-// SetGeminiSending sets the Gemini sending state
-func (m *ReviewModel) SetGeminiSending(sending bool) {
-	m.geminiSending = sending
-	m.geminiError = nil
+// SetLLMSending sets the LLM sending state
+func (m *ReviewModel) SetLLMSending(sending bool) {
+	m.llmSending = sending
+	m.llmError = nil
 	if sending {
-		m.geminiStartTime = time.Now()
+		m.llmStartTime = time.Now()
 	}
 }
 
-// SetGeminiComplete sets the Gemini complete state
-func (m *ReviewModel) SetGeminiComplete(outputFile string, duration time.Duration) {
-	m.geminiSending = false
-	m.geminiComplete = true
-	m.geminiOutputFile = outputFile
-	m.geminiDuration = duration
-	m.geminiError = nil
+// SetLLMComplete sets the LLM complete state
+func (m *ReviewModel) SetLLMComplete(outputFile string, duration time.Duration) {
+	m.llmSending = false
+	m.llmComplete = true
+	m.llmOutputFile = outputFile
+	m.llmDuration = duration
+	m.llmError = nil
 }
 
-// SetGeminiError sets the Gemini error state
-func (m *ReviewModel) SetGeminiError(err error) {
-	m.geminiSending = false
-	m.geminiComplete = false
-	m.geminiError = err
+// SetLLMError sets the LLM error state
+func (m *ReviewModel) SetLLMError(err error) {
+	m.llmSending = false
+	m.llmComplete = false
+	m.llmError = err
 }
 
 // formatDuration formats a duration for display

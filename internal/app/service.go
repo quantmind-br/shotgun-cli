@@ -15,6 +15,7 @@ import (
 type DefaultContextService struct {
 	scanner   scanner.Scanner
 	generator ctxgen.ContextGenerator
+	registry  *llm.Registry
 }
 
 type ServiceOption func(*DefaultContextService)
@@ -23,11 +24,18 @@ func NewContextService(opts ...ServiceOption) *DefaultContextService {
 	svc := &DefaultContextService{
 		scanner:   scanner.NewFileSystemScanner(),
 		generator: ctxgen.NewDefaultContextGenerator(),
+		registry:  DefaultProviderRegistry,
 	}
 	for _, opt := range opts {
 		opt(svc)
 	}
 	return svc
+}
+
+func WithRegistry(r *llm.Registry) ServiceOption {
+	return func(svc *DefaultContextService) {
+		svc.registry = r
+	}
 }
 
 func WithScanner(s scanner.Scanner) ServiceOption {
@@ -165,6 +173,56 @@ func (s *DefaultContextService) SendToLLM(
 		return nil, fmt.Errorf("invalid provider config: %w", err)
 	}
 	return provider.Send(ctx, content)
+}
+
+func (s *DefaultContextService) SendToLLMWithProgress(
+	ctx context.Context,
+	content string,
+	cfg LLMSendConfig,
+	progress LLMProgressCallback,
+) (*llm.Result, error) {
+	llmCfg := llm.Config{
+		Provider:       cfg.Provider,
+		APIKey:         cfg.APIKey,
+		BaseURL:        cfg.BaseURL,
+		Model:          cfg.Model,
+		Timeout:        cfg.Timeout,
+		BinaryPath:     cfg.BinaryPath,
+		BrowserRefresh: cfg.BrowserRefresh,
+	}
+	llmCfg.WithDefaults()
+
+	provider, err := s.registry.Create(llmCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create LLM provider: %w", err)
+	}
+
+	if !provider.IsAvailable() {
+		return nil, fmt.Errorf("%s not available", provider.Name())
+	}
+
+	if err := provider.ValidateConfig(); err != nil {
+		return nil, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	var result *llm.Result
+	if progress != nil {
+		result, err = provider.SendWithProgress(ctx, content, progress)
+	} else {
+		result, err = provider.Send(ctx, content)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("LLM request failed: %w", err)
+	}
+
+	if cfg.SaveResponse && cfg.OutputPath != "" {
+		if writeErr := os.WriteFile(cfg.OutputPath, []byte(result.Response), 0600); writeErr != nil {
+			return result, fmt.Errorf("failed to save response: %w", writeErr)
+		}
+	}
+
+	return result, nil
 }
 
 func (s *DefaultContextService) Scanner() scanner.Scanner {

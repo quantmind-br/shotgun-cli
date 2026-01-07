@@ -15,7 +15,22 @@ type ContextService interface {
 	Generate(ctx context.Context, cfg GenerateConfig) (*GenerateResult, error)
 	GenerateWithProgress(ctx context.Context, cfg GenerateConfig, progress ProgressCallback) (*GenerateResult, error)
 	SendToLLM(ctx context.Context, content string, provider llm.Provider) (*llm.Result, error)
+	SendToLLMWithProgress(ctx context.Context, content string, cfg LLMSendConfig, progress LLMProgressCallback) (*llm.Result, error)
 }
+
+type LLMSendConfig struct {
+	Provider       llm.ProviderType
+	APIKey         string
+	BaseURL        string
+	Model          string
+	Timeout        int
+	SaveResponse   bool
+	OutputPath     string
+	BinaryPath     string // GeminiWeb legacy
+	BrowserRefresh string // GeminiWeb legacy
+}
+
+type LLMProgressCallback func(stage string)
 
 type GenerateConfig struct {
 	RootPath        string

@@ -158,6 +158,21 @@ bd close bd-42 --reason "Completed"      # Complete work
 - `Generate(ctx, cfg)` - Synchronous (CLI)
 - `GenerateWithProgress(ctx, cfg, callback)` - Async with progress (TUI)
 - `SendToLLM(ctx, content, provider)` - Send to LLM provider
+- `SendToLLMWithProgress(ctx, content, config, callback)` - Send to LLM with progress reporting (TUI)
+
+```go
+// Using ContextService for LLM operations
+svc := app.NewContextService()
+result, err := svc.SendToLLMWithProgress(ctx, content, app.LLMSendConfig{
+    Provider:     llm.ProviderOpenAI,
+    APIKey:       "your-api-key",
+    Model:        "gpt-4o",
+    SaveResponse: true,
+    OutputPath:   "./response.md",
+}, func(stage string) {
+    fmt.Printf("Progress: %s\n", stage)
+})
+```
 
 ### ProviderRegistry (`internal/app/providers.go`)
 ```go
