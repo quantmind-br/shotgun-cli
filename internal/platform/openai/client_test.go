@@ -128,7 +128,6 @@ func TestClient_NewClient_Validation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "gpt-4o", client.model) // default model
-	assert.Equal(t, defaultBaseURL, client.baseURL)
 }
 
 func TestClient_IsConfigured(t *testing.T) {

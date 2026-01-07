@@ -1,27 +1,23 @@
 package openai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	platformhttp "github.com/quantmind-br/shotgun-cli/internal/platform/http"
 )
 
 const defaultBaseURL = "https://api.openai.com/v1"
 
 // Client implements llm.Provider for OpenAI-compatible APIs.
 type Client struct {
+	jsonClient *platformhttp.JSONClient
 	apiKey     string
-	baseURL    string
 	model      string
-	timeout    time.Duration
 	maxTokens  int
-	httpClient *http.Client
 }
 
 // NewClient creates a new OpenAI client.
@@ -46,14 +42,13 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:    cfg.APIKey,
-		baseURL:   baseURL,
-		model:     model,
-		timeout:   timeout,
-		maxTokens: cfg.MaxTokens,
-		httpClient: &http.Client{
+		jsonClient: platformhttp.NewJSONClient(platformhttp.ClientConfig{
+			BaseURL: baseURL,
 			Timeout: timeout,
-		},
+		}),
+		apiKey:    cfg.APIKey,
+		model:     model,
+		maxTokens: cfg.MaxTokens,
 	}, nil
 }
 
@@ -72,42 +67,14 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		req.MaxTokens = c.maxTokens
 	}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	url := c.baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error [%d]: %s", resp.StatusCode, errResp.Error.Message)
-		}
-		return nil, fmt.Errorf("API error [%d]: %s", resp.StatusCode, string(respBody))
+	headers := map[string]string{
+		"Authorization": "Bearer " + c.apiKey,
 	}
 
 	var chatResp ChatCompletionResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	err := c.jsonClient.PostJSON(ctx, "/chat/completions", headers, req, &chatResp)
+	if err != nil {
+		return nil, c.handleError(err)
 	}
 
 	if len(chatResp.Choices) == 0 {
@@ -123,14 +90,27 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		}
 	}
 
+	rawResp, _ := json.Marshal(chatResp)
+
 	return &llm.Result{
 		Response:    chatResp.Choices[0].Message.Content,
-		RawResponse: string(respBody),
+		RawResponse: string(rawResp),
 		Model:       c.model,
 		Provider:    "OpenAI",
 		Duration:    time.Since(startTime),
 		Usage:       usage,
 	}, nil
+}
+
+func (c *Client) handleError(err error) error {
+	if httpErr, ok := err.(*platformhttp.HTTPError); ok {
+		var errResp ErrorResponse
+		if json.Unmarshal(httpErr.Body, &errResp) == nil && errResp.Error.Message != "" {
+			return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, errResp.Error.Message)
+		}
+		return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, string(httpErr.Body))
+	}
+	return err
 }
 
 // SendWithProgress sends with progress callback.
