@@ -119,10 +119,6 @@ internal/platform/      → Infrastructure (geminiweb, http, clipboard, openai, 
 - Use `app.CLIConfig` from `internal/app/config.go` for CLI flag parsing
 - Use `app.GenerateConfig` from `internal/app/context.go` for service layer configuration
 
-### Adding a New LLM Provider
-1. Implement `llm.Provider` interface in `internal/platform/<provider>/`
-2. Register in `internal/app/providers.go`
-
 ### Shared HTTP Client
 Most providers use the shared `JSONClient` in `internal/platform/http/` for standardized API calls.
 
@@ -136,6 +132,52 @@ if err != nil {
 ```
 
 > **Note**: The browser-based Gemini integration is located in the `geminiweb` package.
+
+### Adding a New LLM Provider
+
+The project uses a structured architecture for HTTP-based LLM providers to minimize code duplication and ensure consistent behavior.
+
+#### BaseClient Architecture
+
+Most HTTP-based providers (OpenAI, Anthropic, Gemini API) follow the **Strategy Pattern** using a shared `BaseClient` located in `internal/platform/llmbase/`.
+
+- **BaseClient** (`internal/platform/llmbase/base_client.go`): Implements the `llm.Provider` interface methods that are identical across providers (`Name`, `IsAvailable`, `IsConfigured`, `ValidateConfig`). It handles the HTTP request execution, error handling, and progress reporting.
+- **Sender Interface** (`internal/platform/llmbase/sender.go`): Defines the provider-specific strategy. Concrete providers implement this interface to handle their unique API requirements.
+
+#### Steps to Add a New Provider
+
+1.  **Create Package**: Create a new package in `internal/platform/<provider>/`.
+2.  **Define Provider Struct**: Create a struct that embeds `*llmbase.BaseClient`.
+    ```go
+    type MyProvider struct {
+        *llmbase.BaseClient
+    }
+    ```
+3.  **Implement Sender Interface**: Implement the following 6 methods from `llmbase.Sender`:
+    - `BuildRequest(content string) (interface{}, error)`: Create the provider-specific JSON payload.
+    - `ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error)`: Extract the result from the API response.
+    - `GetEndpoint() string`: Return the API path (e.g., `/v1/chat/completions`).
+    - `GetHeaders() map[string]string`: Return necessary headers (e.g., `x-api-key`).
+    - `NewResponse() interface{}`: Return a new pointer to the response struct for unmarshaling.
+    - `GetProviderName() string`: Return the display name.
+4.  **Constructor**: Create a `NewClient(cfg llm.Config)` function that initializes `llmbase.BaseClient`.
+5.  **Register**: Register the new provider in `internal/app/providers.go`:
+    ```go
+    DefaultProviderRegistry.Register(llm.ProviderMyProvider, func(cfg llm.Config) (llm.Provider, error) {
+        return myprovider.NewClient(cfg)
+    })
+    ```
+
+#### Implementation Example
+
+```go
+func (c *Client) BuildRequest(content string) (interface{}, error) {
+    return &MyRequest{
+        Model:    c.Model,
+        Messages: []Message{{Role: "user", Content: content}},
+    }, nil
+}
+```
 
 ## Linting Configuration
 **Max line length**: 120 chars | **Max cyclomatic complexity**: 25  

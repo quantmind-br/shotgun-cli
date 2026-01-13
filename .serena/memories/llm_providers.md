@@ -19,6 +19,15 @@ type Provider interface {
 }
 ```
 
+## BaseClient Architecture
+
+Most HTTP-based providers (OpenAI, Anthropic, Gemini API) follow a structured architecture using a shared `BaseClient` located in `internal/platform/llmbase/`.
+
+- **BaseClient**: Implements the `llm.Provider` interface methods that are identical across providers. It handles HTTP request execution using the shared `JSONClient`.
+- **Sender Interface**: Defines the provider-specific strategy (request building, response parsing, endpoints, headers).
+
+Concrete providers embed `*llmbase.BaseClient` and implement the `llmbase.Sender` interface.
+
 ## Supported Providers
 
 ### 1. OpenAI (`ProviderOpenAI`)

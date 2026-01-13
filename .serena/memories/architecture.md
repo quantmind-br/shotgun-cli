@@ -134,6 +134,25 @@ type Provider interface {
 }
 ```
 
+### LLM Base Client (`internal/platform/llmbase/`)
+A shared base implementation for HTTP-based providers that uses the Strategy pattern to minimize code duplication.
+
+- **BaseClient** (`base_client.go`): Implements common logic for `llm.Provider` interface (Name, IsAvailable, IsConfigured, ValidateConfig). It handles HTTP request execution and progress reporting.
+- **Sender** (`sender.go`): Interface for provider-specific logic.
+
+HTTP providers (OpenAI, Anthropic, GeminiAPI) embed `*llmbase.BaseClient` and implement the `llmbase.Sender` interface:
+
+```go
+type Sender interface {
+    BuildRequest(content string) (interface{}, error)
+    ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error)
+    GetEndpoint() string
+    GetHeaders() map[string]string
+    NewResponse() interface{}
+    GetProviderName() string
+}
+```
+
 ### Context Service (`internal/app/service.go`)
 ```go
 type ContextService interface {

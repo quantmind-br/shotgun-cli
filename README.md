@@ -146,13 +146,38 @@ Most LLM providers use the shared `JSONClient` located in `internal/platform/htt
 - **Error Handling**: Standardized `HTTPError` type that captures status codes and response bodies
 - **Configuration**: Unified timeout and base URL handling
 
+#### LLM Provider Architecture
+
+HTTP-based LLM providers use a shared `BaseClient` with the Strategy pattern:
+
+```text
+┌─────────────────────────────────────────┐
+│              BaseClient                  │
+├─────────────────────────────────────────┤
+│ - JSONClient                             │
+│ - APIKey, Model, MaxTokens               │
+│ + Name(), IsAvailable(), IsConfigured()  │
+│ + ValidateConfig()                       │
+│ + Send(ctx, content, sender)             │
+│ + SendWithProgress(...)                  │
+└────────────────┬────────────────────────┘
+                 │ embeds
+    ┌────────────┼────────────┐
+    ▼            ▼            ▼
+┌────────┐  ┌──────────┐  ┌──────────┐
+│ OpenAI │  │ Anthropic│  │ GeminiAPI│
+└────────┘  └──────────┘  └──────────┘
+(implements Sender interface)
+```
+
 #### Provider Implementation
 
-By using the shared client, LLM providers (OpenAI, Anthropic, GeminiAPI) only need to implement:
-1. **Request Building**: Constructing the provider-specific JSON request structure
-2. **Response Mapping**: Defining the target structure for JSON unmarshaling
-3. **Error Handling**: Mapping `HTTPError` to provider-specific error messages
-4. **Authentication**: Setting the required headers (e.g., `Authorization`, `x-api-key`)
+By using the `BaseClient` and the shared client, LLM providers (OpenAI, Anthropic, GeminiAPI) only need to implement the `Sender` interface:
+
+1. **Request Building**: Constructing the provider-specific JSON request structure (`BuildRequest`)
+2. **Response Mapping**: Defining the target structure for JSON unmarshaling (`NewResponse`, `ParseResponse`)
+3. **Endpoint & Headers**: Providing the API path and required headers (`GetEndpoint`, `GetHeaders`)
+4. **Provider Identity**: Providing the display name (`GetProviderName`)
 
 ## LLM Provider Configuration
 
