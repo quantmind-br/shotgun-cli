@@ -14,8 +14,6 @@ type MockCommandRunner struct {
 	lookPathCalls   []string
 	commandFunc     func(ctx context.Context, name string, args ...string) *exec.Cmd
 	commandCalls    []CommandCall
-	executeOutput   string
-	executeError    error
 	executeCommands []*exec.Cmd
 }
 

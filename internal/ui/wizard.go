@@ -134,18 +134,6 @@ type GenerationProgressMsg struct {
 
 type LLMSendMsg struct{}
 
-type generateCoordinator struct {
-	generator  context.ContextGenerator
-	fileTree   *scanner.FileNode
-	selections map[string]bool
-	config     *context.GenerateConfig
-	rootPath   string
-	progressCh chan context.GenProgress
-	done       chan bool
-	started    bool
-	content    string
-}
-
 type pollScanMsg struct{}
 type pollGenerateMsg struct{}
 
@@ -987,14 +975,6 @@ func parseSize(sizeStr string) (int64, error) {
 	}
 
 	return size * multiplier, nil
-}
-
-const pollInterval = 50 * time.Millisecond
-
-func (m *WizardModel) schedulePollGenerate() tea.Cmd {
-	return tea.Tick(pollInterval, func(time.Time) tea.Msg {
-		return pollGenerateMsg{}
-	})
 }
 
 func (m *WizardModel) pollGenerate() tea.Cmd {
