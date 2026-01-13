@@ -242,6 +242,19 @@ func TestConfigWizard_ConfigSavedMsg(t *testing.T) {
 	assert.NotNil(t, cmd)
 }
 
+func TestConfigWizard_ConfigSavedMsg_QuitAfterSave(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewConfigWizard()
+	wizard.quitAfterSave = true
+	_, cmd := wizard.Update(ConfigSavedMsg{})
+
+	assert.NotNil(t, cmd)
+	msg := cmd()
+	_, isQuit := msg.(tea.QuitMsg)
+	assert.True(t, isQuit, "should return tea.QuitMsg when quitAfterSave is true")
+}
+
 func TestConfigWizard_ConfigSaveErrorMsg(t *testing.T) {
 	t.Parallel()
 

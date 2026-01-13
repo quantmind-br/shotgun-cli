@@ -37,6 +37,7 @@ type ConfigWizardModel struct {
 	height          int
 	showHelp        bool
 	confirmQuit     bool
+	quitAfterSave   bool
 	savedMessage    string
 	errorMessage    string
 }
@@ -71,6 +72,9 @@ func (m *ConfigWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConfigSavedMsg:
 		m.savedMessage = "Configuration saved successfully!"
 		m.errorMessage = ""
+		if m.quitAfterSave {
+			return m, tea.Quit
+		}
 		return m, m.scheduleClearMessage()
 
 	case ConfigSaveErrorMsg:
@@ -177,6 +181,7 @@ func (m *ConfigWizardModel) handleConfirmQuit(msg tea.KeyMsg) (tea.Model, tea.Cm
 		m.confirmQuit = false
 	case "s", "S":
 		m.confirmQuit = false
+		m.quitAfterSave = true
 		return m, m.saveChanges()
 	}
 	return m, nil
