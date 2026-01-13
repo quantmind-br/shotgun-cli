@@ -4,7 +4,6 @@ package geminiweb
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -54,8 +53,13 @@ func IsValidModel(model string) bool {
 	return true
 }
 
-// FindBinary locates the geminiweb executable.
-func (c *Config) FindBinary() (string, error) {
+// FindBinary locates the geminiweb executable using the provided runner.
+// If runner is nil, uses the default runner.
+func (c *Config) FindBinary(runner CommandRunner) (string, error) {
+	if runner == nil {
+		runner = GetDefaultRunner()
+	}
+
 	// Check explicit path first
 	if c.BinaryPath != "" {
 		if _, err := os.Stat(c.BinaryPath); err == nil {
@@ -66,7 +70,7 @@ func (c *Config) FindBinary() (string, error) {
 	}
 
 	// Search in PATH
-	path, err := exec.LookPath("geminiweb")
+	path, err := runner.LookPath("geminiweb")
 	if err == nil {
 		return path, nil
 	}
@@ -92,7 +96,7 @@ func (c *Config) FindBinary() (string, error) {
 	}
 
 	return "", fmt.Errorf(
-		"geminiweb binary not found in PATH or common locations, " +
+		"geminiweb binary not found in PATH or common locations, "+
 			"install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest",
 	)
 }
@@ -100,7 +104,7 @@ func (c *Config) FindBinary() (string, error) {
 // IsAvailable checks if geminiweb binary is available.
 func IsAvailable() bool {
 	cfg := DefaultConfig()
-	_, err := cfg.FindBinary()
+	_, err := cfg.FindBinary(nil)
 
 	return err == nil
 }
@@ -143,7 +147,7 @@ func GetStatus() Status {
 		CookiesPath: GetCookiesPath(),
 	}
 
-	binaryPath, err := cfg.FindBinary()
+	binaryPath, err := cfg.FindBinary(nil)
 	if err != nil {
 		status.Error = err.Error()
 

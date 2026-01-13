@@ -78,7 +78,7 @@ func TestConfigFindBinary_NotFound(t *testing.T) {
 		BinaryPath: "/nonexistent/path/to/geminiweb",
 	}
 
-	_, err := cfg.FindBinary()
+	_, err := cfg.FindBinary(nil)
 	if err == nil {
 		t.Error("expected error for nonexistent binary path")
 	}
@@ -429,7 +429,7 @@ func TestConfig_FindBinary_ExplicitPath(t *testing.T) {
 	}
 
 	cfg := Config{BinaryPath: goPath}
-	path, err := cfg.FindBinary()
+	path, err := cfg.FindBinary(nil)
 	if err != nil {
 		t.Errorf("expected no error for existing path, got: %v", err)
 	}
@@ -806,7 +806,7 @@ func TestConfig_FindBinary_SearchPath(t *testing.T) {
 	// Test with empty config - should search PATH
 	cfg := Config{}
 
-	path, err := cfg.FindBinary()
+	path, err := cfg.FindBinary(nil)
 
 	if err != nil {
 		// This is OK - geminiweb might not be installed
@@ -853,7 +853,7 @@ func TestConfig_FindBinary_CommonPaths(t *testing.T) {
 	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	cfg := Config{} // Empty config should search common paths
-	path, err := cfg.FindBinary()
+	path, err := cfg.FindBinary(nil)
 
 	if err != nil {
 		t.Errorf("expected to find binary in common path, got error: %v", err)
@@ -867,7 +867,7 @@ func TestConfig_FindBinary_CommonPaths(t *testing.T) {
 func TestConfig_FindBinary_ExplicitPathNotFound(t *testing.T) {
 	cfg := Config{BinaryPath: "/definitely/does/not/exist/geminiweb"}
 
-	_, err := cfg.FindBinary()
+	_, err := cfg.FindBinary(nil)
 
 	if err == nil {
 		t.Error("expected error for nonexistent explicit path")

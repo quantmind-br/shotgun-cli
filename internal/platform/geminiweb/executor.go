@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -29,16 +28,31 @@ type Result struct {
 // Executor manages geminiweb execution.
 type Executor struct {
 	config Config
+	runner CommandRunner
 }
 
 // NewExecutor creates a new executor with the given configuration.
 func NewExecutor(config Config) *Executor {
-	return &Executor{config: config}
+	return &Executor{config: config, runner: nil}
+}
+
+// NewExecutorWithRunner creates a new executor with the given configuration and command runner.
+// This is primarily used for testing.
+func NewExecutorWithRunner(config Config, runner CommandRunner) *Executor {
+	return &Executor{config: config, runner: runner}
+}
+
+// getRunner returns the executor's runner, or the default if none is set.
+func (e *Executor) getRunner() CommandRunner {
+	if e.runner == nil {
+		return GetDefaultRunner()
+	}
+	return e.runner
 }
 
 // Send sends content to Gemini and returns the response.
 func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
-	binaryPath, err := e.config.FindBinary()
+	binaryPath, err := e.config.FindBinary(nil)
 	if err != nil {
 		return nil, fmt.Errorf("geminiweb not available: %w", err)
 	}
@@ -64,7 +78,8 @@ func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
 	startTime := time.Now()
 
 	// Create command
-	cmd := exec.CommandContext(ctx, binaryPath, args...) //nolint:gosec // binaryPath is validated via FindBinary
+	runner := e.getRunner()
+	cmd := runner.CommandContext(ctx, binaryPath, args...)
 
 	// Configure stdin with content
 	cmd.Stdin = strings.NewReader(content)
@@ -112,7 +127,7 @@ func (e *Executor) Send(ctx context.Context, content string) (*Result, error) {
 func (e *Executor) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*Result, error) {
 	progress("Locating geminiweb...")
 
-	binaryPath, err := e.config.FindBinary()
+	binaryPath, err := e.config.FindBinary(nil)
 	if err != nil {
 		return nil, fmt.Errorf("geminiweb not available: %w", err)
 	}
@@ -132,7 +147,8 @@ func (e *Executor) SendWithProgress(ctx context.Context, content string, progres
 	progress(fmt.Sprintf("Sending to Gemini (%s)...", e.config.Model))
 
 	startTime := time.Now()
-	cmd := exec.CommandContext(ctx, binaryPath, args...) //nolint:gosec // binaryPath is validated via FindBinary
+	runner := e.getRunner()
+	cmd := runner.CommandContext(ctx, binaryPath, args...)
 	cmd.Stdin = strings.NewReader(content)
 
 	var stdout, stderr bytes.Buffer

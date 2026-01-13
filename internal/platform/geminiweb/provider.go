@@ -11,6 +11,7 @@ import (
 type WebProvider struct {
 	executor *Executor
 	config   Config
+	runner   CommandRunner // Optional custom runner for testing
 }
 
 // NewWebProvider creates a GeminiWeb provider.
@@ -30,10 +31,32 @@ func NewWebProvider(cfg llm.Config) (*WebProvider, error) {
 		execCfg.Timeout = 300
 	}
 
+	exec := NewExecutor(execCfg)
 	return &WebProvider{
-		executor: NewExecutor(execCfg),
+		executor: exec,
 		config:   execCfg,
+		runner:   nil,
 	}, nil
+}
+
+// NewWebProviderWithRunner creates a GeminiWeb provider with a custom command runner.
+// This is primarily used for testing.
+func NewWebProviderWithRunner(cfg llm.Config, runner CommandRunner) (*WebProvider, error) {
+	provider, err := NewWebProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+	provider.runner = runner
+	provider.executor = NewExecutorWithRunner(provider.config, runner)
+	return provider, nil
+}
+
+// getRunner returns the provider's runner, or the default if none is set.
+func (p *WebProvider) getRunner() CommandRunner {
+	if p.runner == nil {
+		return GetDefaultRunner()
+	}
+	return p.runner
 }
 
 // Send sends a prompt and returns the response.
@@ -75,7 +98,8 @@ func (p *WebProvider) Name() string {
 
 // IsAvailable checks if geminiweb binary is available.
 func (p *WebProvider) IsAvailable() bool {
-	return IsAvailable()
+	_, err := p.config.FindBinary(p.getRunner())
+	return err == nil
 }
 
 // IsConfigured checks if geminiweb is configured.
