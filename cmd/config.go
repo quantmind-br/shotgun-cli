@@ -8,17 +8,39 @@ import (
 	"sort"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/quantmind-br/shotgun-cli/internal/config"
+	"github.com/quantmind-br/shotgun-cli/internal/ui"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Configuration management",
-	Long:  "Commands for viewing and modifying shotgun-cli configuration",
+	Long: `Commands for viewing and modifying shotgun-cli configuration.
+
+When called without subcommands, launches an interactive TUI for managing
+all configuration settings organized by category.
+
+Subcommands:
+  show    Display current configuration values
+  set     Set a specific configuration value
+
+Examples:
+  # Launch interactive configuration TUI
+  shotgun-cli config
+
+  # Show current configuration
+  shotgun-cli config show
+
+  # Set a configuration value
+  shotgun-cli config set llm.provider openai`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return launchConfigTUI()
+	},
 }
 
 var configShowCmd = &cobra.Command{
@@ -330,6 +352,22 @@ func formatValue(value interface{}) string {
 
 func getDefaultConfigPath() string {
 	return filepath.Join(getConfigDir(), "config.yaml")
+}
+
+func launchConfigTUI() error {
+	wizard := ui.NewConfigWizard()
+
+	program := tea.NewProgram(
+		wizard,
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+
+	if _, err := program.Run(); err != nil {
+		return fmt.Errorf("failed to start config TUI: %w", err)
+	}
+
+	return nil
 }
 
 func init() {
