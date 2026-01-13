@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
-	platformhttp "github.com/quantmind-br/shotgun-cli/internal/platform/http"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/llmbase"
 )
 
 const (
@@ -16,15 +16,10 @@ const (
 	defaultMaxTokens = 8192
 )
 
-// Client implements llm.Provider for Anthropic API.
 type Client struct {
-	jsonClient *platformhttp.JSONClient
-	apiKey     string
-	model      string
-	maxTokens  int
+	*llmbase.BaseClient
 }
 
-// NewClient creates a new Anthropic client.
 func NewClient(cfg llm.Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("api key is required")
@@ -51,40 +46,48 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}
 
 	return &Client{
-		jsonClient: platformhttp.NewJSONClient(platformhttp.ClientConfig{
-			BaseURL: baseURL,
-			Timeout: timeout,
-		}),
-		apiKey:    cfg.APIKey,
-		model:     model,
-		maxTokens: maxTokens,
+		BaseClient: llmbase.NewBaseClient(llmbase.Config{
+			APIKey:    cfg.APIKey,
+			BaseURL:   baseURL,
+			Model:     model,
+			MaxTokens: maxTokens,
+			Timeout:   timeout,
+		}, "Anthropic"),
 	}, nil
 }
 
-// Send sends a prompt and returns the response.
 func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) {
-	startTime := time.Now()
-
-	req := MessagesRequest{
-		Model:     c.model,
-		MaxTokens: c.maxTokens,
-		Messages: []Message{
-			{Role: "user", Content: content},
-		},
-	}
-
-	headers := map[string]string{
-		"x-api-key":         c.apiKey,
-		"anthropic-version": anthropicVersion,
-	}
-
-	var msgResp MessagesResponse
-	err := c.jsonClient.PostJSON(ctx, "/v1/messages", headers, req, &msgResp)
+	result, err := c.BaseClient.Send(ctx, content, c)
 	if err != nil {
 		return nil, c.handleError(err)
 	}
+	return result, nil
+}
 
-	// Extract text from content blocks.
+func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
+	result, err := c.BaseClient.SendWithProgress(ctx, content, c, progress)
+	if err != nil {
+		return nil, c.handleError(err)
+	}
+	return result, nil
+}
+
+func (c *Client) BuildRequest(content string) (interface{}, error) {
+	return MessagesRequest{
+		Model:     c.Model,
+		MaxTokens: c.MaxTokens,
+		Messages: []Message{
+			{Role: "user", Content: content},
+		},
+	}, nil
+}
+
+func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error) {
+	msgResp, ok := response.(*MessagesResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
 	var responseText string
 	for _, block := range msgResp.Content {
 		if block.Type == "text" {
@@ -101,61 +104,40 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		}
 	}
 
-	rawResp, _ := json.Marshal(msgResp)
-
 	return &llm.Result{
 		Response:    responseText,
-		RawResponse: string(rawResp),
-		Model:       c.model,
-		Provider:    "Anthropic",
-		Duration:    time.Since(startTime),
+		RawResponse: string(rawJSON),
+		Model:       c.Model,
+		Provider:    c.ProviderName,
 		Usage:       usage,
 	}, nil
 }
 
+func (c *Client) GetEndpoint() string {
+	return "/v1/messages"
+}
+
+func (c *Client) GetHeaders() map[string]string {
+	return map[string]string{
+		"x-api-key":         c.APIKey,
+		"anthropic-version": anthropicVersion,
+	}
+}
+
+func (c *Client) NewResponse() interface{} {
+	return &MessagesResponse{}
+}
+
+func (c *Client) GetProviderName() string {
+	return c.ProviderName
+}
+
 func (c *Client) handleError(err error) error {
-	if httpErr, ok := err.(*platformhttp.HTTPError); ok {
+	return c.BaseClient.HandleHTTPError(err, func(body []byte) string {
 		var errResp ErrorResponse
-		if json.Unmarshal(httpErr.Body, &errResp) == nil && errResp.Error.Message != "" {
-			return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, errResp.Error.Message)
+		if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+			return errResp.Error.Message
 		}
-		return fmt.Errorf("API error [%d]: %s", httpErr.StatusCode, string(httpErr.Body))
-	}
-	return err
-}
-
-// SendWithProgress sends with progress callback.
-func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
-	progress("Connecting to Anthropic...")
-	result, err := c.Send(ctx, content)
-	if err == nil {
-		progress("Response received")
-	}
-	return result, err
-}
-
-// Name returns the provider name.
-func (c *Client) Name() string {
-	return "Anthropic"
-}
-
-// IsAvailable checks if the provider is available.
-func (c *Client) IsAvailable() bool {
-	return true
-}
-
-// IsConfigured checks if the provider is configured.
-func (c *Client) IsConfigured() bool {
-	return c.apiKey != "" && c.model != ""
-}
-
-// ValidateConfig validates the configuration.
-func (c *Client) ValidateConfig() error {
-	if c.apiKey == "" {
-		return fmt.Errorf("API key is required")
-	}
-	if c.model == "" {
-		return fmt.Errorf("model is required")
-	}
-	return nil
+		return ""
+	})
 }

@@ -112,7 +112,6 @@ func TestClient_Send_APIError(t *testing.T) {
 }
 
 func TestClient_NewClient_Validation(t *testing.T) {
-	// Missing API key
 	_, err := NewClient(llm.Config{
 		Model:   "claude-sonnet-4-20250514",
 		Timeout: 30,
@@ -120,21 +119,20 @@ func TestClient_NewClient_Validation(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "api key is required")
 
-	// Valid config
 	client, err := NewClient(llm.Config{
 		APIKey:  "test-key",
 		Timeout: 30,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "claude-sonnet-4-20250514", client.model)
-	assert.Equal(t, defaultMaxTokens, client.maxTokens)
+	assert.Equal(t, "claude-sonnet-4-20250514", client.Model)
+	assert.Equal(t, defaultMaxTokens, client.MaxTokens)
 }
 
 func TestClient_IsConfigured(t *testing.T) {
-	client := &Client{apiKey: "key", model: "model"}
+	client, _ := NewClient(llm.Config{APIKey: "key", Model: "model"})
 	assert.True(t, client.IsConfigured())
 
-	client = &Client{apiKey: "", model: "model"}
+	client.APIKey = ""
 	assert.False(t, client.IsConfigured())
 }
 

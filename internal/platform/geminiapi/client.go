@@ -1,15 +1,12 @@
 package geminiapi
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
+	"github.com/quantmind-br/shotgun-cli/internal/platform/llmbase"
 )
 
 const (
@@ -17,17 +14,10 @@ const (
 	defaultMaxTokens = 8192
 )
 
-// Client implements llm.Provider for Google Gemini API.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	model      string
-	timeout    time.Duration
-	maxTokens  int
-	httpClient *http.Client
+	*llmbase.BaseClient
 }
 
-// NewClient creates a new Gemini API client.
 func NewClient(cfg llm.Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("api key is required")
@@ -54,61 +44,49 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}
 
 	return &Client{
-		apiKey:    cfg.APIKey,
-		baseURL:   baseURL,
-		model:     model,
-		timeout:   timeout,
-		maxTokens: maxTokens,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		BaseClient: llmbase.NewBaseClient(llmbase.Config{
+			APIKey:    cfg.APIKey,
+			BaseURL:   baseURL,
+			Model:     model,
+			MaxTokens: maxTokens,
+			Timeout:   timeout,
+		}, "Gemini"),
 	}, nil
 }
 
-// Send sends a prompt and returns the response.
 func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) {
-	startTime := time.Now()
+	result, err := c.BaseClient.Send(ctx, content, c)
+	if err != nil {
+		return nil, c.handleError(err)
+	}
+	return result, nil
+}
 
-	req := GenerateRequest{
+func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
+	result, err := c.BaseClient.SendWithProgress(ctx, content, c, progress)
+	if err != nil {
+		return nil, c.handleError(err)
+	}
+	return result, nil
+}
+
+func (c *Client) BuildRequest(content string) (interface{}, error) {
+	return GenerateRequest{
 		Contents: []Content{
 			{
 				Parts: []Part{{Text: content}},
 			},
 		},
 		GenerationConfig: &GenerationConfig{
-			MaxOutputTokens: c.maxTokens,
+			MaxOutputTokens: c.MaxTokens,
 		},
-	}
+	}, nil
+}
 
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s",
-		c.baseURL, c.model, c.apiKey)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var genResp GenerateResponse
-	if err := json.Unmarshal(respBody, &genResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error) {
+	genResp, ok := response.(*GenerateResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
 	}
 
 	if genResp.Error != nil {
@@ -119,7 +97,6 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 		return nil, fmt.Errorf("no candidates in response")
 	}
 
-	// Extract text from parts.
 	var responseText string
 	for _, part := range genResp.Candidates[0].Content.Parts {
 		responseText += part.Text
@@ -136,46 +113,31 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 
 	return &llm.Result{
 		Response:    responseText,
-		RawResponse: string(respBody),
-		Model:       c.model,
-		Provider:    "Gemini",
-		Duration:    time.Since(startTime),
+		RawResponse: string(rawJSON),
+		Model:       c.Model,
+		Provider:    c.ProviderName,
 		Usage:       usage,
 	}, nil
 }
 
-// SendWithProgress sends with progress callback.
-func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
-	progress("Connecting to Gemini API...")
-	result, err := c.Send(ctx, content)
-	if err == nil {
-		progress("Response received")
-	}
-	return result, err
+func (c *Client) GetEndpoint() string {
+	return fmt.Sprintf("/models/%s:generateContent?key=%s", c.Model, c.APIKey)
 }
 
-// Name returns the provider name.
-func (c *Client) Name() string {
-	return "Gemini"
+func (c *Client) GetHeaders() map[string]string {
+	return map[string]string{}
 }
 
-// IsAvailable checks if the provider is available.
-func (c *Client) IsAvailable() bool {
-	return true
+func (c *Client) NewResponse() interface{} {
+	return &GenerateResponse{}
 }
 
-// IsConfigured checks if the provider is configured.
-func (c *Client) IsConfigured() bool {
-	return c.apiKey != "" && c.model != ""
+func (c *Client) GetProviderName() string {
+	return c.ProviderName
 }
 
-// ValidateConfig validates the configuration.
-func (c *Client) ValidateConfig() error {
-	if c.apiKey == "" {
-		return fmt.Errorf("API key is required")
-	}
-	if c.model == "" {
-		return fmt.Errorf("model is required")
-	}
-	return nil
+func (c *Client) handleError(err error) error {
+	return c.BaseClient.HandleHTTPError(err, func(body []byte) string {
+		return ""
+	})
 }

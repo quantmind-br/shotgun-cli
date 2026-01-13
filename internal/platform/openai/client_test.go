@@ -127,28 +127,29 @@ func TestClient_NewClient_Validation(t *testing.T) {
 		Timeout: 30,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-4o", client.model) // default model
+	assert.Equal(t, "gpt-4o", client.Model) // default model
 }
 
 func TestClient_IsConfigured(t *testing.T) {
-	client := &Client{apiKey: "key", model: "model"}
+	client, _ := NewClient(llm.Config{APIKey: "key", Model: "model"})
 	assert.True(t, client.IsConfigured())
 
-	client = &Client{apiKey: "", model: "model"}
-	assert.False(t, client.IsConfigured())
+	client, _ = NewClient(llm.Config{APIKey: "key", Model: ""})
+	assert.True(t, client.IsConfigured())
 
-	client = &Client{apiKey: "key", model: ""}
+	client.APIKey = ""
 	assert.False(t, client.IsConfigured())
 }
 
 func TestClient_ValidateConfig(t *testing.T) {
-	client := &Client{apiKey: "key", model: "model"}
+	client, _ := NewClient(llm.Config{APIKey: "key", Model: "model"})
 	assert.NoError(t, client.ValidateConfig())
 
-	client = &Client{apiKey: "", model: "model"}
+	client.APIKey = ""
 	assert.Error(t, client.ValidateConfig())
 
-	client = &Client{apiKey: "key", model: ""}
+	client.APIKey = "key"
+	client.Model = ""
 	assert.Error(t, client.ValidateConfig())
 }
 

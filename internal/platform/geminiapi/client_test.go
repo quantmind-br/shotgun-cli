@@ -152,15 +152,15 @@ func TestClient_NewClient_Validation(t *testing.T) {
 		Timeout: 30,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "gemini-2.5-flash", client.model)
-	assert.Equal(t, defaultMaxTokens, client.maxTokens)
+	assert.Equal(t, "gemini-2.5-flash", client.Model)
+	assert.Equal(t, defaultMaxTokens, client.MaxTokens)
 }
 
 func TestClient_IsConfigured(t *testing.T) {
-	client := &Client{apiKey: "key", model: "model"}
+	client, _ := NewClient(llm.Config{APIKey: "key", Model: "model"})
 	assert.True(t, client.IsConfigured())
 
-	client = &Client{apiKey: "", model: "model"}
+	client.APIKey = ""
 	assert.False(t, client.IsConfigured())
 }
 
@@ -189,6 +189,6 @@ func TestClient_SendWithProgress(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "Hello!", result.Response)
-	assert.Contains(t, stages, "Connecting to Gemini API...")
+	assert.Contains(t, stages, "Connecting to Gemini...")
 	assert.Contains(t, stages, "Response received")
 }
