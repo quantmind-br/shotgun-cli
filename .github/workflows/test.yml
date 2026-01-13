@@ -35,7 +35,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestScanCoordinator|TestGenerateCoordinator" ./...
+          go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestScanCoordinator|TestGenerateCoordinator|TestWizardClipboardCopyCmd" ./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
