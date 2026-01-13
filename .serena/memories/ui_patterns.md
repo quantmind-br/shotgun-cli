@@ -2,10 +2,35 @@
 
 ## Wizard Architecture
 
+### Composed Screen Model Pattern
+
+The `WizardModel` uses composition to delegate screen-specific state to dedicated screen models. This keeps `WizardModel` focused on coordination while each screen owns its own state.
+
+```
+WizardModel (coordination only)
+├── fileSelection     → FileSelectionModel (tree, selections, filter)
+├── templateSelection → TemplateSelectionModel (templates, selected)
+├── taskInput         → TaskInputModel (task description)
+├── rulesInput        → RulesInputModel (rules text)
+└── review            → ReviewModel (summary display)
+```
+
+**Accessor Pattern:**
+```go
+// WizardModel delegates state access to screen models
+func (m *WizardModel) getSelectedFiles() map[string]bool {
+    if m.fileSelection != nil {
+        return m.fileSelection.GetSelections()
+    }
+    return nil
+}
+```
+
 ### Main Wizard Model (`internal/ui/wizard.go`)
 - `WizardModel` orchestrates all 5 steps
 - Steps defined as constants: `StepFileSelection`, `StepTemplateSelection`, `StepTaskInput`, `StepRulesInput`, `StepReview`
 - Handles navigation between steps and async operations
+- Screen-specific state delegated to screen models (not stored in WizardModel)
 
 ### Message Types
 ```go
@@ -149,3 +174,58 @@ Scanner progress uses stages to indicate current phase:
 - `"counting"` - First pass counting files (no progress numbers yet)
 - `"scanning"` - Second pass building file tree (with progress)
 - `"complete"` - Scan finished
+
+## Testing Patterns
+
+### CommandRunner Interface (GeminiWeb)
+
+For deterministic testing of external binary execution (like `geminiweb`), use the `CommandRunner` interface pattern:
+
+```go
+// Production uses DefaultRunner
+type DefaultRunner struct{}
+func (r *DefaultRunner) LookPath(file string) (string, error) {
+    return exec.LookPath(file)
+}
+func (r *DefaultRunner) Run(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error) {
+    cmd := exec.CommandContext(ctx, name, args...)
+    cmd.Stdin = stdin
+    return cmd.Output()
+}
+
+// Tests use MockRunner
+type MockRunner struct {
+    LookPathFunc func(file string) (string, error)
+    RunFunc      func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
+}
+```
+
+**Benefits:**
+- Tests don't depend on installed binaries
+- Can simulate error conditions
+- No network calls in tests
+- Deterministic and fast
+
+### Screen Model Test Helpers
+
+For testing wizard behavior, use the test helper functions:
+
+```go
+// Set selections via screen model
+func setWizardSelectedFiles(wizard *WizardModel, selections map[string]bool) {
+    if wizard.fileSelection == nil {
+        wizard.fileSelection = screens.NewFileSelection(nil, selections)
+    } else {
+        wizard.fileSelection.SetSelectionsForTest(selections)
+    }
+}
+
+// Set task description via screen model  
+func setWizardTaskDesc(wizard *WizardModel, taskDesc string) {
+    if wizard.taskInput == nil {
+        wizard.taskInput = screens.NewTaskInput(taskDesc)
+    } else {
+        wizard.taskInput.SetValueForTest(taskDesc)
+    }
+}
+```

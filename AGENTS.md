@@ -238,3 +238,74 @@ The wizard uses dedicated coordinators for background operations:
 go test -v -run TestScanCoordinator ./internal/ui/
 go test -v -run TestGenerateCoordinator ./internal/ui/
 ```
+
+### Composed Screen Model Architecture
+
+The `WizardModel` delegates screen-specific state to dedicated screen models in `internal/ui/screens/`:
+
+| Screen Model | File | Owns State |
+|--------------|------|------------|
+| `FileSelectionModel` | `file_selection.go` | File tree, selections, filter |
+| `TemplateSelectionModel` | `template_selection.go` | Template list, selected template |
+| `TaskInputModel` | `task_input.go` | Task description text |
+| `RulesInputModel` | `rules_input.go` | Rules text |
+| `ReviewModel` | `review.go` | Summary display state |
+
+**Adding a New Wizard Screen:**
+1. Create `internal/ui/screens/my_screen.go` implementing `tea.Model`
+2. Screen owns its own state (not stored in `WizardModel`)
+3. Add screen model as field in `WizardModel`
+4. Update `WizardModel.Update()` to delegate messages to the new screen
+5. Update `WizardModel.View()` to render the new screen
+
+**Accessing Screen State:**
+```go
+// WizardModel accessor methods delegate to screen models
+func (m *WizardModel) getSelectedFiles() map[string]bool {
+    if m.fileSelection != nil {
+        return m.fileSelection.GetSelections()
+    }
+    return nil
+}
+```
+
+### Testing External Binary Execution
+
+Use the `CommandRunner` interface pattern for deterministic testing of external binaries:
+
+**Production code** uses `DefaultRunner`:
+```go
+type CommandRunner interface {
+    LookPath(file string) (string, error)
+    Run(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
+}
+
+type DefaultRunner struct{}
+func (r *DefaultRunner) LookPath(file string) (string, error) {
+    return exec.LookPath(file)
+}
+```
+
+**Test code** uses `MockRunner`:
+```go
+type MockRunner struct {
+    LookPathFunc func(file string) (string, error)
+    RunFunc      func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
+}
+
+// Test with mock
+runner := &MockRunner{
+    LookPathFunc: func(file string) (string, error) {
+        return "/usr/bin/geminiweb", nil
+    },
+    RunFunc: func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error) {
+        return []byte("mocked response"), nil
+    },
+}
+provider := NewProvider(WithRunner(runner))
+```
+
+**Benefits:**
+- Tests are deterministic (no dependency on installed binaries)
+- Can test error conditions easily
+- No network calls in tests

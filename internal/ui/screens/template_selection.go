@@ -105,9 +105,12 @@ func (m *TemplateSelectionModel) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// GetSelected returns the currently selected template, or nil if none selected
 func (m *TemplateSelectionModel) GetSelected() *template.Template {
 	return m.selectedTemplate
+}
+
+func (m *TemplateSelectionModel) SetSelectedForTest(tmpl *template.Template) {
+	m.selectedTemplate = tmpl
 }
 
 func (m *TemplateSelectionModel) HandleMessage(msg tea.Msg) tea.Cmd {

@@ -320,7 +320,45 @@ Configuration values are loaded from multiple sources in order of priority (high
 3. **Config file**: Persistent settings stored in `config.yaml`
 4. **Defaults**: Built-in default values used if no other source specifies a value
 
-### Available Commands
+### Interactive Configuration TUI
+
+Launch the interactive configuration interface:
+
+```bash
+shotgun-cli config
+```
+
+This opens a full-screen TUI where you can:
+- Navigate between configuration categories (Scanner, Context, Template, Output, LLM Provider, Gemini Integration)
+- Edit values with real-time validation
+- Toggle boolean settings with Space
+- Select from dropdown options for enum values
+- Save all changes with Ctrl+S
+- See helpful descriptions for each setting
+
+**Keyboard Shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| Tab / Shift+Tab | Navigate between categories |
+| Up/Down or j/k | Navigate between fields |
+| Enter | Enter edit mode |
+| Esc | Exit edit mode / Cancel |
+| Space | Toggle boolean fields |
+| r | Reset field to default value |
+| Ctrl+S | Save all changes |
+| F1 | Show help screen |
+| q / Ctrl+Q | Quit (prompts to save if changes pending) |
+
+**Features:**
+- **Real-time Validation**: Invalid values are highlighted immediately with error messages
+- **Type-aware Input**: Integer fields only accept numbers, paths expand `~` automatically
+- **Unsaved Changes Warning**: Prompts before quitting if you have unsaved changes
+- **Category Organization**: Settings grouped logically for easy navigation
+
+### CLI Configuration Commands
+
+For scripting or quick changes, use the CLI subcommands:
 
 #### `shotgun-cli config show`
 
@@ -808,6 +846,47 @@ The wizard follows the MVU (Model-View-Update) pattern from Bubble Tea, with hel
 - **Generation Operations**: Context generation and file output
 - **Message Handling**: Processing Bubble Tea messages
 - **Validation**: Ensuring data integrity before state transitions
+
+### Composed Screen Model Architecture
+
+The `WizardModel` uses composition to delegate screen-specific state to dedicated screen models:
+
+```
+┌─────────────────────────────────────────────┐
+│              WizardModel                    │
+│   (coordination + shared state only)        │
+├─────────────────────────────────────────────┤
+│ Fields: step, width, height, progress       │
+│         rootPath, scanConfig, service       │
+│         scanCoordinator, generateCoordinator│
+└─────────────┬───────────────────────────────┘
+              │ composes
+    ┌─────────┼─────────┬──────────┬──────────┐
+    ▼         ▼         ▼          ▼          ▼
+┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐
+│FileSel ││TmplSel ││TaskInp ││RulesInp││Review  │
+│Model   ││Model   ││Model   ││Model   ││Model   │
+└────────┘└────────┘└────────┘└────────┘└────────┘
+   │          │         │          │         │
+   │          │         │          │         │
+   ▼          ▼         ▼          ▼         ▼
+ fileTree  templates  taskDesc   rules    summary
+ selections selected
+```
+
+**Key Principles:**
+
+1. **Screen models own their state**: File selections, template choice, task description, and rules are stored in their respective screen models, not in `WizardModel`.
+
+2. **WizardModel delegates via accessor methods**:
+   - `getSelectedFiles()` → `fileSelection.GetSelections()`
+   - `getSelectedTemplate()` → `templateSelection.GetSelected()`
+   - `getTaskDesc()` → `taskInput.GetValue()`
+   - `getRules()` → `rulesInput.GetValue()`
+
+3. **Message routing**: `WizardModel.Update()` routes messages to the appropriate screen model based on the current step.
+
+4. **Single Responsibility**: WizardModel handles step navigation and coordination; screen models handle their specific UI/state logic.
 
 ### TUI Coordinator Pattern
 
