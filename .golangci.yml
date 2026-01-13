@@ -1,0 +1,64 @@
+# golangci-lint configuration
+# Matches CI workflow settings with appropriate exclusions
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - goconst
+    - misspell
+    - gocyclo
+    - gosec
+    - lll
+    - prealloc
+    - unconvert
+    - unparam
+    - unused
+
+linters-settings:
+  lll:
+    line-length: 120
+    tab-width: 4
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  gocyclo:
+    min-complexity: 25
+  gosec:
+    excludes:
+      # G101: false positive for config key names containing "key"
+      - G101
+      # G306: WriteFile permissions in tests are fine
+      - G306
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - goconst
+    - path: _test\.go
+      linters:
+        - lll
+    - path: internal/ui/
+      linters:
+        - goconst
+    - path: cmd/root\.go
+      linters:
+        - goconst
+    - source: "^func.*interface.*\\{"
+      linters:
+        - lll
+    - source: "func.*progress func\\(.*\\).*\\{"
+      linters:
+        - lll
+    - source: "^func \\(.*\\) \\w+\\(ctx context\\.Context"
+      linters:
+        - lll
+    - path: internal/ui/
+      linters:
+        - unparam

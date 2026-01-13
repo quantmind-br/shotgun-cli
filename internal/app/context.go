@@ -13,9 +13,13 @@ import (
 
 type ContextService interface {
 	Generate(ctx context.Context, cfg GenerateConfig) (*GenerateResult, error)
-	GenerateWithProgress(ctx context.Context, cfg GenerateConfig, progress ProgressCallback) (*GenerateResult, error)
+	GenerateWithProgress(
+		ctx context.Context, cfg GenerateConfig, progress ProgressCallback,
+	) (*GenerateResult, error)
 	SendToLLM(ctx context.Context, content string, provider llm.Provider) (*llm.Result, error)
-	SendToLLMWithProgress(ctx context.Context, content string, cfg LLMSendConfig, progress LLMProgressCallback) (*llm.Result, error)
+	SendToLLMWithProgress(
+		ctx context.Context, content string, cfg LLMSendConfig, progress LLMProgressCallback,
+	) (*llm.Result, error)
 }
 
 type LLMSendConfig struct {

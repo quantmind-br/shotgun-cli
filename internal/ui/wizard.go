@@ -151,7 +151,9 @@ type startGenerationMsg struct {
 	rootPath      string
 }
 
-func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *WizardConfig, svc app.ContextService) *WizardModel {
+func NewWizard(
+	rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *WizardConfig, svc app.ContextService,
+) *WizardModel {
 	if wizardConfig == nil {
 		wizardConfig = &WizardConfig{}
 	}

@@ -110,7 +110,8 @@ func (p *WebProvider) IsConfigured() bool {
 // ValidateConfig validates the configuration.
 func (p *WebProvider) ValidateConfig() error {
 	if !p.IsAvailable() {
-		return fmt.Errorf("geminiweb binary not found. Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
+		return fmt.Errorf("geminiweb binary not found. " +
+			"Install with: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
 	}
 	if !p.IsConfigured() {
 		return fmt.Errorf("geminiweb not configured. Run: geminiweb auto-login")

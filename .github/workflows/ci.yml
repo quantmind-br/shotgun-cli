@@ -38,4 +38,3 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --enable=govet,errcheck,staticcheck,goconst,misspell,gocyclo,gosec,lll,prealloc,unconvert,unparam,unused --timeout=5m --tests ./...

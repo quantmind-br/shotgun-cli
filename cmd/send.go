@@ -83,7 +83,9 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 	// Backward compatibility: if llm.provider is geminiweb, check gemini.enabled
 	if provider == "" || provider == "geminiweb" {
 		if !viper.GetBool(config.KeyGeminiEnabled) {
-			return fmt.Errorf("LLM integration is disabled. Enable with: shotgun-cli config set gemini.enabled true\nOr configure a different provider: shotgun-cli llm list")
+			return fmt.Errorf("LLM integration is disabled. Enable with: " +
+				"shotgun-cli config set gemini.enabled true\n" +
+				"Or configure a different provider: shotgun-cli llm list")
 		}
 	}
 

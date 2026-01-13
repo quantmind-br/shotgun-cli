@@ -170,7 +170,8 @@ func (m *ProgressModel) View() string {
 		content.WriteString("\n")
 	} else if m.message != "" {
 		truncated := m.truncate(m.message, modalWidth-6)
-		messageWithSpinner := m.spinner.View() + " " + lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
+		styledMsg := lipgloss.NewStyle().Foreground(styles.TextColor).Render(truncated)
+		messageWithSpinner := m.spinner.View() + " " + styledMsg
 		messageLine := lipgloss.NewStyle().Foreground(borderColor).Render("│") +
 			m.padCenter(messageWithSpinner, modalWidth-2) +
 			lipgloss.NewStyle().Foreground(borderColor).Render("│")

@@ -137,7 +137,8 @@ Examples:
 		value := args[1]
 
 		if !config.IsValidKey(key) {
-			return fmt.Errorf("invalid configuration key '%s'. Use 'shotgun-cli config show' to see available keys", key)
+			return fmt.Errorf(
+				"invalid configuration key '%s'. Use 'shotgun-cli config show' to see available keys", key)
 		}
 
 		if err := config.ValidateValue(key, value); err != nil {
