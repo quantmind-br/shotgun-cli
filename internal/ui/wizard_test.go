@@ -87,6 +87,57 @@ func (m *wizardTestMockGenerator) GenerateWithProgressEx(root *scanner.FileNode,
 	return "", nil
 }
 
+// setWizardFileTree is a test helper that sets the file tree via the fileSelection component
+func setWizardFileTree(wizard *WizardModel, tree *scanner.FileNode) {
+	var selections map[string]bool
+	if wizard.fileSelection != nil {
+		selections = wizard.fileSelection.GetSelections()
+	}
+	wizard.fileSelection = screens.NewFileSelection(tree, selections)
+}
+
+// getWizardFileTree is a test helper that retrieves the file tree via the fileSelection component
+func getWizardFileTree(wizard *WizardModel) *scanner.FileNode {
+	if wizard.fileSelection != nil {
+		return wizard.fileSelection.GetFileTree()
+	}
+	return nil
+}
+
+// setWizardTemplate is a test helper that sets the template via the templateSelection component
+func setWizardTemplate(wizard *WizardModel, tmpl *template.Template) {
+	if wizard.templateSelection == nil {
+		wizard.templateSelection = screens.NewTemplateSelection()
+	}
+	wizard.templateSelection.SetSelectedForTest(tmpl)
+}
+
+// getWizardTemplate is a test helper that retrieves the template via the templateSelection component
+func getWizardTemplate(wizard *WizardModel) *template.Template {
+	if wizard.templateSelection != nil {
+		return wizard.templateSelection.GetSelected()
+	}
+	return nil
+}
+
+// setWizardSelectedFiles is a test helper that sets file selections via the fileSelection component
+func setWizardSelectedFiles(wizard *WizardModel, selections map[string]bool) {
+	if wizard.fileSelection == nil {
+		wizard.fileSelection = screens.NewFileSelection(nil, selections)
+	} else {
+		wizard.fileSelection.SetSelectionsForTest(selections)
+	}
+}
+
+// setWizardTaskDesc is a test helper that sets task description via the taskInput component
+func setWizardTaskDesc(wizard *WizardModel, taskDesc string) {
+	if wizard.taskInput == nil {
+		wizard.taskInput = screens.NewTaskInput(taskDesc)
+	} else {
+		wizard.taskInput.SetValueForTest(taskDesc)
+	}
+}
+
 func TestWizardHandlesScanLifecycle(t *testing.T) {
 	t.Parallel()
 
@@ -120,7 +171,7 @@ func TestWizardHandlesScanLifecycle(t *testing.T) {
 	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
 	model, _ = wiz.Update(ScanCompleteMsg{Tree: tree})
 	wiz = model.(*WizardModel)
-	if wiz.fileTree != tree {
+	if getWizardFileTree(wiz) != tree {
 		t.Fatalf("expected file tree to be set")
 	}
 	if wiz.fileSelection == nil {
@@ -143,17 +194,19 @@ func TestWizardHandlesGenerationLifecycle(t *testing.T) {
 	}
 	wizard.generateCoordinator = NewGenerateCoordinator(mockGen)
 
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "test task"
+	tree := &scanner.FileNode{Name: "root", Path: tempDir, IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	tmpl := &template.Template{Name: "basic"}
+	setWizardTemplate(wizard, tmpl)
+	setWizardTaskDesc(wizard, "test task")
 
 	// Trigger generation
 	cmd := wizard.handleStartGeneration(startGenerationMsg{
-		fileTree:      wizard.fileTree,
-		selectedFiles: wizard.selectedFiles,
-		template:      wizard.template,
-		taskDesc:      wizard.taskDesc,
+		fileTree:      tree,
+		selectedFiles: wizard.getSelectedFiles(),
+		template:      tmpl,
+		taskDesc:      wizard.getTaskDesc(),
 		rootPath:      tempDir,
 	})
 
@@ -178,10 +231,10 @@ func TestWizardCanAdvanceStepLogic(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = testTaskDescription
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	setWizardTemplate(wizard, &template.Template{Name: "basic"})
+	setWizardTaskDesc(wizard, testTaskDescription)
 
 	if !wizard.canAdvanceStep() {
 		t.Fatalf("expected step 1 to advance when files selected")
@@ -207,10 +260,10 @@ func TestWizardGenerateContextCommand(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = testTaskDescription
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	setWizardTemplate(wizard, &template.Template{Name: "basic"})
+	setWizardTaskDesc(wizard, testTaskDescription)
 
 	cmd := wizard.generateContext()
 	if cmd == nil {
@@ -230,7 +283,7 @@ func TestWizardGenerateContextMissingTemplate(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.selectedFiles["main.go"] = true
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 
 	cmd := wizard.generateContext()
 	if cmd == nil {
@@ -265,16 +318,18 @@ func TestWizardHandlesStructuredProgressMessages(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	tmpl := &template.Template{Name: "basic"}
+	setWizardTemplate(wizard, tmpl)
 
 	var model tea.Model
 
 	model, _ = wizard.Update(startGenerationMsg{
-		fileTree:      wizard.fileTree,
-		selectedFiles: wizard.selectedFiles,
-		template:      wizard.template,
+		fileTree:      tree,
+		selectedFiles: wizard.getSelectedFiles(),
+		template:      tmpl,
 		taskDesc:      testTaskDescription,
 		rootPath:      "/workspace",
 	})
@@ -292,10 +347,10 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = testTaskDescription
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	setWizardTemplate(wizard, &template.Template{Name: "basic"})
+	setWizardTaskDesc(wizard, testTaskDescription)
 
 	wizard.step = StepFileSelection
 	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
@@ -325,7 +380,7 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 			startStep:    StepFileSelection,
 			expectedStep: StepTemplateSelection,
 			setupFunc: func(m *WizardModel) {
-				m.selectedFiles = map[string]bool{"file.go": true}
+				setWizardSelectedFiles(m, map[string]bool{"file.go": true})
 			},
 		},
 		{
@@ -333,7 +388,7 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 			startStep:    StepTemplateSelection,
 			expectedStep: StepTaskInput,
 			setupFunc: func(m *WizardModel) {
-				m.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
+				setWizardTemplate(m, &template.Template{Name: "test", Content: "Task: {TASK}"})
 			},
 		},
 		{
@@ -341,8 +396,8 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 			startStep:    StepTaskInput,
 			expectedStep: StepRulesInput,
 			setupFunc: func(m *WizardModel) {
-				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
-				m.taskDesc = "test task"
+				setWizardTemplate(m, &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"})
+				setWizardTaskDesc(m, "test task")
 			},
 		},
 		{
@@ -350,8 +405,8 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 			startStep:    StepRulesInput,
 			expectedStep: StepReview,
 			setupFunc: func(m *WizardModel) {
-				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
-				m.taskDesc = "test task"
+				setWizardTemplate(m, &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"})
+				setWizardTaskDesc(m, "test task")
 			},
 		},
 	}
@@ -360,7 +415,7 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
-			wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+			setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true})
 			wizard.step = tt.startStep
 			if tt.setupFunc != nil {
 				tt.setupFunc(wizard)
@@ -397,7 +452,7 @@ func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
 			startStep:    StepTaskInput,
 			expectedStep: StepTemplateSelection,
 			setupFunc: func(m *WizardModel) {
-				m.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
+				setWizardTemplate(m, &template.Template{Name: "test", Content: "Task: {TASK}"})
 			},
 		},
 		{
@@ -405,7 +460,7 @@ func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
 			startStep:    StepRulesInput,
 			expectedStep: StepTaskInput,
 			setupFunc: func(m *WizardModel) {
-				m.template = &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"}
+				setWizardTemplate(m, &template.Template{Name: "test", Content: "Task: {TASK}\nRules: {RULES}"})
 			},
 		},
 	}
@@ -414,7 +469,7 @@ func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
-			wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+			setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true})
 			wizard.step = tt.startStep
 			if tt.setupFunc != nil {
 				tt.setupFunc(wizard)
@@ -452,9 +507,9 @@ func TestWizardKeyboardNavigation_FunctionKeys_StillWork(t *testing.T) {
 	t.Run("F8 advances step", func(t *testing.T) {
 		t.Parallel()
 		wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
-		wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true}
+		setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/tmp", IsDir: true})
 		wizard.step = StepFileSelection
-		wizard.selectedFiles = map[string]bool{"file.go": true}
+		setWizardSelectedFiles(wizard, map[string]bool{"file.go": true})
 
 		msg := tea.KeyMsg{Type: tea.KeyF8}
 		model, _ := wizard.Update(msg)
@@ -535,13 +590,13 @@ func TestWizardSkipStepsNoTaskNoRules(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that has neither TASK nor RULES
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "file_structure_only",
 		Content: "File Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// Start at template selection (step 2)
 	wizard.step = StepTemplateSelection
@@ -559,13 +614,13 @@ func TestWizardSkipStepsNoTaskHasRules(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that has RULES but not TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "rules_only",
 		Content: "Rules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// Start at template selection (step 2)
 	wizard.step = StepTemplateSelection
@@ -583,14 +638,14 @@ func TestWizardSkipStepsHasTaskNoRules(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that has TASK but not RULES
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "task_only",
 		Content: "Task: {TASK}\nFile Structure:\n{FILE_STRUCTURE}",
-	}
-	wizard.taskDesc = testSampleTask
+	})
+	setWizardTaskDesc(wizard, testSampleTask)
 
 	// Start at task input (step 3)
 	wizard.step = StepTaskInput
@@ -608,13 +663,13 @@ func TestWizardNoSkipWhenBothRequired(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that has both TASK and RULES
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "full_template",
 		Content: "Task: {TASK}\nRules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// Start at template selection (step 2)
 	wizard.step = StepTemplateSelection
@@ -628,7 +683,7 @@ func TestWizardNoSkipWhenBothRequired(t *testing.T) {
 	}
 
 	// Provide task and advance
-	wizard.taskDesc = testSampleTask
+	setWizardTaskDesc(wizard, testSampleTask)
 	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
 	wizard = model.(*WizardModel)
 
@@ -641,17 +696,19 @@ func TestWizardBackwardNavigationSkipsCorrectly(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template with no TASK and no RULES
-	wizard.template = &template.Template{
+	tmpl := &template.Template{
 		Name:    "file_structure_only",
 		Content: "File Structure:\n{FILE_STRUCTURE}",
 	}
+	setWizardTemplate(wizard, tmpl)
 
 	// Start at Review (step 5)
 	wizard.step = StepReview
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, "", "", "")
+	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, "", "", "")
 
 	// Press F7/F10 to go back - should skip Rules and Task, go to Template Selection
 	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
@@ -666,13 +723,13 @@ func TestWizardBackwardFromRulesWithNoTask(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template with RULES but no TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "rules_only",
 		Content: "Rules: {RULES}\nFile Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// Start at Rules Input (step 4)
 	wizard.step = StepRulesInput
@@ -698,19 +755,19 @@ func TestWizardRequiresTaskInput(t *testing.T) {
 	}
 
 	// Template without TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "no_task",
 		Content: "File Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 	if wizard.requiresTaskInput() {
 		t.Fatal("expected requiresTaskInput to be false when template has no TASK")
 	}
 
 	// Template with TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "with_task",
 		Content: "Task: {TASK}",
-	}
+	})
 	if !wizard.requiresTaskInput() {
 		t.Fatal("expected requiresTaskInput to be true when template has TASK")
 	}
@@ -727,19 +784,19 @@ func TestWizardRequiresRulesInput(t *testing.T) {
 	}
 
 	// Template without RULES
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "no_rules",
 		Content: "Task: {TASK}",
-	}
+	})
 	if wizard.requiresRulesInput() {
 		t.Fatal("expected requiresRulesInput to be false when template has no RULES")
 	}
 
 	// Template with RULES
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "with_rules",
 		Content: "Rules: {RULES}",
-	}
+	})
 	if !wizard.requiresRulesInput() {
 		t.Fatal("expected requiresRulesInput to be true when template has RULES")
 	}
@@ -749,17 +806,17 @@ func TestWizardCanAdvanceWithoutTaskWhenNotRequired(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that does NOT require TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "no_task",
 		Content: "File Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// At Task Input step with empty task description
 	wizard.step = StepTaskInput
-	wizard.taskDesc = ""
+	setWizardTaskDesc(wizard, "")
 
 	// Should be able to advance since template doesn't require TASK
 	if !wizard.canAdvanceStep() {
@@ -771,17 +828,17 @@ func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	// Template that requires TASK
-	wizard.template = &template.Template{
+	setWizardTemplate(wizard, &template.Template{
 		Name:    "with_task",
 		Content: "Task: {TASK}\nFile Structure:\n{FILE_STRUCTURE}",
-	}
+	})
 
 	// At Task Input step with empty task description
 	wizard.step = StepTaskInput
-	wizard.taskDesc = ""
+	setWizardTaskDesc(wizard, "")
 
 	// Should NOT be able to advance since template requires TASK
 	if wizard.canAdvanceStep() {
@@ -789,7 +846,7 @@ func TestWizardCannotAdvanceWithoutTaskWhenRequired(t *testing.T) {
 	}
 
 	// Provide task description
-	wizard.taskDesc = testSampleTask
+	setWizardTaskDesc(wizard, testSampleTask)
 
 	// Now should be able to advance
 	if !wizard.canAdvanceStep() {
@@ -801,8 +858,8 @@ func TestWizardHandleWindowResize(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
 
 	// Initial dimensions
 	initialWidth := wizard.width
@@ -869,14 +926,16 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
-	wizard.taskDesc = "Test task"
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	tmpl := &template.Template{Name: "basic", Content: "Task: {TASK}"}
+	setWizardTemplate(wizard, tmpl)
+	setWizardTaskDesc(wizard, "Test task")
 	wizard.generatedContent = "generated context"
 	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.step = StepReview
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "", "")
+	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, wizard.getTaskDesc(), "", "")
 
 	// Test GeminiProgressMsg
 	model, _ := wizard.Update(screens.LLMProgressMsg{Stage: "sending"})
@@ -905,9 +964,10 @@ func TestWizardHandleGeminiError(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
 	wizard.step = StepReview
-	wizard.review = screens.NewReview(map[string]bool{}, wizard.fileTree, nil, "", "", "")
+	wizard.review = screens.NewReview(map[string]bool{}, tree, nil, "", "", "")
 	wizard.llmSending = true
 
 	testErr := fmt.Errorf("geminiweb: connection timeout")
@@ -924,8 +984,8 @@ func TestWizardHandleTemplateMessage(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	wizard.step = StepTemplateSelection
 
 	selectedTemplate := &template.Template{
@@ -936,11 +996,12 @@ func TestWizardHandleTemplateMessage(t *testing.T) {
 	model, _ := wizard.Update(TemplateSelectedMsg{Template: selectedTemplate})
 	wizard = model.(*WizardModel)
 
-	if wizard.template == nil {
+	tmpl := getWizardTemplate(wizard)
+	if tmpl == nil {
 		t.Fatal("expected template to be set")
 	}
-	if wizard.template.Name != "code-review" {
-		t.Errorf("expected template name 'code-review', got %q", wizard.template.Name)
+	if tmpl.Name != "code-review" {
+		t.Errorf("expected template name 'code-review', got %q", tmpl.Name)
 	}
 }
 
@@ -1006,8 +1067,8 @@ func TestWizardHandleTemplateMessage_CorrectStepWithSelection(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	wizard.step = StepTemplateSelection
 	wizard.templateSelection = screens.NewTemplateSelection()
 
@@ -1032,13 +1093,14 @@ func TestWizardHandleRescanRequest(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{MaxFiles: 100}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
 	wizard.step = StepFileSelection
 
 	// The wizard should handle rescan by restarting the scan
 	// This tests the conceptual flow - actual rescan may use different mechanism
-	initialTree := wizard.fileTree
+	initialTree := tree
 
 	// Simulate conditions that would trigger rescan
 	wizard.scanCoordinator = nil
@@ -1058,8 +1120,8 @@ func TestWizardViewRendersFileSelectionStep(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
 	wizard.step = StepFileSelection
 	wizard.width = 80
 	wizard.height = 24
@@ -1079,7 +1141,7 @@ func TestWizardViewRendersTemplateSelectionStep(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
 	wizard.step = StepTemplateSelection
 	wizard.templateSelection = screens.NewTemplateSelection() // Will use default templates
 	wizard.width = 80
@@ -1096,8 +1158,8 @@ func TestWizardViewRendersTaskInputStep(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.template = &template.Template{Name: "basic", Content: "Task: {TASK}"}
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardTemplate(wizard, &template.Template{Name: "basic", Content: "Task: {TASK}"})
 	wizard.step = StepTaskInput
 	wizard.taskInput = screens.NewTaskInput("")
 	wizard.width = 80
@@ -1114,8 +1176,8 @@ func TestWizardViewRendersRulesInputStep(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.template = &template.Template{Name: "basic", Content: "Rules: {RULES}"}
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardTemplate(wizard, &template.Template{Name: "basic", Content: "Rules: {RULES}"})
 	wizard.step = StepRulesInput
 	wizard.rulesInput = screens.NewRulesInput("")
 	wizard.width = 80
@@ -1132,12 +1194,14 @@ func TestWizardViewRendersReviewStep(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.selectedFiles["main.go"] = true
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.taskDesc = "Test task"
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	tmpl := &template.Template{Name: "basic"}
+	setWizardTemplate(wizard, tmpl)
+	setWizardTaskDesc(wizard, "Test task")
 	wizard.step = StepReview
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, wizard.taskDesc, "", "")
+	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, wizard.getTaskDesc(), "", "")
 	wizard.width = 80
 	wizard.height = 24
 
@@ -1301,7 +1365,7 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	t.Run("empty file selection shows error", func(t *testing.T) {
 		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepFileSelection
-		wizard.selectedFiles = map[string]bool{}
+		setWizardSelectedFiles(wizard, map[string]bool{})
 
 		wizard.handleNextStep()
 
@@ -1316,7 +1380,6 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	t.Run("no template selected shows error", func(t *testing.T) {
 		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepTemplateSelection
-		wizard.template = nil
 
 		wizard.handleNextStep()
 
@@ -1331,8 +1394,8 @@ func TestWizardValidationErrorSetOnFailedAdvance(t *testing.T) {
 	t.Run("empty task description shows error when required", func(t *testing.T) {
 		wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 		wizard.step = StepTaskInput
-		wizard.template = &template.Template{Name: "test", Content: "Task: {TASK}"}
-		wizard.taskDesc = ""
+		setWizardTemplate(wizard, &template.Template{Name: "test", Content: "Task: {TASK}"})
+		setWizardTaskDesc(wizard, "")
 
 		wizard.handleNextStep()
 
@@ -1349,8 +1412,8 @@ func TestWizardValidationErrorClearedOnInput(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
 	wizard.step = StepFileSelection
 	wizard.validationError = "Some error"
 
@@ -1366,7 +1429,7 @@ func TestWizardValidationErrorClearedOnSuccessfulAdvance(t *testing.T) {
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepFileSelection
-	wizard.selectedFiles = map[string]bool{"/test/file.go": true}
+	setWizardSelectedFiles(wizard, map[string]bool{"/test/file.go": true})
 	wizard.validationError = "Previous error"
 
 	wizard.handleNextStep()
@@ -1383,8 +1446,8 @@ func TestWizardViewShowsValidationError(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
-	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	tree := &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true}
+	setWizardFileTree(wizard, tree)
 	wizard.step = StepFileSelection
 	wizard.validationError = "Select at least one file to continue"
 	wizard.width = 80
@@ -1551,8 +1614,8 @@ func TestWizardHandleStepInput_FileSelection(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
-	wizard.fileSelection = screens.NewFileSelection(wizard.fileTree, wizard.selectedFiles)
+	tree := &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
+	setWizardFileTree(wizard, tree)
 	wizard.step = StepFileSelection
 	wizard.validationError = "Some error"
 
@@ -1634,9 +1697,12 @@ func TestWizardHandleStepInput_Review(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.fileTree = &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
-	wizard.template = &template.Template{Name: "basic"}
-	wizard.review = screens.NewReview(wizard.selectedFiles, wizard.fileTree, wizard.template, "task", "", "")
+	tree := &scanner.FileNode{Name: "root", Path: "/tmp/test", IsDir: true}
+	setWizardFileTree(wizard, tree)
+	setWizardSelectedFiles(wizard, map[string]bool{"main.go": true})
+	tmpl := &template.Template{Name: "basic"}
+	setWizardTemplate(wizard, tmpl)
+	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, "task", "", "")
 	wizard.step = StepReview
 	wizard.validationError = "Some error"
 

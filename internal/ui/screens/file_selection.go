@@ -243,6 +243,32 @@ func (m *FileSelectionModel) IsLoading() bool {
 	return m.loading
 }
 
+// GetFileTree returns the current file tree
+func (m *FileSelectionModel) GetFileTree() *scanner.FileNode {
+	return m.fileTree
+}
+
+// GetSelections returns the current file selections map
+func (m *FileSelectionModel) GetSelections() map[string]bool {
+	return m.selections
+}
+
+// GetSelectedCount returns the number of selected files
+func (m *FileSelectionModel) GetSelectedCount() int {
+	if m.selections == nil {
+		return 0
+	}
+	return len(m.selections)
+}
+
+// SetSelectionsForTest sets the selections map directly (for testing only)
+func (m *FileSelectionModel) SetSelectionsForTest(selections map[string]bool) {
+	m.selections = selections
+	if m.tree != nil {
+		m.tree = components.NewFileTree(m.fileTree, m.selections)
+	}
+}
+
 func (m *FileSelectionModel) calculateSelectedSize() int64 {
 	if m.fileTree == nil || m.selections == nil {
 		return 0

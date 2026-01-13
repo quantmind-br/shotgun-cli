@@ -77,17 +77,12 @@ type Progress struct {
 }
 
 type WizardModel struct {
-	step          int
-	fileTree      *scanner.FileNode
-	selectedFiles map[string]bool
-	template      *template.Template
-	taskDesc      string
-	rules         string
-	progress      Progress
-	error         error
-	width         int
-	height        int
-	showHelp      bool
+	step     int
+	progress Progress
+	error    error
+	width    int
+	height   int
+	showHelp bool
 
 	rootPath       string
 	scanConfig     *scanner.ScanConfig
@@ -177,7 +172,6 @@ func NewWizard(rootPath string, scanConfig *scanner.ScanConfig, wizardConfig *Wi
 	}
 	return &WizardModel{
 		step:                StepFileSelection,
-		selectedFiles:       make(map[string]bool),
 		rootPath:            rootPath,
 		scanConfig:          scanConfig,
 		wizardConfig:        wizardConfig,
@@ -220,7 +214,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.handleScanError(msg)
 
 	case TemplateSelectedMsg:
-		m.template = msg.Template
+		if m.templateSelection == nil {
+			m.templateSelection = screens.NewTemplateSelection()
+		}
+		m.templateSelection.SetSelectedForTest(msg.Template)
 
 	case GenerationProgressMsg:
 		cmd = m.handleGenerationProgress(msg)
@@ -548,12 +545,11 @@ func (m *WizardModel) handleScanProgress(msg ScanProgressMsg) tea.Cmd {
 }
 
 func (m *WizardModel) handleScanComplete(msg ScanCompleteMsg) {
-	m.fileTree = msg.Tree
 	m.progress.Visible = false
 	if m.fileSelection != nil {
 		m.fileSelection.SetFileTree(msg.Tree)
 	} else {
-		m.fileSelection = screens.NewFileSelection(msg.Tree, m.selectedFiles)
+		m.fileSelection = screens.NewFileSelection(msg.Tree, nil)
 		m.fileSelection.SetSize(m.width, m.height)
 	}
 }
@@ -746,7 +742,7 @@ func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
 		m.scanCoordinator = NewScanCoordinator(scanner.NewFileSystemScanner())
 	}
 
-	m.fileSelection = screens.NewFileSelection(nil, m.selectedFiles)
+	m.fileSelection = screens.NewFileSelection(nil, nil)
 	m.fileSelection.SetSize(m.width, m.height)
 
 	return tea.Batch(m.fileSelection.Init(), m.scanCoordinator.Start(msg.rootPath, msg.config))
@@ -778,15 +774,15 @@ func (m *WizardModel) handleRescanRequest() tea.Cmd {
 func (m *WizardModel) canAdvanceStep() bool {
 	switch m.step {
 	case StepFileSelection:
-		return len(m.selectedFiles) > 0
+		return len(m.getSelectedFiles()) > 0
 	case StepTemplateSelection:
-		return m.template != nil
+		return m.getSelectedTemplate() != nil
 	case StepTaskInput:
-		// Only require task description if template has TASK variable
-		if m.template != nil && !m.template.HasVariable(template.VarTask) {
+		tmpl := m.getSelectedTemplate()
+		if tmpl != nil && !tmpl.HasVariable(template.VarTask) {
 			return true
 		}
-		return len(strings.TrimSpace(m.taskDesc)) > 0
+		return len(strings.TrimSpace(m.getTaskDesc())) > 0
 	case StepRulesInput:
 		return true
 	case StepReview:
@@ -796,14 +792,14 @@ func (m *WizardModel) canAdvanceStep() bool {
 	}
 }
 
-// requiresTaskInput returns true if the current template requires the TASK variable
 func (m *WizardModel) requiresTaskInput() bool {
-	return m.template != nil && m.template.HasVariable(template.VarTask)
+	tmpl := m.getSelectedTemplate()
+	return tmpl != nil && tmpl.HasVariable(template.VarTask)
 }
 
-// requiresRulesInput returns true if the current template requires the RULES variable
 func (m *WizardModel) requiresRulesInput() bool {
-	return m.template != nil && m.template.HasVariable(template.VarRules)
+	tmpl := m.getSelectedTemplate()
+	return tmpl != nil && tmpl.HasVariable(template.VarRules)
 }
 
 // getNextStep returns the next step to navigate to, skipping steps that are not needed
@@ -859,8 +855,8 @@ func (m *WizardModel) getPrevStep() int {
 func (m *WizardModel) initStep() tea.Cmd {
 	switch m.step {
 	case StepFileSelection:
-		if m.fileTree != nil {
-			m.fileSelection = screens.NewFileSelection(m.fileTree, m.selectedFiles)
+		if m.getFileTree() != nil {
+			m.fileSelection = screens.NewFileSelection(m.getFileTree(), m.getSelectedFiles())
 			m.fileSelection.SetSize(m.width, m.height)
 		}
 	case StepTemplateSelection:
@@ -868,17 +864,17 @@ func (m *WizardModel) initStep() tea.Cmd {
 		m.templateSelection.SetSize(m.width, m.height)
 		return m.templateSelection.LoadTemplates()
 	case StepTaskInput:
-		m.taskInput = screens.NewTaskInput(m.taskDesc)
+		m.taskInput = screens.NewTaskInput(m.getTaskDesc())
 		m.taskInput.SetSize(m.width, m.height)
 		// Set skip hint if template doesn't require RULES variable
 		m.taskInput.SetWillSkipToReview(!m.requiresRulesInput())
 	case StepRulesInput:
-		m.rulesInput = screens.NewRulesInput(m.rules)
+		m.rulesInput = screens.NewRulesInput(m.getRules())
 		m.rulesInput.SetSize(m.width, m.height)
 	case StepReview:
 		m.review = screens.NewReview(
-			m.selectedFiles, m.fileTree, m.template,
-			m.taskDesc, m.rules, m.wizardConfig.Context.MaxSize,
+			m.getSelectedFiles(), m.getFileTree(), m.getSelectedTemplate(),
+			m.getTaskDesc(), m.getRules(), m.wizardConfig.Context.MaxSize,
 		)
 		m.review.SetSize(m.width, m.height)
 		m.review.SetLLMAvailable(m.isLLMAvailable())
@@ -899,19 +895,14 @@ func (m *WizardModel) handleStepInput(msg tea.KeyMsg) tea.Cmd {
 	case StepTemplateSelection:
 		if m.templateSelection != nil {
 			cmd = m.templateSelection.Update(msg)
-			if tmpl := m.templateSelection.GetSelected(); tmpl != nil {
-				m.template = tmpl
-			}
 		}
 	case StepTaskInput:
 		if m.taskInput != nil {
 			cmd = m.taskInput.Update(msg)
-			m.taskDesc = m.taskInput.GetValue()
 		}
 	case StepRulesInput:
 		if m.rulesInput != nil {
 			cmd = m.rulesInput.Update(msg)
-			m.rules = m.rulesInput.GetValue()
 		}
 	case StepReview:
 		if m.review != nil {
@@ -923,13 +914,14 @@ func (m *WizardModel) handleStepInput(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *WizardModel) generateContext() tea.Cmd {
-	if m.template == nil || len(m.selectedFiles) == 0 {
+	tmpl := m.getSelectedTemplate()
+	if tmpl == nil || len(m.getSelectedFiles()) == 0 {
 		return func() tea.Msg {
 			return screens.GenerationErrorMsg{Err: fmt.Errorf("missing template or files")}
 		}
 	}
 
-	return generateContextCmd(m.fileTree, m.selectedFiles, m.template, m.taskDesc, m.rules, m.rootPath)
+	return generateContextCmd(m.getFileTree(), m.getSelectedFiles(), tmpl, m.getTaskDesc(), m.getRules(), m.rootPath)
 }
 
 func scanDirectoryCmd(rootPath string, scanConfig *scanner.ScanConfig) tea.Cmd {
@@ -1041,6 +1033,41 @@ func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 	return filePath, nil
+}
+
+func (m *WizardModel) getFileTree() *scanner.FileNode {
+	if m.fileSelection != nil {
+		return m.fileSelection.GetFileTree()
+	}
+	return nil
+}
+
+func (m *WizardModel) getSelectedTemplate() *template.Template {
+	if m.templateSelection != nil {
+		return m.templateSelection.GetSelected()
+	}
+	return nil
+}
+
+func (m *WizardModel) getSelectedFiles() map[string]bool {
+	if m.fileSelection != nil {
+		return m.fileSelection.GetSelections()
+	}
+	return nil
+}
+
+func (m *WizardModel) getTaskDesc() string {
+	if m.taskInput != nil {
+		return m.taskInput.GetValue()
+	}
+	return ""
+}
+
+func (m *WizardModel) getRules() string {
+	if m.rulesInput != nil {
+		return m.rulesInput.GetValue()
+	}
+	return ""
 }
 
 func (m *WizardModel) isTerminalTooSmall() bool {

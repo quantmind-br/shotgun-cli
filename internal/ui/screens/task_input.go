@@ -188,6 +188,10 @@ func (m *TaskInputModel) GetValue() string {
 	return m.textarea.Value()
 }
 
+func (m *TaskInputModel) SetValueForTest(value string) {
+	m.textarea.SetValue(value)
+}
+
 func (m *TaskInputModel) IsValid() bool {
 	return len(strings.TrimSpace(m.textarea.Value())) > 0
 }
