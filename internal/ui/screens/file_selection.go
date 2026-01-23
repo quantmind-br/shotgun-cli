@@ -39,6 +39,11 @@ func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool) *F
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(styles.PrimaryColor)
 
+	// Ensure selections map is never nil to prevent panic in syncSelections
+	if selections == nil {
+		selections = make(map[string]bool)
+	}
+
 	return &FileSelectionModel{
 		tree:       components.NewFileTree(fileTree, selections),
 		fileTree:   fileTree,
