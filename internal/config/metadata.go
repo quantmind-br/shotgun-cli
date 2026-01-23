@@ -292,6 +292,13 @@ func buildAllMetadata() []ConfigMetadata {
 			MinValue:     1,
 			MaxValue:     3600,
 		},
+		{
+			Key:          KeyLLMSaveResponse,
+			Category:     CategoryLLM,
+			Type:         TypeBool,
+			Description:  "Save LLM response to file",
+			DefaultValue: false,
+		},
 
 		// Gemini Integration (7 keys)
 		{

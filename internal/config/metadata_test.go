@@ -38,7 +38,7 @@ func TestAllConfigMetadata_ReturnsAllKeys(t *testing.T) {
 	metadata := AllConfigMetadata()
 
 	assert.NotEmpty(t, metadata)
-	assert.Len(t, metadata, 27, "should have 27 configuration keys")
+	assert.Len(t, metadata, 28, "should have 28 configuration keys")
 }
 
 func TestAllConfigMetadata_MatchesValidKeys(t *testing.T) {
@@ -195,7 +195,7 @@ func TestGetByCategory_ReturnsCorrectKeys(t *testing.T) {
 		{CategoryContext, 3, []string{KeyContextIncludeTree, KeyContextMaxSize}},
 		{CategoryTemplate, 1, []string{KeyTemplateCustomPath}},
 		{CategoryOutput, 2, []string{KeyOutputFormat, KeyOutputClipboard}},
-		{CategoryLLM, 5, []string{KeyLLMProvider, KeyLLMAPIKey}},
+		{CategoryLLM, 6, []string{KeyLLMProvider, KeyLLMAPIKey}},
 		{CategoryGemini, 7, []string{KeyGeminiEnabled, KeyGeminiModel}},
 	}
 
@@ -280,6 +280,7 @@ func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
 		KeyLLMBaseURL:                  "",
 		KeyLLMModel:                    "",
 		KeyLLMTimeout:                  300,
+		KeyLLMSaveResponse:             false,
 		KeyGeminiEnabled:               false,
 		KeyGeminiModel:                 "gemini-2.5-flash",
 		KeyGeminiTimeout:               300,

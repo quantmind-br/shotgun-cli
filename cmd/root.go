@@ -252,6 +252,7 @@ func setConfigDefaults() {
 	viper.SetDefault(config.KeyLLMBaseURL, "")
 	viper.SetDefault(config.KeyLLMModel, "")
 	viper.SetDefault(config.KeyLLMTimeout, 300)
+	viper.SetDefault(config.KeyLLMSaveResponse, true)
 
 	viper.SetDefault(config.KeyGeminiEnabled, false)
 	viper.SetDefault(config.KeyGeminiBinaryPath, "")

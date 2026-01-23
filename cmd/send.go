@@ -95,6 +95,14 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 	outputFile, _ := cmd.Flags().GetString("output")
 	raw, _ := cmd.Flags().GetBool("raw")
 
+	// Check save-response config if no output file specified
+	saveResponse := viper.GetBool(config.KeyLLMSaveResponse) || viper.GetBool(config.KeyGeminiSaveResponse)
+	if outputFile == "" && saveResponse {
+		// Auto-generate output filename
+		timestamp := time.Now().Format("20060102-150405")
+		outputFile = fmt.Sprintf("llm-response-%s.md", timestamp)
+	}
+
 	// Build config
 	cfg := BuildLLMConfigWithOverrides(model, timeout)
 

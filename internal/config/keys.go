@@ -14,11 +14,12 @@ const (
 	KeyScannerRespectShotgunignore = "scanner.respect-shotgunignore"
 
 	// LLM
-	KeyLLMProvider = "llm.provider"
-	KeyLLMAPIKey   = "llm.api-key"
-	KeyLLMBaseURL  = "llm.base-url"
-	KeyLLMModel    = "llm.model"
-	KeyLLMTimeout  = "llm.timeout"
+	KeyLLMProvider     = "llm.provider"
+	KeyLLMAPIKey       = "llm.api-key"
+	KeyLLMBaseURL      = "llm.base-url"
+	KeyLLMModel        = "llm.model"
+	KeyLLMTimeout      = "llm.timeout"
+	KeyLLMSaveResponse = "llm.save-response"
 
 	// Gemini
 	KeyGeminiEnabled        = "gemini.enabled"

@@ -46,6 +46,8 @@ func ValidKeys() []string {
 		KeyGeminiBrowserRefresh,
 		KeyGeminiAutoSend,
 		KeyGeminiSaveResponse,
+		// LLM save response key
+		KeyLLMSaveResponse,
 	}
 }
 
@@ -69,7 +71,7 @@ func ValidateValue(key, value string) error {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse:
+		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse, KeyLLMSaveResponse:
 		return validateBooleanValue(value)
 	case KeyScannerWorkers:
 		return validateWorkers(value)
@@ -109,7 +111,7 @@ func ConvertValue(key, value string) (interface{}, error) {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse:
+		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse, KeyLLMSaveResponse:
 		return strings.ToLower(value) == "true", nil
 
 	default:
