@@ -253,7 +253,7 @@ func buildAllMetadata() []ConfigMetadata {
 			DefaultValue: true,
 		},
 
-		// LLM Provider (5 keys)
+		// LLM Provider (6 keys)
 		{
 			Key:          KeyLLMProvider,
 			Category:     CategoryLLM,
