@@ -79,6 +79,10 @@ func TestRunContextSend_FromFile(t *testing.T) {
 
 	// Test successful file reading and validation
 	t.Run("successful file read", func(t *testing.T) {
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
+
 		cmd := &cobra.Command{}
 		cmd.Flags().String("output", "", "")
 		cmd.Flags().String("model", "", "")
@@ -101,8 +105,10 @@ func TestRunContextSend_FromFile(t *testing.T) {
 					strings.Contains(errorMsg, "gemini integration is disabled") ||
 					strings.Contains(errorMsg, "LLM integration is disabled") ||
 					strings.Contains(errorMsg, "not available") ||
-					strings.Contains(errorMsg, "request failed"),
-				"Expected LLM/gemini-related error, got: %s", errorMsg)
+					strings.Contains(errorMsg, "request failed") ||
+					strings.Contains(errorMsg, "401") ||
+					strings.Contains(errorMsg, "Incorrect API key"),
+				"Expected LLM-related error, got: %s", errorMsg)
 		}
 		// If err is nil, it means gemini is working and the test succeeded
 	})
@@ -162,6 +168,10 @@ func TestRunContextSend_Flags(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("custom model flag parsing", func(t *testing.T) {
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
+
 		cmd := &cobra.Command{}
 		cmd.Flags().String("output", "", "")
 		cmd.Flags().String("model", "gemini-3.0-pro", "")
@@ -181,12 +191,18 @@ func TestRunContextSend_Flags(t *testing.T) {
 				strings.Contains(errStr, "LLM") ||
 				strings.Contains(errStr, "not available") ||
 				strings.Contains(errStr, "API error") ||
-				strings.Contains(errStr, "request failed")
+				strings.Contains(errStr, "request failed") ||
+				strings.Contains(errStr, "401") ||
+				strings.Contains(errStr, "Incorrect API key")
 			assert.True(t, isExpectedError, "unexpected error: %v", err)
 		}
 	})
 
 	t.Run("custom timeout flag parsing", func(t *testing.T) {
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
+
 		cmd := &cobra.Command{}
 		cmd.Flags().String("output", "", "")
 		cmd.Flags().String("model", "", "")
@@ -202,11 +218,17 @@ func TestRunContextSend_Flags(t *testing.T) {
 		if err != nil {
 			assert.True(t, strings.Contains(err.Error(), "gemini") ||
 				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available"))
+				strings.Contains(err.Error(), "not available") ||
+				strings.Contains(err.Error(), "401") ||
+				strings.Contains(err.Error(), "Incorrect API key"))
 		}
 	})
 
 	t.Run("output to file flag", func(t *testing.T) {
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
+
 		outputFile := tempDir + "/response.txt"
 		cmd := &cobra.Command{}
 		cmd.Flags().String("output", outputFile, "")
@@ -220,11 +242,17 @@ func TestRunContextSend_Flags(t *testing.T) {
 		if err != nil {
 			assert.True(t, strings.Contains(err.Error(), "gemini") ||
 				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available"))
+				strings.Contains(err.Error(), "not available") ||
+				strings.Contains(err.Error(), "401") ||
+				strings.Contains(err.Error(), "Incorrect API key"))
 		}
 	})
 
 	t.Run("raw output flag", func(t *testing.T) {
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
+
 		cmd := &cobra.Command{}
 		cmd.Flags().String("output", "", "")
 		cmd.Flags().String("model", "", "")
@@ -237,12 +265,17 @@ func TestRunContextSend_Flags(t *testing.T) {
 		if err != nil {
 			assert.True(t, strings.Contains(err.Error(), "gemini") ||
 				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available"))
+				strings.Contains(err.Error(), "not available") ||
+				strings.Contains(err.Error(), "401") ||
+				strings.Contains(err.Error(), "Incorrect API key"))
 		}
 	})
 
 	t.Run("viper config integration", func(t *testing.T) {
 		// Set up viper config
+		viper.Reset()
+		viper.Set("llm.provider", "openai")
+		viper.Set("llm.api-key", "test-key")
 		viper.Set("gemini.model", "config-model")
 		viper.Set("gemini.timeout", 45)
 		viper.Set("gemini.binary-path", "/path/to/binary")
@@ -261,7 +294,9 @@ func TestRunContextSend_Flags(t *testing.T) {
 		if err != nil {
 			assert.True(t, strings.Contains(err.Error(), "gemini") ||
 				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available"))
+				strings.Contains(err.Error(), "not available") ||
+				strings.Contains(err.Error(), "401") ||
+				strings.Contains(err.Error(), "Incorrect API key"))
 		}
 	})
 }

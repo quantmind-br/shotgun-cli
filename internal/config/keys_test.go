@@ -40,8 +40,8 @@ func TestKeyValueFormat(t *testing.T) {
 func TestAllKeysDocumented(t *testing.T) {
 	keys := getAllKeyValues()
 
-	if len(keys) < 25 {
-		t.Errorf("expected at least 25 configuration keys, got %d", len(keys))
+	if len(keys) < 22 {
+		t.Errorf("expected at least 22 configuration keys, got %d", len(keys))
 	}
 }
 
@@ -86,27 +86,6 @@ func TestLLMKeysExist(t *testing.T) {
 	}
 }
 
-func TestGeminiKeysExist(t *testing.T) {
-	expected := []string{
-		KeyGeminiEnabled,
-		KeyGeminiModel,
-		KeyGeminiTimeout,
-		KeyGeminiBinaryPath,
-		KeyGeminiBrowserRefresh,
-		KeyGeminiAutoSend,
-		KeyGeminiSaveResponse,
-	}
-
-	for _, key := range expected {
-		if key == "" {
-			t.Error("gemini key constant is empty")
-		}
-		if !strings.HasPrefix(key, "gemini.") {
-			t.Errorf("gemini key %q should start with 'gemini.'", key)
-		}
-	}
-}
-
 func getAllKeyValues() map[string]string {
 	return map[string]string{
 		"KeyScannerMaxFiles":             KeyScannerMaxFiles,
@@ -123,13 +102,6 @@ func getAllKeyValues() map[string]string {
 		"KeyLLMBaseURL":                  KeyLLMBaseURL,
 		"KeyLLMModel":                    KeyLLMModel,
 		"KeyLLMTimeout":                  KeyLLMTimeout,
-		"KeyGeminiEnabled":               KeyGeminiEnabled,
-		"KeyGeminiModel":                 KeyGeminiModel,
-		"KeyGeminiTimeout":               KeyGeminiTimeout,
-		"KeyGeminiBinaryPath":            KeyGeminiBinaryPath,
-		"KeyGeminiBrowserRefresh":        KeyGeminiBrowserRefresh,
-		"KeyGeminiAutoSend":              KeyGeminiAutoSend,
-		"KeyGeminiSaveResponse":          KeyGeminiSaveResponse,
 		"KeyContextIncludeTree":          KeyContextIncludeTree,
 		"KeyContextIncludeSummary":       KeyContextIncludeSummary,
 		"KeyContextMaxSize":              KeyContextMaxSize,

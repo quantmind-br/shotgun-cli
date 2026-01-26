@@ -142,14 +142,8 @@ func TestSetConfigDefaults(t *testing.T) {
 		{"context.include-summary", true},
 		{"output.format", "markdown"},
 		{"output.clipboard", true},
-		{"llm.provider", "geminiweb"},
+		{"llm.provider", "openai"},
 		{"llm.timeout", 300},
-		{"gemini.enabled", false},
-		{"gemini.model", "gemini-2.5-flash"},
-		{"gemini.timeout", 300},
-		{"gemini.browser-refresh", "auto"},
-		{"gemini.auto-send", false},
-		{"gemini.save-response", true},
 	}
 
 	for _, tt := range tests {

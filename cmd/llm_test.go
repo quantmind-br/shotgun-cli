@@ -31,21 +31,6 @@ func TestBuildLLMConfig_CustomValues(t *testing.T) {
 	assert.Equal(t, "https://custom.api.com", cfg.BaseURL)
 }
 
-func TestBuildLLMConfig_GeminiWeb(t *testing.T) {
-	viper.Reset()
-	viper.Set(config.KeyLLMProvider, "geminiweb")
-	viper.Set(config.KeyGeminiBinaryPath, "/path/to/geminiweb")
-	viper.Set(config.KeyGeminiBrowserRefresh, "firefox")
-	viper.Set(config.KeyGeminiModel, "gemini-2.0-pro")
-
-	cfg := BuildLLMConfig()
-
-	assert.Equal(t, llm.ProviderGeminiWeb, cfg.Provider)
-	assert.Equal(t, "/path/to/geminiweb", cfg.BinaryPath)
-	assert.Equal(t, "firefox", cfg.BrowserRefresh)
-	assert.Equal(t, "gemini-2.0-pro", cfg.Model)
-}
-
 func TestBuildLLMConfigWithOverrides(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "anthropic")
@@ -110,18 +95,6 @@ func TestCreateLLMProvider_Gemini(t *testing.T) {
 	assert.Equal(t, "Gemini", provider.Name())
 }
 
-func TestCreateLLMProvider_GeminiWeb(t *testing.T) {
-	viper.Reset()
-	viper.Set(config.KeyLLMProvider, "geminiweb")
-
-	cfg := BuildLLMConfig()
-	provider, err := CreateLLMProvider(cfg)
-
-	require.NoError(t, err)
-	assert.NotNil(t, provider)
-	assert.Equal(t, "GeminiWeb", provider.Name())
-}
-
 func TestCreateLLMProvider_InvalidProvider(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "invalid-provider")
@@ -132,17 +105,6 @@ func TestCreateLLMProvider_InvalidProvider(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, provider)
 	assert.Contains(t, err.Error(), "failed to create provider")
-}
-
-func TestRunLLMStatus_NoError(t *testing.T) {
-	viper.Reset()
-	viper.Set(config.KeyLLMProvider, "geminiweb")
-	viper.Set(config.KeyGeminiBinaryPath, "/nonexistent/geminiweb")
-
-	cmd := &cobra.Command{}
-	err := runLLMStatus(cmd, []string{})
-
-	_ = err // intentionally ignored for this test
 }
 
 func TestRunLLMStatus_OpenAI_Configured(t *testing.T) {
@@ -228,32 +190,6 @@ func TestRunLLMStatus_Gemini_DefaultBaseURL(t *testing.T) {
 	assert.Contains(t, output, "Provider:  gemini")
 	assert.Contains(t, output, "https://generativelanguage.googleapis.com/v1beta")
 	assert.Contains(t, output, "gemini-2.5-flash")
-}
-
-func TestRunLLMStatus_GeminiWeb(t *testing.T) {
-	viper.Reset()
-	viper.Set(config.KeyLLMProvider, "geminiweb")
-	viper.Set(config.KeyGeminiBinaryPath, "/path/to/geminiweb")
-	viper.Set(config.KeyGeminiModel, "gemini-2.0-pro")
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := &cobra.Command{}
-	err := runLLMStatus(cmd, []string{})
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(r)
-	output := buf.String()
-
-	_ = err
-	assert.Contains(t, output, "Provider:  geminiweb")
-	assert.Contains(t, output, "gemini-2.0-pro")
 }
 
 func TestRunLLMStatus_MissingAPIKey(t *testing.T) {
@@ -416,35 +352,6 @@ func TestRunLLMDoctor_Gemini(t *testing.T) {
 	assert.Contains(t, output, "No issues found")
 }
 
-func TestRunLLMDoctor_GeminiWeb(t *testing.T) {
-	viper.Reset()
-	viper.Set(config.KeyLLMProvider, "geminiweb")
-	viper.Set(config.KeyGeminiBinaryPath, "/path/to/geminiweb")
-	viper.Set(config.KeyGeminiModel, "gemini-2.0-pro")
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := &cobra.Command{}
-	err := runLLMDoctor(cmd, []string{})
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(r)
-	output := buf.String()
-
-	require.NoError(t, err)
-	assert.Contains(t, output, "Running diagnostics for geminiweb")
-	assert.Contains(t, output, "Checking provider... geminiweb")
-	assert.Contains(t, output, "Checking model... gemini-2.0-pro")
-	assert.NotContains(t, output, "Checking API key")
-	assert.Contains(t, output, "Next steps:")
-}
-
 func TestRunLLMDoctor_InvalidProvider(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "invalid-provider")
@@ -520,7 +427,6 @@ func TestRunLLMList(t *testing.T) {
 	assert.Contains(t, output, "openai")
 	assert.Contains(t, output, "anthropic")
 	assert.Contains(t, output, "gemini")
-	assert.Contains(t, output, "geminiweb")
 	assert.Contains(t, output, "GPT-4o")
 	assert.Contains(t, output, "Claude 4")
 	assert.Contains(t, output, "Configure with:")
@@ -535,7 +441,6 @@ func TestRunLLMList_CurrentProviderMarker(t *testing.T) {
 		{"OpenAI as current", "openai", "* openai"},
 		{"Anthropic as current", "anthropic", "* anthropic"},
 		{"Gemini as current", "gemini", "* gemini"},
-		{"GeminiWeb as current", "geminiweb", "* geminiweb"},
 	}
 
 	for _, tt := range tests {
@@ -586,7 +491,6 @@ func TestRunLLMList_ProviderDescriptions(t *testing.T) {
 	assert.Contains(t, output, "GPT-4o, GPT-4, o1, o3")
 	assert.Contains(t, output, "Claude 4, Claude 3.5")
 	assert.Contains(t, output, "Gemini 2.5, Gemini 2.0")
-	assert.Contains(t, output, "Browser-based")
 }
 
 func TestGetProviderRegistry(t *testing.T) {
@@ -598,7 +502,6 @@ func TestGetProviderRegistry(t *testing.T) {
 	assert.Contains(t, providers, llm.ProviderOpenAI)
 	assert.Contains(t, providers, llm.ProviderAnthropic)
 	assert.Contains(t, providers, llm.ProviderGemini)
-	assert.Contains(t, providers, llm.ProviderGeminiWeb)
 }
 
 func TestGetProviderRegistry_AllProvidersPresent(t *testing.T) {
@@ -611,7 +514,6 @@ func TestGetProviderRegistry_AllProvidersPresent(t *testing.T) {
 		llm.ProviderOpenAI,
 		llm.ProviderAnthropic,
 		llm.ProviderGemini,
-		llm.ProviderGeminiWeb,
 	}
 
 	for _, expected := range expectedProviders {
@@ -640,7 +542,6 @@ func TestGetProviderRegistry_CreatesProvider(t *testing.T) {
 		{"OpenAI", llm.ProviderOpenAI, "gpt-4o", "sk-test"},
 		{"Anthropic", llm.ProviderAnthropic, "claude-sonnet-4-20250514", "sk-ant-test"},
 		{"Gemini", llm.ProviderGemini, "gemini-2.5-flash", "test-key"},
-		{"GeminiWeb", llm.ProviderGeminiWeb, "gemini-2.0-pro", ""},
 	}
 
 	for _, tt := range tests {
@@ -698,12 +599,6 @@ func TestDisplayURL(t *testing.T) {
 			want:     "(default: https://generativelanguage.googleapis.com/v1beta)",
 		},
 		{
-			name:     "empty url with GeminiWeb - no default configured",
-			url:      "",
-			provider: llm.ProviderGeminiWeb,
-			want:     "(default)",
-		},
-		{
 			name:     "custom url with OpenAI",
 			url:      "https://custom.openai.proxy.com/v1",
 			provider: llm.ProviderOpenAI,
@@ -720,12 +615,6 @@ func TestDisplayURL(t *testing.T) {
 			url:      "https://custom.gemini.proxy.com/v1beta",
 			provider: llm.ProviderGemini,
 			want:     "https://custom.gemini.proxy.com/v1beta",
-		},
-		{
-			name:     "custom url with GeminiWeb",
-			url:      "https://custom.endpoint.com",
-			provider: llm.ProviderGeminiWeb,
-			want:     "https://custom.endpoint.com",
 		},
 		{
 			name:     "localhost url",

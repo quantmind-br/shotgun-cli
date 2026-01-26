@@ -80,8 +80,6 @@ func TestSetConfigValue_AllValidKeys(t *testing.T) {
 		"llm.api-key":               "test-key",
 		"output.format":             "markdown",
 		"output.clipboard":          "false",
-		"gemini.enabled":            "true",
-		"gemini.browser-refresh":    "auto",
 	}
 
 	for key, value := range validSettings {
@@ -147,8 +145,6 @@ func TestShowCurrentConfig_AllSections(t *testing.T) {
 	viper.Set("llm.provider", "gemini")
 	viper.Set("llm.model", "gemini-2.5-flash")
 	viper.Set("output.format", "text")
-	viper.Set("gemini.enabled", true)
-	viper.Set("gemini.model", "gemini-2.5-pro")
 
 	err := showCurrentConfig()
 	require.NoError(t, err)
@@ -258,35 +254,6 @@ func TestGetDefaultConfigPath_Windows(t *testing.T) {
 	// Verify path ends with config.yaml
 	if !strings.HasSuffix(filepath.Base(path), "config.yaml") {
 		t.Errorf("expected path to end with 'config.yaml', got: %s", path)
-	}
-}
-
-func TestGetGeminiStatusSummary_Disabled(t *testing.T) {
-	restoreViperState()
-	t.Cleanup(func() {
-		viper.Reset()
-	})
-
-	viper.Set("gemini.enabled", false)
-
-	status := getGeminiStatusSummary()
-	if status != "disabled" {
-		t.Errorf("expected 'disabled', got: %s", status)
-	}
-}
-
-func TestGetGeminiStatusSummary_EnabledNotConfigured(t *testing.T) {
-	restoreViperState()
-	t.Cleanup(func() {
-		viper.Reset()
-	})
-
-	viper.Set("gemini.enabled", true)
-
-	status := getGeminiStatusSummary()
-	// Should return either "✗ geminiweb not found" or "⚠ needs configuration"
-	if !strings.Contains(status, "not found") && !strings.Contains(status, "needs configuration") {
-		t.Logf("Warning: status should indicate not configured, got: %s", status)
 	}
 }
 
