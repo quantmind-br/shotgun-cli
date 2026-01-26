@@ -11,6 +11,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
@@ -364,54 +365,9 @@ func (m *ReviewModel) renderSizeLimitSection() string {
 	section.WriteString(limitIcon + " " + limitLabel)
 	section.WriteString("\n")
 
-	// Current size
-	currentSize := formatSizeHelper(m.totalBytes)
-	currentTokens := tokens.FormatTokens(m.totalTokens)
-
-	if m.maxSizeBytes > 0 {
-		// Calculate percentage
-		percentage := float64(m.totalBytes) / float64(m.maxSizeBytes) * 100
-
-		// Determine status color
-		var statusStyle lipgloss.Style
-		var statusIcon string
-		if percentage > 100 {
-			statusStyle = lipgloss.NewStyle().Foreground(styles.ErrorColor)
-			statusIcon = "⛔"
-		} else if percentage > 80 {
-			statusStyle = lipgloss.NewStyle().Foreground(styles.WarningColor)
-			statusIcon = "⚠️"
-		} else {
-			statusStyle = lipgloss.NewStyle().Foreground(styles.SuccessColor)
-			statusIcon = "✅"
-		}
-
-		// Size bar visualization
-		barWidth := 30
-		filledWidth := int(float64(barWidth) * percentage / 100)
-		if filledWidth > barWidth {
-			filledWidth = barWidth
-		}
-
-		filledStyle := statusStyle
-		emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
-
-		bar := filledStyle.Render(strings.Repeat("█", filledWidth)) +
-			emptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
-
-		sizeInfo := fmt.Sprintf("  %s %s / %s (%.1f%%) ~%s tokens",
-			statusIcon, currentSize, m.maxSizeStr, percentage, currentTokens)
-		section.WriteString(statusStyle.Render(sizeInfo))
-		section.WriteString("\n")
-		section.WriteString("  " + bar)
-	} else {
-		// No limit configured
-		sizeInfo := fmt.Sprintf("  %s / ~%s tokens", currentSize, currentTokens)
-		section.WriteString(styles.StatsValueStyle.Render(sizeInfo))
-		section.WriteString("\n")
-		noLimit := styles.HelpStyle.Render("  (no size limit configured)")
-		section.WriteString(noLimit)
-	}
+	// Create and render usage bar
+	bar := components.NewUsageBar(m.totalBytes, m.maxSizeBytes, m.maxSizeStr, m.totalTokens, 30)
+	section.WriteString(bar.View())
 
 	return section.String()
 }

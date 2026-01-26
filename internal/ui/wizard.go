@@ -185,6 +185,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	// -- System & Navigation --
 	case tea.WindowSizeMsg:
 		cmd = m.handleWindowResize(msg)
 
@@ -193,58 +194,81 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
 
+	// -- Scan Operations (Async) --
 	case ScanProgressMsg:
+		// Updates progress bar during directory scanning
 		cmd = m.handleScanProgress(msg)
 		cmds = append(cmds, cmd)
 
 	case ScanCompleteMsg:
+		// Critical transition: Scanning finished, data available
+		// Switches from loading state to File Selection screen
 		m.handleScanComplete(msg)
 
 	case ScanErrorMsg:
+		// Blocking state: Scan failed, shows error screen
 		m.handleScanError(msg)
 
+	// -- Template Operations --
 	case TemplateSelectedMsg:
 		if m.templateSelection == nil {
 			m.templateSelection = screens.NewTemplateSelection()
 		}
 		m.templateSelection.SetSelectedForTest(msg.Template)
 
+	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
+		cmd = m.handleTemplateMessage(msg)
+		cmds = append(cmds, cmd)
+
+	// -- Generation Operations (Async) --
 	case GenerationProgressMsg:
+		// Updates progress bar during context generation
 		cmd = m.handleGenerationProgress(msg)
 		cmds = append(cmds, cmd)
 
 	case screens.GenerationCompleteMsg:
+		// Critical transition: Generation finished, content ready
+		// Triggers clipboard copy and enables LLM sending in Review screen
 		cmd = m.handleGenerationComplete(msg)
 		cmds = append(cmds, cmd)
 
 	case screens.GenerationErrorMsg:
 		m.handleGenerationError(msg)
 
+	// -- Clipboard Operations --
 	case screens.ClipboardCompleteMsg:
 		m.handleClipboardComplete(msg)
 
+	case screens.ClipboardCopyRequestMsg:
+		if m.generatedContent != "" {
+			cmds = append(cmds, m.clipboardCopyCmd(m.generatedContent))
+		}
+
+	// -- LLM Operations (Async) --
 	case screens.LLMProgressMsg:
 		m.handleLLMProgress(msg)
 
 	case screens.LLMCompleteMsg:
+		// Critical transition: LLM response received
+		// Updates Review screen with response file path
 		m.handleLLMComplete(msg)
 
 	case screens.LLMErrorMsg:
 		m.handleLLMError(msg)
 
-	case screens.TemplatesLoadedMsg, screens.TemplatesErrorMsg:
-		cmd = m.handleTemplateMessage(msg)
-		cmds = append(cmds, cmd)
-
+	// -- Async Coordinators --
 	case startScanMsg:
+		// Triggers the ScanCoordinator to begin async filesystem scan
 		cmd = m.handleStartScan(msg)
 		cmds = append(cmds, cmd)
 
 	case startGenerationMsg:
+		// Triggers the GenerateCoordinator to begin async context generation
 		cmd = m.handleStartGeneration(msg)
 		cmds = append(cmds, cmd)
 
 	case pollScanMsg:
+		// Polls the ScanCoordinator for progress/results
 		if m.scanCoordinator != nil {
 			cmd = m.scanCoordinator.Poll()
 			if cmd != nil {
@@ -253,6 +277,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case pollGenerateMsg:
+		// Polls the GenerateCoordinator for progress/results
 		cmd = m.pollGenerate()
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -262,11 +287,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.handleRescanRequest()
 		cmds = append(cmds, cmd)
 
-	case screens.ClipboardCopyRequestMsg:
-		if m.generatedContent != "" {
-			cmds = append(cmds, m.clipboardCopyCmd(m.generatedContent))
-		}
-
+	// -- Polling & Spinners --
 	default:
 		if m.progress.Visible {
 			var spinnerCmd tea.Cmd
@@ -539,7 +560,7 @@ func (m *WizardModel) handleScanComplete(msg ScanCompleteMsg) {
 	if m.fileSelection != nil {
 		m.fileSelection.SetFileTree(msg.Tree)
 	} else {
-		m.fileSelection = screens.NewFileSelection(msg.Tree, nil)
+		m.fileSelection = screens.NewFileSelection(msg.Tree, nil, m.wizardConfig.Context.MaxSize)
 		m.fileSelection.SetSize(m.width, m.height)
 	}
 }
@@ -732,7 +753,7 @@ func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
 		m.scanCoordinator = NewScanCoordinator(scanner.NewFileSystemScanner())
 	}
 
-	m.fileSelection = screens.NewFileSelection(nil, nil)
+	m.fileSelection = screens.NewFileSelection(nil, nil, m.wizardConfig.Context.MaxSize)
 	m.fileSelection.SetSize(m.width, m.height)
 
 	return tea.Batch(m.fileSelection.Init(), m.scanCoordinator.Start(msg.rootPath, msg.config))
@@ -846,7 +867,7 @@ func (m *WizardModel) initStep() tea.Cmd {
 	switch m.step {
 	case StepFileSelection:
 		if m.getFileTree() != nil {
-			m.fileSelection = screens.NewFileSelection(m.getFileTree(), m.getSelectedFiles())
+			m.fileSelection = screens.NewFileSelection(m.getFileTree(), m.getSelectedFiles(), m.wizardConfig.Context.MaxSize)
 			m.fileSelection.SetSize(m.width, m.height)
 		}
 	case StepTemplateSelection:

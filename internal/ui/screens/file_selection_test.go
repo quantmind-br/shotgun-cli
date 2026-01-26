@@ -20,7 +20,7 @@ func TestNewFileSelection(t *testing.T) {
 		"/root/file1.go": true,
 	}
 
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "10MB")
 
 	assert.NotNil(t, model)
 	assert.Equal(t, fileTree, model.fileTree)
@@ -36,7 +36,7 @@ func TestFileSelectionSetSize(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 
 	model.SetSize(100, 50)
 
@@ -62,7 +62,7 @@ func TestFileSelectionHandleFilterMode(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 	model.filterMode = true
 	model.filterBuffer = testFilterValue
 
@@ -124,7 +124,7 @@ func TestFileSelectionHandleNormalMode(t *testing.T) {
 		},
 	}
 	selections := make(map[string]bool)
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "")
 	model.SetSize(100, 50)
 
 	// Test Up arrow moves cursor up
@@ -185,7 +185,7 @@ func TestFileSelectionUpdate(t *testing.T) {
 		IsDir: true,
 	}
 	selections := make(map[string]bool)
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "")
 
 	// Test in filter mode calls handleFilterMode
 	model.filterMode = true
@@ -214,7 +214,7 @@ func TestFileSelectionSyncSelections(t *testing.T) {
 		},
 	}
 	selections := make(map[string]bool)
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "")
 	model.SetSize(100, 50)
 
 	// Move cursor down to the file (root is expanded by default, so file is visible)
@@ -248,7 +248,7 @@ func TestFileSelectionView(t *testing.T) {
 	selections := map[string]bool{
 		"/root/file1.go": true,
 	}
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "1MB")
 	model.SetSize(100, 50)
 
 	view := model.View()
@@ -266,7 +266,7 @@ func TestFileSelectionViewWithNilSelections(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 
 	view := model.View()
 
@@ -293,7 +293,7 @@ func TestFileSelectionViewWithFilter(t *testing.T) {
 	}
 	fileTree.Children[0].Parent = fileTree
 
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 	model.SetSize(100, 50)
 	model.tree.SetFilter("main")
 
@@ -337,7 +337,7 @@ func TestFileSelectionViewWithFilterShowsMatchCount(t *testing.T) {
 	file2.Parent = fileTree
 	file3.Parent = fileTree
 
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 	model.SetSize(100, 50)
 	model.tree.SetFilter(".go")
 
@@ -353,7 +353,7 @@ func TestFileSelectionViewInFilterMode(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(fileTree, nil)
+	model := NewFileSelection(fileTree, nil, "")
 	model.filterMode = true
 	model.filterBuffer = "test"
 
@@ -389,7 +389,7 @@ func TestFileSelectionCalculateSelectedSize(t *testing.T) {
 		"/root/file1.go": true,
 		"/root/file2.go": true,
 	}
-	model := NewFileSelection(fileTree, selections)
+	model := NewFileSelection(fileTree, selections, "")
 
 	size := model.calculateSelectedSize()
 
@@ -471,7 +471,7 @@ func TestFormatSize(t *testing.T) {
 func TestFileSelection_LoadingState_ShowsSpinner(t *testing.T) {
 	t.Parallel()
 
-	model := NewFileSelection(nil, make(map[string]bool))
+	model := NewFileSelection(nil, make(map[string]bool), "")
 	model.SetSize(80, 24)
 
 	view := model.View()
@@ -489,7 +489,7 @@ func TestFileSelection_LoadedState_HidesSpinner(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(tree, make(map[string]bool))
+	model := NewFileSelection(tree, make(map[string]bool), "")
 	model.SetSize(80, 24)
 
 	view := model.View()
@@ -501,7 +501,7 @@ func TestFileSelection_LoadedState_HidesSpinner(t *testing.T) {
 func TestFileSelection_Init_LoadingState_ReturnsSpinnerTick(t *testing.T) {
 	t.Parallel()
 
-	model := NewFileSelection(nil, make(map[string]bool))
+	model := NewFileSelection(nil, make(map[string]bool), "")
 
 	cmd := model.Init()
 
@@ -516,7 +516,7 @@ func TestFileSelection_Init_LoadedState_ReturnsNil(t *testing.T) {
 		Path:  "/root",
 		IsDir: true,
 	}
-	model := NewFileSelection(tree, make(map[string]bool))
+	model := NewFileSelection(tree, make(map[string]bool), "")
 
 	cmd := model.Init()
 
@@ -526,7 +526,7 @@ func TestFileSelection_Init_LoadedState_ReturnsNil(t *testing.T) {
 func TestFileSelection_Update_LoadingState_HandlesSpinner(t *testing.T) {
 	t.Parallel()
 
-	model := NewFileSelection(nil, make(map[string]bool))
+	model := NewFileSelection(nil, make(map[string]bool), "")
 
 	tickMsg := model.spinner.Tick()
 	cmd := model.Update(tickMsg)
@@ -537,7 +537,7 @@ func TestFileSelection_Update_LoadingState_HandlesSpinner(t *testing.T) {
 func TestFileSelection_SetFileTree_TransitionsToLoaded(t *testing.T) {
 	t.Parallel()
 
-	model := NewFileSelection(nil, make(map[string]bool))
+	model := NewFileSelection(nil, make(map[string]bool), "")
 	model.SetSize(80, 24)
 
 	assert.True(t, model.loading)
@@ -560,7 +560,7 @@ func TestFileSelection_SetFileTree_TransitionsToLoaded(t *testing.T) {
 func TestFileSelection_View_AfterSetFileTree_ShowsTree(t *testing.T) {
 	t.Parallel()
 
-	model := NewFileSelection(nil, make(map[string]bool))
+	model := NewFileSelection(nil, make(map[string]bool), "")
 	model.SetSize(80, 24)
 
 	view1 := model.View()
@@ -586,14 +586,14 @@ func TestFileSelection_IsLoading(t *testing.T) {
 
 	t.Run("returns true when loading", func(t *testing.T) {
 		t.Parallel()
-		model := NewFileSelection(nil, make(map[string]bool))
+		model := NewFileSelection(nil, make(map[string]bool), "")
 		assert.True(t, model.IsLoading())
 	})
 
 	t.Run("returns false when loaded", func(t *testing.T) {
 		t.Parallel()
 		tree := &scanner.FileNode{Name: "root", Path: "/root", IsDir: true}
-		model := NewFileSelection(tree, make(map[string]bool))
+		model := NewFileSelection(tree, make(map[string]bool), "")
 		assert.False(t, model.IsLoading())
 	})
 }
@@ -610,7 +610,7 @@ func TestFileSelectionSelectAllKey(t *testing.T) {
 			},
 		}
 		selections := make(map[string]bool)
-		model := NewFileSelection(fileTree, selections)
+		model := NewFileSelection(fileTree, selections, "")
 		model.SetSize(100, 50)
 
 		model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
@@ -634,7 +634,7 @@ func TestFileSelectionSelectAllKey(t *testing.T) {
 			"/root/a.go": true,
 			"/root/b.go": true,
 		}
-		model := NewFileSelection(fileTree, selections)
+		model := NewFileSelection(fileTree, selections, "")
 		model.SetSize(100, 50)
 
 		model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
@@ -652,7 +652,7 @@ func TestFileSelectionSelectAllKey(t *testing.T) {
 			},
 		}
 		selections := make(map[string]bool)
-		model := NewFileSelection(fileTree, selections)
+		model := NewFileSelection(fileTree, selections, "")
 		model.SetSize(100, 50)
 		model.filterMode = true
 

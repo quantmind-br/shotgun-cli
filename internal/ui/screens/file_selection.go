@@ -32,25 +32,35 @@ type FileSelectionModel struct {
 
 	spinner spinner.Model
 	loading bool
+
+	maxSizeBytes int64
+	maxSizeStr   string
+	totalTokens  int
 }
 
-func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool) *FileSelectionModel {
+func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool, maxSizeStr string) *FileSelectionModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(styles.PrimaryColor)
 
-	// Ensure selections map is never nil to prevent panic in syncSelections
 	if selections == nil {
 		selections = make(map[string]bool)
 	}
 
-	return &FileSelectionModel{
+	m := &FileSelectionModel{
 		tree:       components.NewFileTree(fileTree, selections),
 		fileTree:   fileTree,
 		selections: selections,
 		spinner:    s,
 		loading:    fileTree == nil,
+		maxSizeStr: maxSizeStr,
 	}
+
+	if maxSizeStr != "" {
+		m.maxSizeBytes, _ = parseSize(maxSizeStr)
+	}
+
+	return m
 }
 
 func (m *FileSelectionModel) SetSize(width, height int) {
@@ -165,6 +175,9 @@ func (m *FileSelectionModel) View() string {
 		totalSize := m.calculateSelectedSize()
 		estimatedTokens := tokens.EstimateFromBytes(totalSize)
 		stats = styles.RenderTokenStats(selectedCount, formatSize(totalSize), tokens.FormatTokens(estimatedTokens))
+
+		bar := components.NewUsageBar(totalSize, m.maxSizeBytes, m.maxSizeStr, estimatedTokens, m.width-4)
+		stats += "\n" + bar.View()
 	} else {
 		stats = styles.RenderTokenStats(0, "0 B", "0")
 	}
