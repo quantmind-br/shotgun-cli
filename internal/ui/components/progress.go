@@ -7,8 +7,106 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
+
+// UsageBar represents a visual progress bar for context usage
+type UsageBar struct {
+	CurrentBytes int64
+	MaxBytes     int64
+	MaxBytesStr  string
+	TotalTokens  int
+	Width        int
+}
+
+// NewUsageBar creates a new usage bar
+func NewUsageBar(current, max int64, maxStr string, tokens int, width int) UsageBar {
+	return UsageBar{
+		CurrentBytes: current,
+		MaxBytes:     max,
+		MaxBytesStr:  maxStr,
+		TotalTokens:  tokens,
+		Width:        width,
+	}
+}
+
+// View renders the usage bar
+func (b UsageBar) View() string {
+	var section strings.Builder
+
+	// Calculate percentage
+	var percentage float64
+	if b.MaxBytes > 0 {
+		percentage = float64(b.CurrentBytes) / float64(b.MaxBytes) * 100
+	}
+
+	// Current size
+	currentSize := formatSizeHelper(b.CurrentBytes)
+	currentTokens := tokens.FormatTokens(b.TotalTokens)
+
+	if b.MaxBytes > 0 {
+		// Determine status color
+		var statusStyle lipgloss.Style
+		var statusIcon string
+		if percentage > 100 {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.ErrorColor)
+			statusIcon = "⛔"
+		} else if percentage > 80 {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.WarningColor)
+			statusIcon = "⚠️"
+		} else {
+			statusStyle = lipgloss.NewStyle().Foreground(styles.SuccessColor)
+			statusIcon = "✅"
+		}
+
+		// Size bar visualization
+		barWidth := b.Width
+		if barWidth <= 0 {
+			barWidth = 30 // Default width
+		}
+
+		filledWidth := int(float64(barWidth) * percentage / 100)
+		if filledWidth > barWidth {
+			filledWidth = barWidth
+		}
+
+		filledStyle := statusStyle
+		emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+
+		bar := filledStyle.Render(strings.Repeat("█", filledWidth)) +
+			emptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
+
+		sizeInfo := fmt.Sprintf(" %s %s / %s (%.1f%%) ~%s tokens",
+			statusIcon, currentSize, b.MaxBytesStr, percentage, currentTokens)
+		section.WriteString(statusStyle.Render(sizeInfo))
+		section.WriteString("\n")
+		section.WriteString(" " + bar)
+	} else {
+		// No limit configured
+		sizeInfo := fmt.Sprintf(" %s / ~%s tokens", currentSize, currentTokens)
+		section.WriteString(styles.StatsValueStyle.Render(sizeInfo))
+		section.WriteString("\n")
+		noLimit := styles.HelpStyle.Render(" (no size limit configured)")
+		section.WriteString(noLimit)
+	}
+
+	return section.String()
+}
+
+func formatSizeHelper(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
 
 type ProgressModel struct {
 	current int64
@@ -37,7 +135,6 @@ func (m *ProgressModel) Init() tea.Cmd {
 	return m.spinner.Tick
 }
 
-// Update handles spinner updates
 func (m *ProgressModel) UpdateSpinner(msg tea.Msg) (*ProgressModel, tea.Cmd) {
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)

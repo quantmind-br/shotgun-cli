@@ -315,7 +315,6 @@ func TestProgressUpdateSpinner(t *testing.T) {
 	// Create a test spinner message
 	msg := spinner.TickMsg{}
 
-	// Update spinner should process the tick message
 	updatedModel, cmd := p.UpdateSpinner(msg)
 
 	// Should return the same model instance
@@ -337,4 +336,65 @@ func TestProgressUpdateSpinnerWithDifferentMessage(t *testing.T) {
 	// Should handle gracefully and return same model and nil cmd
 	assert.Equal(t, p, updatedModel)
 	assert.Nil(t, cmd)
+}
+
+func TestUsageBar_View(t *testing.T) {
+	tests := []struct {
+		name        string
+		current     int64
+		max         int64
+		maxStr      string
+		tokens      int
+		expectIcon  string
+		expectColor string // Just checking content for simplicity
+	}{
+		{
+			name:       "safe usage",
+			current:    50,
+			max:        100,
+			maxStr:     "100 B",
+			tokens:     10,
+			expectIcon: "✅",
+		},
+		{
+			name:       "warning usage",
+			current:    85,
+			max:        100,
+			maxStr:     "100 B",
+			tokens:     20,
+			expectIcon: "⚠️",
+		},
+		{
+			name:       "critical usage",
+			current:    101,
+			max:        100,
+			maxStr:     "100 B",
+			tokens:     30,
+			expectIcon: "⛔",
+		},
+		{
+			name:       "no limit",
+			current:    50,
+			max:        0,
+			maxStr:     "",
+			tokens:     10,
+			expectIcon: "", // No icon for no limit
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bar := NewUsageBar(tt.current, tt.max, tt.maxStr, tt.tokens, 30)
+			view := bar.View()
+
+			if tt.expectIcon != "" {
+				assert.Contains(t, view, tt.expectIcon)
+			}
+			if tt.max > 0 {
+				assert.Contains(t, view, tt.maxStr)
+			} else {
+				assert.Contains(t, view, "no size limit")
+			}
+		})
+	}
 }
