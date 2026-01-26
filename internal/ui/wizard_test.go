@@ -93,7 +93,7 @@ func setWizardFileTree(wizard *WizardModel, tree *scanner.FileNode) {
 	if wizard.fileSelection != nil {
 		selections = wizard.fileSelection.GetSelections()
 	}
-	wizard.fileSelection = screens.NewFileSelection(tree, selections)
+	wizard.fileSelection = screens.NewFileSelection(tree, selections, "")
 }
 
 // getWizardFileTree is a test helper that retrieves the file tree via the fileSelection component
@@ -123,7 +123,7 @@ func getWizardTemplate(wizard *WizardModel) *template.Template {
 // setWizardSelectedFiles is a test helper that sets file selections via the fileSelection component
 func setWizardSelectedFiles(wizard *WizardModel, selections map[string]bool) {
 	if wizard.fileSelection == nil {
-		wizard.fileSelection = screens.NewFileSelection(nil, selections)
+		wizard.fileSelection = screens.NewFileSelection(nil, selections, "")
 	} else {
 		wizard.fileSelection.SetSelectionsForTest(selections)
 	}
