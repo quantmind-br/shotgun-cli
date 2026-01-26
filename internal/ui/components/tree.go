@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
@@ -261,6 +262,38 @@ func (m *FileTreeModel) View() string {
 		}
 	}
 
+	// Calculate and render scrollbar if needed
+	if len(m.visibleItems) > maxVisible {
+		total := len(m.visibleItems)
+		visible := maxVisible
+
+		// Ensure visible is not zero to avoid division by zero
+		if visible > 0 && total > 0 {
+			thumbHeight := int(float64(visible) * float64(visible) / float64(total))
+			if thumbHeight < 1 {
+				thumbHeight = 1
+			}
+
+			thumbPos := int(float64(m.topIndex) * float64(visible) / float64(total))
+
+			// Render scrollbar track and thumb
+			var scrollbar strings.Builder
+			for i := 0; i < visible; i++ {
+				if i >= thumbPos && i < thumbPos+thumbHeight {
+					scrollbar.WriteString("█")
+				} else {
+					scrollbar.WriteString("│")
+				}
+				if i < visible-1 {
+					scrollbar.WriteString("\n")
+				}
+			}
+
+			// Join tree view and scrollbar horizontally
+			return lipgloss.JoinHorizontal(lipgloss.Top, content.String(), " "+scrollbar.String())
+		}
+	}
+
 	return content.String()
 }
 
@@ -368,6 +401,13 @@ func (m *FileTreeModel) rebuildVisibleItems() {
 	m.recomputeSelectionStates()
 }
 
+// buildVisibleItems flattens the tree structure into a linear list of visible items.
+// This "flattening" strategy is crucial for UI virtualization, allowing us to:
+// 1. Render only the items currently visible in the viewport (O(height) vs O(total_nodes))
+// 2. Map cursor movement to simple slice indices
+// 3. Efficiently calculate scroll offsets
+//
+// It performs a pre-order traversal, respecting expansion state and filters.
 func (m *FileTreeModel) buildVisibleItems(node *scanner.FileNode, _ string, depth int, isLast bool, hasNext []bool) {
 	// Skip if filtered out
 	if !m.shouldShowNode(node) {
@@ -491,7 +531,13 @@ func (m *FileTreeModel) walkNode(node *scanner.FileNode, fn func(*scanner.FileNo
 	}
 }
 
-// recomputeSelectionStates traverses the tree and computes selection state for each node
+// recomputeSelectionStates traverses the tree and computes selection state for each node.
+// It uses a post-order traversal (bottom-up) to propagate selection states from
+// children to parents. This ensures that directory selection states correctly
+// reflect the state of their contents:
+// - Selected: All visible children are selected
+// - Unselected: No visible children are selected
+// - Partial: Some children are selected, or mixed states
 func (m *FileTreeModel) recomputeSelectionStates() {
 	m.selectionStates = make(map[string]styles.SelectionState)
 	if m.tree == nil {
