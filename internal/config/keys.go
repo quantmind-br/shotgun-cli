@@ -21,15 +21,6 @@ const (
 	KeyLLMTimeout      = "llm.timeout"
 	KeyLLMSaveResponse = "llm.save-response"
 
-	// Gemini
-	KeyGeminiEnabled        = "gemini.enabled"
-	KeyGeminiModel          = "gemini.model"
-	KeyGeminiTimeout        = "gemini.timeout"
-	KeyGeminiBinaryPath     = "gemini.binary-path"
-	KeyGeminiBrowserRefresh = "gemini.browser-refresh"
-	KeyGeminiAutoSend       = "gemini.auto-send"
-	KeyGeminiSaveResponse   = "gemini.save-response"
-
 	// Context
 	KeyContextIncludeTree    = "context.include-tree"
 	KeyContextIncludeSummary = "context.include-summary"

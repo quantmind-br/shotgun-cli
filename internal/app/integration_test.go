@@ -105,7 +105,6 @@ func TestLLMFlow_MultipleProviders(t *testing.T) {
 		llm.ProviderOpenAI,
 		llm.ProviderAnthropic,
 		llm.ProviderGemini,
-		llm.ProviderGeminiWeb,
 	}
 
 	for _, providerType := range providers {
@@ -301,13 +300,11 @@ func TestLLMFlow_ConfigPropagation(t *testing.T) {
 	svc := NewContextService(WithRegistry(registry))
 
 	cfg := LLMSendConfig{
-		Provider:       llm.ProviderOpenAI,
-		APIKey:         "secret-api-key",
-		BaseURL:        "https://custom.api.endpoint.com",
-		Model:          "custom-model-v2",
-		Timeout:        120,
-		BinaryPath:     "/custom/binary/path",
-		BrowserRefresh: "chrome",
+		Provider: llm.ProviderOpenAI,
+		APIKey:   "secret-api-key",
+		BaseURL:  "https://custom.api.endpoint.com",
+		Model:    "custom-model-v2",
+		Timeout:  120,
 	}
 
 	_, err := svc.SendToLLMWithProgress(context.Background(), "test", cfg, nil)
@@ -318,8 +315,6 @@ func TestLLMFlow_ConfigPropagation(t *testing.T) {
 	assert.Equal(t, "https://custom.api.endpoint.com", receivedCfg.BaseURL)
 	assert.Equal(t, "custom-model-v2", receivedCfg.Model)
 	assert.Equal(t, 120, receivedCfg.Timeout)
-	assert.Equal(t, "/custom/binary/path", receivedCfg.BinaryPath)
-	assert.Equal(t, "chrome", receivedCfg.BrowserRefresh)
 }
 
 func TestLLMFlow_ContextCancellation(t *testing.T) {

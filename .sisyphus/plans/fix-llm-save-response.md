@@ -33,9 +33,9 @@ Fazer o comando `context send` respeitar a configuração `gemini.save-response`
 - Lógica de auto-save em `cmd/send.go`
 
 ### Definition of Done
-- [ ] `shotgun-cli config set llm.save-response true` funciona
-- [ ] `echo "test" | shotgun-cli context send` salva resposta automaticamente quando config está true
-- [ ] Todos os testes passam
+- [x] `shotgun-cli config set llm.save-response true` funciona
+- [x] `echo "test" | shotgun-cli context send` salva resposta automaticamente quando config está true
+- [x] Todos os testes passam
 
 ### Must Have
 - Compatibilidade retroativa com `gemini.save-response`
@@ -91,8 +91,8 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5
   - `internal/config/keys.go:30` - Exemplo de key similar: `KeyGeminiSaveResponse`
 
   **Acceptance Criteria**:
-  - [ ] `grep "KeyLLMSaveResponse" internal/config/keys.go` → retorna a linha
-  - [ ] `go build ./...` → compila sem erros
+  - [x] `grep "KeyLLMSaveResponse" internal/config/keys.go` → retorna a linha
+  - [x] `go build ./...` → compila sem erros
 
   **Commit**: NO (agrupa com 2, 3)
 
@@ -116,8 +116,8 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5
   - `internal/config/validator.go:112` - Case de conversão boolean
 
   **Acceptance Criteria**:
-  - [ ] `go test ./internal/config/... -run TestValidateValue` → PASS
-  - [ ] `go build ./...` → compila sem erros
+  - [x] `go test ./internal/config/... -run TestValidateValue` → PASS
+  - [x] `go build ./...` → compila sem erros
 
   **Commit**: NO (agrupa com 1, 3)
 
@@ -138,8 +138,8 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5
   - `cmd/root.go:262` - Referência: `viper.SetDefault(config.KeyGeminiSaveResponse, true)`
 
   **Acceptance Criteria**:
-  - [ ] `grep "KeyLLMSaveResponse" cmd/root.go` → retorna a linha
-  - [ ] `go build ./...` → compila sem erros
+  - [x] `grep "KeyLLMSaveResponse" cmd/root.go` → retorna a linha
+  - [x] `go build ./...` → compila sem erros
 
   **Commit**: NO (agrupa com 1, 2)
 
@@ -172,10 +172,10 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5
   - `cmd/send.go:15` - Imports existentes (verificar se `config` está presente)
 
   **Acceptance Criteria**:
-  - [ ] `go build ./...` → compila sem erros
-  - [ ] Teste manual: `echo "test" | shotgun-cli context send` com `llm.save-response: true`
+  - [x] `go build ./...` → compila sem erros
+  - [x] Teste manual: `echo "test" | shotgun-cli context send` com `llm.save-response: true`
     - Deve criar arquivo `llm-response-YYYYMMDD-HHMMSS.md`
-  - [ ] Teste manual: `echo "test" | shotgun-cli context send -o custom.md`
+  - [x] Teste manual: `echo "test" | shotgun-cli context send -o custom.md`
     - Deve criar arquivo `custom.md` (comportamento existente preservado)
 
   **Commit**: YES
@@ -201,9 +201,9 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5
   - `AGENTS.md` - Comandos de build e test
 
   **Acceptance Criteria**:
-  - [ ] `go test -race ./...` → PASS (0 failures)
-  - [ ] `golangci-lint run ./...` → 0 errors
-  - [ ] Teste end-to-end:
+  - [x] `go test -race ./...` → PASS (0 failures)
+  - [x] `golangci-lint run ./...` → 0 errors
+  - [x] Teste end-to-end:
     ```bash
     # Configurar
     shotgun-cli config set llm.save-response true
@@ -248,7 +248,7 @@ echo "test" | shotgun-cli context send
 ```
 
 ### Final Checklist
-- [ ] Nova config key `llm.save-response` funciona
-- [ ] Compatibilidade com `gemini.save-response` mantida
-- [ ] Flag `-o` continua funcionando
-- [ ] Todos os testes passam
+- [x] Nova config key `llm.save-response` funciona
+- [x] Compatibilidade com `gemini.save-response` mantida
+- [x] Flag `-o` continua funcionando
+- [x] Todos os testes passam

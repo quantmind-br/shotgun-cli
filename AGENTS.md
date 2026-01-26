@@ -108,7 +108,7 @@ cmd/                    → Presentation (CLI commands, composition root)
 internal/ui/            → Presentation (TUI wizard, Bubble Tea MVU)
 internal/app/           → Application (orchestration, ContextService)
 internal/core/          → Domain (scanner, template, llm, ignore, tokens)
-internal/platform/      → Infrastructure (geminiweb, http, clipboard, openai, anthropic)
+internal/platform/      → Infrastructure (http, clipboard, openai, anthropic, geminiapi)
 ```
 
 **Key rules**:
@@ -130,8 +130,6 @@ if err != nil {
     return nil, c.handleError(err) // Map platformhttp.HTTPError to provider error
 }
 ```
-
-> **Note**: The browser-based Gemini integration is located in the `geminiweb` package.
 
 ### Adding a New LLM Provider
 
@@ -311,43 +309,3 @@ func (m *WizardModel) getSelectedFiles() map[string]bool {
 }
 ```
 
-### Testing External Binary Execution
-
-Use the `CommandRunner` interface pattern for deterministic testing of external binaries:
-
-**Production code** uses `DefaultRunner`:
-```go
-type CommandRunner interface {
-    LookPath(file string) (string, error)
-    Run(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
-}
-
-type DefaultRunner struct{}
-func (r *DefaultRunner) LookPath(file string) (string, error) {
-    return exec.LookPath(file)
-}
-```
-
-**Test code** uses `MockRunner`:
-```go
-type MockRunner struct {
-    LookPathFunc func(file string) (string, error)
-    RunFunc      func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
-}
-
-// Test with mock
-runner := &MockRunner{
-    LookPathFunc: func(file string) (string, error) {
-        return "/usr/bin/geminiweb", nil
-    },
-    RunFunc: func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error) {
-        return []byte("mocked response"), nil
-    },
-}
-provider := NewProvider(WithRunner(runner))
-```
-
-**Benefits:**
-- Tests are deterministic (no dependency on installed binaries)
-- Can test error conditions easily
-- No network calls in tests

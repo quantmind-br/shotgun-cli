@@ -38,7 +38,7 @@ func TestAllConfigMetadata_ReturnsAllKeys(t *testing.T) {
 	metadata := AllConfigMetadata()
 
 	assert.NotEmpty(t, metadata)
-	assert.Len(t, metadata, 28, "should have 28 configuration keys")
+	assert.Len(t, metadata, 21, "should have 21 configuration keys")
 }
 
 func TestAllConfigMetadata_MatchesValidKeys(t *testing.T) {
@@ -162,7 +162,6 @@ func TestGetMetadata_ExistingKey(t *testing.T) {
 		{KeyOutputFormat, CategoryOutput, TypeEnum},
 		{KeyLLMProvider, CategoryLLM, TypeEnum},
 		{KeyLLMTimeout, CategoryLLM, TypeTimeout},
-		{KeyGeminiEnabled, CategoryGemini, TypeBool},
 	}
 
 	for _, tt := range tests {
@@ -196,7 +195,6 @@ func TestGetByCategory_ReturnsCorrectKeys(t *testing.T) {
 		{CategoryTemplate, 1, []string{KeyTemplateCustomPath}},
 		{CategoryOutput, 2, []string{KeyOutputFormat, KeyOutputClipboard}},
 		{CategoryLLM, 6, []string{KeyLLMProvider, KeyLLMAPIKey}},
-		{CategoryGemini, 7, []string{KeyGeminiEnabled, KeyGeminiModel}},
 	}
 
 	for _, tt := range tests {
@@ -230,13 +228,12 @@ func TestAllCategories_ReturnsAllCategories(t *testing.T) {
 
 	categories := AllCategories()
 
-	assert.Len(t, categories, 6)
+	assert.Len(t, categories, 5)
 	assert.Equal(t, CategoryScanner, categories[0])
 	assert.Equal(t, CategoryContext, categories[1])
 	assert.Equal(t, CategoryTemplate, categories[2])
 	assert.Equal(t, CategoryOutput, categories[3])
 	assert.Equal(t, CategoryLLM, categories[4])
-	assert.Equal(t, CategoryGemini, categories[5])
 }
 
 func TestAllCategories_CoversAllMetadata(t *testing.T) {
@@ -275,19 +272,12 @@ func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
 		KeyTemplateCustomPath:          "",
 		KeyOutputFormat:                "markdown",
 		KeyOutputClipboard:             true,
-		KeyLLMProvider:                 "geminiweb",
+		KeyLLMProvider:                 "gemini",
 		KeyLLMAPIKey:                   "",
 		KeyLLMBaseURL:                  "",
 		KeyLLMModel:                    "",
 		KeyLLMTimeout:                  300,
 		KeyLLMSaveResponse:             false,
-		KeyGeminiEnabled:               false,
-		KeyGeminiModel:                 "gemini-2.5-flash",
-		KeyGeminiTimeout:               300,
-		KeyGeminiBinaryPath:            "",
-		KeyGeminiBrowserRefresh:        "auto",
-		KeyGeminiAutoSend:              false,
-		KeyGeminiSaveResponse:          true,
 	}
 
 	for key, expectedDefault := range expectedDefaults {
@@ -309,8 +299,7 @@ func TestMetadataEnumOptions_MatchValidators(t *testing.T) {
 		options []string
 	}{
 		{KeyOutputFormat, []string{"markdown", "text"}},
-		{KeyLLMProvider, []string{"openai", "anthropic", "gemini", "geminiweb"}},
-		{KeyGeminiBrowserRefresh, []string{"", "auto", "chrome", "firefox", "edge", "chromium", "opera"}},
+		{KeyLLMProvider, []string{"openai", "anthropic", "gemini"}},
 	}
 
 	for _, tt := range tests {
@@ -334,7 +323,6 @@ func TestMetadataRanges_MatchValidators(t *testing.T) {
 		{KeyScannerWorkers, 1, 32},
 		{KeyScannerMaxFiles, 1, 1000000},
 		{KeyLLMTimeout, 1, 3600},
-		{KeyGeminiTimeout, 1, 3600},
 	}
 
 	for _, tt := range tests {

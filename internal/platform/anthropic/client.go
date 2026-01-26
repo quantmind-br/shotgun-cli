@@ -16,10 +16,13 @@ const (
 	defaultMaxTokens = 8192
 )
 
+// Client is the Anthropic implementation of the LLM provider.
 type Client struct {
 	*llmbase.BaseClient
 }
 
+// NewClient creates a new Anthropic client with the given configuration.
+// It validates the API key and sets default values for BaseURL, Model, MaxTokens, and Timeout if not provided.
 func NewClient(cfg llm.Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("api key is required")
@@ -56,6 +59,7 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}, nil
 }
 
+// Send sends a content string to the Anthropic API and returns the result.
 func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) {
 	result, err := c.BaseClient.Send(ctx, content, c)
 	if err != nil {
@@ -64,6 +68,7 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 	return result, nil
 }
 
+// SendWithProgress sends a content string to the Anthropic API and reports progress via the callback.
 func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
 	result, err := c.BaseClient.SendWithProgress(ctx, content, c, progress)
 	if err != nil {
@@ -72,6 +77,7 @@ func (c *Client) SendWithProgress(ctx context.Context, content string, progress 
 	return result, nil
 }
 
+// BuildRequest constructs the Anthropic-specific request body.
 func (c *Client) BuildRequest(content string) (interface{}, error) {
 	return MessagesRequest{
 		Model:     c.Model,
@@ -82,6 +88,7 @@ func (c *Client) BuildRequest(content string) (interface{}, error) {
 	}, nil
 }
 
+// ParseResponse extracts the result from the Anthropic API response.
 func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error) {
 	msgResp, ok := response.(*MessagesResponse)
 	if !ok {
@@ -113,10 +120,12 @@ func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Resul
 	}, nil
 }
 
+// GetEndpoint returns the Anthropic Messages API endpoint.
 func (c *Client) GetEndpoint() string {
 	return "/v1/messages"
 }
 
+// GetHeaders returns the necessary headers for Anthropic API requests, including the API key and version.
 func (c *Client) GetHeaders() map[string]string {
 	return map[string]string{
 		"x-api-key":         c.APIKey,
@@ -124,10 +133,12 @@ func (c *Client) GetHeaders() map[string]string {
 	}
 }
 
+// NewResponse returns a new instance of the Anthropic response structure for unmarshaling.
 func (c *Client) NewResponse() interface{} {
 	return &MessagesResponse{}
 }
 
+// GetProviderName returns the display name of the provider ("Anthropic").
 func (c *Client) GetProviderName() string {
 	return c.ProviderName
 }

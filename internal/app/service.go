@@ -12,14 +12,20 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 )
 
+// DefaultContextService implements the ContextService interface.
+// It orchestrates the context generation workflow by coordinating the scanner,
+// generator, and LLM provider components.
 type DefaultContextService struct {
 	scanner   scanner.Scanner
 	generator ctxgen.ContextGenerator
 	registry  *llm.Registry
 }
 
+// ServiceOption defines a functional option for configuring the DefaultContextService.
 type ServiceOption func(*DefaultContextService)
 
+// NewContextService creates a new DefaultContextService with the provided options.
+// If no options are provided, it uses default implementations for scanner, generator, and registry.
 func NewContextService(opts ...ServiceOption) *DefaultContextService {
 	svc := &DefaultContextService{
 		scanner:   scanner.NewFileSystemScanner(),
@@ -32,28 +38,42 @@ func NewContextService(opts ...ServiceOption) *DefaultContextService {
 	return svc
 }
 
+// WithRegistry configures the service to use a specific LLM provider registry.
 func WithRegistry(r *llm.Registry) ServiceOption {
 	return func(svc *DefaultContextService) {
 		svc.registry = r
 	}
 }
 
+// WithScanner configures the service to use a specific scanner implementation.
 func WithScanner(s scanner.Scanner) ServiceOption {
 	return func(svc *DefaultContextService) {
 		svc.scanner = s
 	}
 }
 
+// WithGenerator configures the service to use a specific context generator implementation.
 func WithGenerator(g ctxgen.ContextGenerator) ServiceOption {
 	return func(svc *DefaultContextService) {
 		svc.generator = g
 	}
 }
 
+// Generate generates a codebase context synchronously.
+// It delegates to GenerateWithProgress with a nil callback.
 func (s *DefaultContextService) Generate(ctx context.Context, cfg GenerateConfig) (*GenerateResult, error) {
 	return s.GenerateWithProgress(ctx, cfg, nil)
 }
 
+// GenerateWithProgress generates a codebase context and reports progress via the callback.
+// It performs the following steps:
+// 1. Validates configuration
+// 2. Scans the filesystem (reporting progress)
+// 3. Applies selections (defaulting to all if none provided)
+// 4. Generates context content (reporting progress)
+// 5. Enforces size limits
+// 6. Saves output to file
+// 7. Optionally copies to clipboard
 func (s *DefaultContextService) GenerateWithProgress(
 	ctx context.Context,
 	cfg GenerateConfig,
@@ -161,6 +181,8 @@ func (s *DefaultContextService) GenerateWithProgress(
 	}, nil
 }
 
+// SendToLLM sends content to an LLM provider synchronously.
+// It checks provider availability and configuration before sending.
 func (s *DefaultContextService) SendToLLM(
 	ctx context.Context,
 	content string,
@@ -175,6 +197,12 @@ func (s *DefaultContextService) SendToLLM(
 	return provider.Send(ctx, content)
 }
 
+// SendToLLMWithProgress sends content to an LLM provider with progress reporting.
+// It handles:
+// 1. Provider creation from config
+// 2. Availability and config validation
+// 3. Sending with progress callback
+// 4. Optionally saving the response to a file
 func (s *DefaultContextService) SendToLLMWithProgress(
 	ctx context.Context,
 	content string,
@@ -182,13 +210,11 @@ func (s *DefaultContextService) SendToLLMWithProgress(
 	progress LLMProgressCallback,
 ) (*llm.Result, error) {
 	llmCfg := llm.Config{
-		Provider:       cfg.Provider,
-		APIKey:         cfg.APIKey,
-		BaseURL:        cfg.BaseURL,
-		Model:          cfg.Model,
-		Timeout:        cfg.Timeout,
-		BinaryPath:     cfg.BinaryPath,
-		BrowserRefresh: cfg.BrowserRefresh,
+		Provider: cfg.Provider,
+		APIKey:   cfg.APIKey,
+		BaseURL:  cfg.BaseURL,
+		Model:    cfg.Model,
+		Timeout:  cfg.Timeout,
 	}
 	llmCfg.WithDefaults()
 
@@ -225,6 +251,8 @@ func (s *DefaultContextService) SendToLLMWithProgress(
 	return result, nil
 }
 
+// Scanner returns the underlying scanner instance.
+// This is useful for tests or components that need direct access to the scanner.
 func (s *DefaultContextService) Scanner() scanner.Scanner {
 	return s.scanner
 }

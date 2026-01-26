@@ -91,6 +91,8 @@ func (fs *FileSystemScanner) ScanWithProgress(
 	}
 
 	// Single pass: build the file tree (streaming mode with total = -1)
+	// We pass -1 as total to indicate streaming mode where the final count is unknown.
+	// This signals consumers (like the UI) to display an indeterminate progress state (e.g. spinner).
 	root, actualCount, err := fs.walkAndBuild(rootPath, config, progress, -1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan directory: %w", err)
@@ -207,6 +209,11 @@ func (fs *FileSystemScanner) walkAndBuild(
 	dirNodes[normRel(".")] = root
 
 	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
+		// Error Suppression Strategy:
+		// If we encounter an error accessing a path (e.g. permission denied), we generally don't want
+		// to abort the entire scan. handleWalkError implements this policy:
+		// - For directories: Skip the directory (filepath.SkipDir) to avoid getting stuck or crashing.
+		// - For files: Suppress the error and continue, effectively ignoring the problematic file.
 		if err != nil {
 			return fs.handleWalkError(d)
 		}
@@ -220,6 +227,11 @@ func (fs *FileSystemScanner) walkAndBuild(
 			return nil //nolint:nilerr // intentional: continue walking on relative path error
 		}
 
+		// Interaction with Ignore Engine:
+		// Before processing, we consult the ignore engine to check against all loaded rules
+		// (.gitignore, .shotgunignore, custom patterns).
+		// Critical optimization: If a directory is ignored, we skip it entirely (filepath.SkipDir),
+		// preventing traversal of massive ignored folders like node_modules or .git.
 		if fs.shouldIgnore(relPath, d.IsDir(), config) {
 			return fs.skipIfDirectory(d)
 		}
@@ -237,6 +249,10 @@ func (fs *FileSystemScanner) walkAndBuild(
 			fileCount++
 		}
 
+		// Progress Throttling:
+		// reportProgress enforces a throttle (only sending updates every 100 items).
+		// This "magic number" is crucial to prevent channel flooding and UI performance degradation
+		// when scanning large directories with thousands of files.
 		fs.reportProgress(progress, current, total, relPath)
 
 		return nil

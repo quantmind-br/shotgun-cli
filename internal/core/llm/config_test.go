@@ -44,15 +44,6 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "geminiweb without api key is ok",
-			cfg: Config{
-				Provider: ProviderGeminiWeb,
-				Model:    "gemini-2.5-flash",
-				Timeout:  300,
-			},
-			wantErr: false,
-		},
-		{
 			name: "missing provider",
 			cfg: Config{
 				APIKey:  "key",
@@ -156,7 +147,7 @@ func TestConfigMaskAPIKey(t *testing.T) {
 func TestDefaultConfigs(t *testing.T) {
 	defaults := DefaultConfigs()
 
-	assert.Len(t, defaults, 4)
+	assert.Len(t, defaults, 3)
 
 	// OpenAI
 	openai := defaults[ProviderOpenAI]
@@ -176,11 +167,6 @@ func TestDefaultConfigs(t *testing.T) {
 	assert.Equal(t, ProviderGemini, gemini.Provider)
 	assert.Contains(t, gemini.BaseURL, "generativelanguage.googleapis.com")
 	assert.Equal(t, "gemini-2.5-flash", gemini.Model)
-
-	// GeminiWeb
-	geminiweb := defaults[ProviderGeminiWeb]
-	assert.Equal(t, ProviderGeminiWeb, geminiweb.Provider)
-	assert.Equal(t, "gemini-2.5-flash", geminiweb.Model)
 }
 
 func TestConfigWithDefaults(t *testing.T) {

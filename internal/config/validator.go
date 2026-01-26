@@ -38,14 +38,6 @@ func ValidKeys() []string {
 		KeyLLMBaseURL,
 		KeyLLMModel,
 		KeyLLMTimeout,
-		// Gemini integration keys (kept for backward compatibility)
-		KeyGeminiEnabled,
-		KeyGeminiBinaryPath,
-		KeyGeminiModel,
-		KeyGeminiTimeout,
-		KeyGeminiBrowserRefresh,
-		KeyGeminiAutoSend,
-		KeyGeminiSaveResponse,
 		// LLM save response key
 		KeyLLMSaveResponse,
 	}
@@ -71,20 +63,16 @@ func ValidateValue(key, value string) error {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse, KeyLLMSaveResponse:
+		KeyLLMSaveResponse:
 		return validateBooleanValue(value)
 	case KeyScannerWorkers:
 		return validateWorkers(value)
 	case KeyOutputFormat:
 		return validateOutputFormat(value)
-	case KeyTemplateCustomPath, KeyGeminiBinaryPath:
+	case KeyTemplateCustomPath:
 		return validatePath(value)
-	case KeyGeminiModel:
-		return nil // Model can be any string, allows custom/preview models
-	case KeyGeminiTimeout, KeyLLMTimeout:
+	case KeyLLMTimeout:
 		return validateTimeout(value)
-	case KeyGeminiBrowserRefresh:
-		return validateBrowserRefresh(value)
 	case KeyLLMProvider:
 		return validateLLMProvider(value)
 	case KeyLLMAPIKey:
@@ -101,7 +89,7 @@ func ValidateValue(key, value string) error {
 // ConvertValue converts a string configuration value to the appropriate type.
 func ConvertValue(key, value string) (interface{}, error) {
 	switch key {
-	case KeyScannerMaxFiles, KeyScannerWorkers, KeyGeminiTimeout, KeyLLMTimeout:
+	case KeyScannerMaxFiles, KeyScannerWorkers, KeyLLMTimeout:
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, fmt.Errorf("failed to parse integer value: %w", err)
@@ -111,7 +99,7 @@ func ConvertValue(key, value string) (interface{}, error) {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyGeminiEnabled, KeyGeminiAutoSend, KeyGeminiSaveResponse, KeyLLMSaveResponse:
+		KeyLLMSaveResponse:
 		return strings.ToLower(value) == "true", nil
 
 	default:
@@ -221,20 +209,9 @@ func validateTimeout(value string) error {
 	return nil
 }
 
-// validateBrowserRefresh validates browser refresh configuration values.
-func validateBrowserRefresh(value string) error {
-	validValues := []string{"", "auto", "chrome", "firefox", "edge", "chromium", "opera"}
-	for _, valid := range validValues {
-		if value == valid {
-			return nil
-		}
-	}
-	return fmt.Errorf("expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)")
-}
-
 // validateLLMProvider validates LLM provider configuration values.
 func validateLLMProvider(value string) error {
-	validProviders := []string{"openai", "anthropic", "gemini", "geminiweb"}
+	validProviders := []string{"openai", "anthropic", "gemini"}
 	for _, provider := range validProviders {
 		if value == provider {
 			return nil

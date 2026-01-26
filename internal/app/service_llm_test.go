@@ -267,11 +267,11 @@ func TestSendToLLMWithProgress_ProviderNotAvailable(t *testing.T) {
 		name:      "TestProvider",
 		available: false,
 	}
-	registry := newMockRegistry(provider, llm.ProviderGeminiWeb)
+	registry := newMockRegistry(provider, llm.ProviderOpenAI)
 	svc := NewContextService(WithRegistry(registry))
 
 	cfg := LLMSendConfig{
-		Provider: llm.ProviderGeminiWeb,
+		Provider: llm.ProviderOpenAI,
 	}
 
 	_, err := svc.SendToLLMWithProgress(context.Background(), "content", cfg, nil)
@@ -367,13 +367,11 @@ func TestSendToLLMWithProgress_ConfigPassedToProvider(t *testing.T) {
 	svc := NewContextService(WithRegistry(registry))
 
 	cfg := LLMSendConfig{
-		Provider:       llm.ProviderOpenAI,
-		APIKey:         "my-api-key",
-		BaseURL:        "https://custom.api.com",
-		Model:          "gpt-4o",
-		Timeout:        60,
-		BinaryPath:     "/path/to/binary",
-		BrowserRefresh: "chrome",
+		Provider: llm.ProviderOpenAI,
+		APIKey:   "my-api-key",
+		BaseURL:  "https://custom.api.com",
+		Model:    "gpt-4o",
+		Timeout:  60,
 	}
 
 	_, err := svc.SendToLLMWithProgress(context.Background(), "content", cfg, nil)
@@ -384,8 +382,6 @@ func TestSendToLLMWithProgress_ConfigPassedToProvider(t *testing.T) {
 	assert.Equal(t, "https://custom.api.com", receivedCfg.BaseURL)
 	assert.Equal(t, "gpt-4o", receivedCfg.Model)
 	assert.Equal(t, 60, receivedCfg.Timeout)
-	assert.Equal(t, "/path/to/binary", receivedCfg.BinaryPath)
-	assert.Equal(t, "chrome", receivedCfg.BrowserRefresh)
 }
 
 func TestSendToLLMWithProgress_AllProviderTypes(t *testing.T) {
@@ -395,7 +391,6 @@ func TestSendToLLMWithProgress_AllProviderTypes(t *testing.T) {
 		llm.ProviderOpenAI,
 		llm.ProviderAnthropic,
 		llm.ProviderGemini,
-		llm.ProviderGeminiWeb,
 	}
 
 	for _, pt := range providerTypes {

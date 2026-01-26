@@ -99,8 +99,7 @@ func TestRunContextSend_FromFile(t *testing.T) {
 			errorMsg := err.Error()
 			// Check that we got one of the expected error types
 			assert.True(t,
-				strings.Contains(errorMsg, "geminiweb") ||
-					strings.Contains(errorMsg, "gemini request failed") ||
+				strings.Contains(errorMsg, "gemini request failed") ||
 					strings.Contains(errorMsg, "failed to read file") ||
 					strings.Contains(errorMsg, "gemini integration is disabled") ||
 					strings.Contains(errorMsg, "LLM integration is disabled") ||

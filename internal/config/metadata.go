@@ -61,8 +61,6 @@ const (
 	CategoryOutput ConfigCategory = "Output"
 	// CategoryLLM groups LLM provider configuration.
 	CategoryLLM ConfigCategory = "LLM Provider"
-	// CategoryGemini groups Gemini integration configuration.
-	CategoryGemini ConfigCategory = "Gemini Integration"
 )
 
 // ConfigMetadata describes a single configuration key.
@@ -128,7 +126,6 @@ func AllCategories() []ConfigCategory {
 		CategoryTemplate,
 		CategoryOutput,
 		CategoryLLM,
-		CategoryGemini,
 	}
 }
 
@@ -259,8 +256,8 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeEnum,
 			Description:  "LLM provider to use",
-			DefaultValue: "geminiweb",
-			EnumOptions:  []string{"openai", "anthropic", "gemini", "geminiweb"},
+			DefaultValue: "gemini",
+			EnumOptions:  []string{"openai", "anthropic", "gemini"},
 		},
 		{
 			Key:          KeyLLMAPIKey,
@@ -298,60 +295,6 @@ func buildAllMetadata() []ConfigMetadata {
 			Type:         TypeBool,
 			Description:  "Save LLM response to file",
 			DefaultValue: false,
-		},
-
-		// Gemini Integration (7 keys)
-		{
-			Key:          KeyGeminiEnabled,
-			Category:     CategoryGemini,
-			Type:         TypeBool,
-			Description:  "Enable Gemini integration",
-			DefaultValue: false,
-		},
-		{
-			Key:          KeyGeminiModel,
-			Category:     CategoryGemini,
-			Type:         TypeString,
-			Description:  "Gemini model to use",
-			DefaultValue: "gemini-2.5-flash",
-		},
-		{
-			Key:          KeyGeminiTimeout,
-			Category:     CategoryGemini,
-			Type:         TypeTimeout,
-			Description:  "Gemini request timeout in seconds",
-			DefaultValue: 300,
-			MinValue:     1,
-			MaxValue:     3600,
-		},
-		{
-			Key:          KeyGeminiBinaryPath,
-			Category:     CategoryGemini,
-			Type:         TypePath,
-			Description:  "Path to geminiweb binary",
-			DefaultValue: "",
-		},
-		{
-			Key:          KeyGeminiBrowserRefresh,
-			Category:     CategoryGemini,
-			Type:         TypeEnum,
-			Description:  "Browser for cookie refresh",
-			DefaultValue: "auto",
-			EnumOptions:  []string{"", "auto", "chrome", "firefox", "edge", "chromium", "opera"},
-		},
-		{
-			Key:          KeyGeminiAutoSend,
-			Category:     CategoryGemini,
-			Type:         TypeBool,
-			Description:  "Automatically send to Gemini after generation",
-			DefaultValue: false,
-		},
-		{
-			Key:          KeyGeminiSaveResponse,
-			Category:     CategoryGemini,
-			Type:         TypeBool,
-			Description:  "Save Gemini response to file",
-			DefaultValue: true,
 		},
 	}
 }

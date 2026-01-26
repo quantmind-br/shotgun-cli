@@ -35,23 +35,12 @@ const (
 
 // LLMConfig holds configuration for the LLM provider.
 type LLMConfig struct {
-	Provider       string
-	APIKey         string
-	BaseURL        string
-	Model          string
-	Timeout        int
-	SaveResponse   bool
-	BinaryPath     string // For GeminiWeb
-	BrowserRefresh string // For GeminiWeb
-}
-
-// GeminiConfig holds legacy configuration for GeminiWeb.
-type GeminiConfig struct {
-	BinaryPath     string
-	Model          string
-	Timeout        int
-	BrowserRefresh string
-	SaveResponse   bool
+	Provider     string
+	APIKey       string
+	BaseURL      string
+	Model        string
+	Timeout      int
+	SaveResponse bool
 }
 
 // ContextConfig holds context generation configuration.
@@ -64,7 +53,6 @@ type ContextConfig struct {
 // WizardConfig holds all wizard configuration.
 type WizardConfig struct {
 	LLM     LLMConfig
-	Gemini  GeminiConfig
 	Context ContextConfig
 }
 
@@ -667,59 +655,39 @@ func (m *WizardModel) handleLLMError(msg screens.LLMErrorMsg) {
 
 func (m *WizardModel) buildLLMSendConfig() app.LLMSendConfig {
 	cfg := app.LLMSendConfig{
-		Provider:       llm.ProviderType(m.wizardConfig.LLM.Provider),
-		APIKey:         m.wizardConfig.LLM.APIKey,
-		BaseURL:        m.wizardConfig.LLM.BaseURL,
-		Model:          m.wizardConfig.LLM.Model,
-		Timeout:        m.wizardConfig.LLM.Timeout,
-		BinaryPath:     m.wizardConfig.LLM.BinaryPath,
-		BrowserRefresh: m.wizardConfig.LLM.BrowserRefresh,
+		Provider:     llm.ProviderType(m.wizardConfig.LLM.Provider),
+		APIKey:       m.wizardConfig.LLM.APIKey,
+		BaseURL:      m.wizardConfig.LLM.BaseURL,
+		Model:        m.wizardConfig.LLM.Model,
+		SaveResponse: m.wizardConfig.LLM.SaveResponse,
 	}
 
-	if cfg.Provider == llm.ProviderGeminiWeb || cfg.Provider == "" {
-		if cfg.Model == "" {
-			cfg.Model = m.wizardConfig.Gemini.Model
-		}
-		if cfg.Timeout == 0 {
-			cfg.Timeout = m.wizardConfig.Gemini.Timeout
-		}
-		if cfg.BinaryPath == "" {
-			cfg.BinaryPath = m.wizardConfig.Gemini.BinaryPath
-		}
-		if cfg.BrowserRefresh == "" {
-			cfg.BrowserRefresh = m.wizardConfig.Gemini.BrowserRefresh
-		}
-		cfg.Provider = llm.ProviderGeminiWeb
+	if cfg.SaveResponse {
+		ext := ".md"
+		base := strings.TrimSuffix(filepath.Base(m.generatedFilePath), filepath.Ext(m.generatedFilePath))
+		dir := filepath.Dir(m.generatedFilePath)
+		cfg.OutputPath = filepath.Join(dir, base+"_response"+ext)
 	}
-
-	saveResponse := m.wizardConfig.LLM.SaveResponse
-	if !saveResponse {
-		saveResponse = m.wizardConfig.Gemini.SaveResponse
-	}
-	cfg.SaveResponse = saveResponse
-	cfg.OutputPath = strings.TrimSuffix(m.generatedFilePath, ".md") + "_response.md"
 
 	return cfg
 }
 
 func (m *WizardModel) isLLMAvailable() bool {
-	cfg := m.buildLLMSendConfig()
-	llmCfg := llm.Config{
-		Provider:       cfg.Provider,
-		APIKey:         cfg.APIKey,
-		BaseURL:        cfg.BaseURL,
-		Model:          cfg.Model,
-		Timeout:        cfg.Timeout,
-		BinaryPath:     cfg.BinaryPath,
-		BrowserRefresh: cfg.BrowserRefresh,
-	}
-	llmCfg.WithDefaults()
-
-	provider, err := app.DefaultProviderRegistry.Create(llmCfg)
-	if err != nil {
+	if m.wizardConfig == nil {
 		return false
 	}
-	return provider.IsAvailable() && provider.ValidateConfig() == nil
+	// For API providers, we need an API key
+	provider := llm.ProviderType(m.wizardConfig.LLM.Provider)
+	if provider == "" {
+		return false // No provider configured
+	}
+
+	// Basic check: require API key for known API providers
+	if provider == llm.ProviderOpenAI || provider == llm.ProviderAnthropic || provider == llm.ProviderGemini {
+		return m.wizardConfig.LLM.APIKey != ""
+	}
+
+	return true
 }
 
 func (m *WizardModel) sendToLLMCmd() tea.Cmd {

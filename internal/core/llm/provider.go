@@ -51,7 +51,6 @@ const (
 	ProviderOpenAI    ProviderType = "openai"
 	ProviderAnthropic ProviderType = "anthropic"
 	ProviderGemini    ProviderType = "gemini"
-	ProviderGeminiWeb ProviderType = "geminiweb"
 )
 
 // AllProviders returns all supported providers.
@@ -60,7 +59,6 @@ func AllProviders() []ProviderType {
 		ProviderOpenAI,
 		ProviderAnthropic,
 		ProviderGemini,
-		ProviderGeminiWeb,
 	}
 }
 

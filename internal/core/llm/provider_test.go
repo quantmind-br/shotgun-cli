@@ -14,7 +14,6 @@ func TestIsValidProvider(t *testing.T) {
 		{"openai", true},
 		{"anthropic", true},
 		{"gemini", true},
-		{"geminiweb", true},
 		{"invalid", false},
 		{"", false},
 		{"OPENAI", false}, // case sensitive
@@ -30,16 +29,14 @@ func TestIsValidProvider(t *testing.T) {
 
 func TestAllProviders(t *testing.T) {
 	providers := AllProviders()
-	assert.Len(t, providers, 4)
+	assert.Len(t, providers, 3)
 	assert.Contains(t, providers, ProviderOpenAI)
 	assert.Contains(t, providers, ProviderAnthropic)
 	assert.Contains(t, providers, ProviderGemini)
-	assert.Contains(t, providers, ProviderGeminiWeb)
 }
 
 func TestProviderTypeString(t *testing.T) {
 	assert.Equal(t, "openai", ProviderOpenAI.String())
 	assert.Equal(t, "anthropic", ProviderAnthropic.String())
 	assert.Equal(t, "gemini", ProviderGemini.String())
-	assert.Equal(t, "geminiweb", ProviderGeminiWeb.String())
 }

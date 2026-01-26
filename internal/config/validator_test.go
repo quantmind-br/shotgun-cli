@@ -14,7 +14,6 @@ func TestIsValidKey(t *testing.T) {
 	}{
 		{KeyScannerMaxFiles, true},
 		{KeyLLMProvider, true},
-		{KeyGeminiEnabled, true},
 		{KeyTemplateCustomPath, true},
 		{"invalid.key", false},
 		{"", false},
@@ -147,9 +146,9 @@ func TestValidateValue_Boolean(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateValue(KeyGeminiEnabled, tt.value)
+			err := ValidateValue(KeyScannerSkipBinary, tt.value)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateValue(gemini.enabled, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+				t.Errorf("ValidateValue(scanner.skip-binary, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
 			}
 		})
 	}
@@ -165,7 +164,6 @@ func TestValidateValue_LLMProvider(t *testing.T) {
 		{"openai", false},
 		{"anthropic", false},
 		{"gemini", false},
-		{"geminiweb", false},
 		{"invalid", true},
 		{"", true},
 	}
@@ -285,12 +283,12 @@ func TestConvertValue_Boolean(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {
 			t.Parallel()
-			val, err := ConvertValue(KeyGeminiEnabled, tt.value)
+			val, err := ConvertValue(KeyScannerSkipBinary, tt.value)
 			if err != nil {
 				t.Fatalf("ConvertValue failed: %v", err)
 			}
 			if val != tt.want {
-				t.Errorf("ConvertValue(gemini.enabled, %q) = %v, want %v", tt.value, val, tt.want)
+				t.Errorf("ConvertValue(scanner.skip-binary, %q) = %v, want %v", tt.value, val, tt.want)
 			}
 		})
 	}
@@ -305,73 +303,6 @@ func TestConvertValue_String(t *testing.T) {
 	}
 	if val != "openai" {
 		t.Errorf("ConvertValue(llm.provider, \"openai\") = %v, want \"openai\"", val)
-	}
-}
-
-func TestValidateValue_BrowserRefresh(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		value   string
-		wantErr bool
-	}{
-		// Valid values
-		{"", false},
-		{"auto", false},
-		{"chrome", false},
-		{"firefox", false},
-		{"edge", false},
-		{"chromium", false},
-		{"opera", false},
-		// Invalid values
-		{"safari", true},
-		{"brave", true},
-		{"invalid", true},
-		{"Chrome", true},  // case sensitive
-		{"FIREFOX", true}, // case sensitive
-		{"AUTO", true},    // case sensitive
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			t.Parallel()
-			err := ValidateValue(KeyGeminiBrowserRefresh, tt.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateValue(gemini.browser-refresh, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateBrowserRefresh_Direct(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		value   string
-		wantErr bool
-	}{
-		// Valid values
-		{"", false},
-		{"auto", false},
-		{"chrome", false},
-		{"firefox", false},
-		{"edge", false},
-		{"chromium", false},
-		{"opera", false},
-		// Invalid values
-		{"safari", true},
-		{"brave", true},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			t.Parallel()
-			err := validateBrowserRefresh(tt.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateBrowserRefresh(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
-			}
-		})
 	}
 }
 
@@ -424,7 +355,6 @@ func TestValidatePath_ExistingFile(t *testing.T) {
 	}
 }
 
-
 func TestValidateValue_Path(t *testing.T) {
 	t.Parallel()
 
@@ -444,35 +374,6 @@ func TestValidateValue_Path(t *testing.T) {
 			err := ValidateValue(KeyTemplateCustomPath, tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateValue(template-custom-path, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateValue_GeminiModel(t *testing.T) {
-	t.Parallel()
-
-	// Model validation removed - any string is now accepted
-	tests := []struct {
-		value   string
-		wantErr bool
-	}{
-		{"gemini-2.5-flash", false},
-		{"gemini-2.5-pro", false},
-		{"gemini-3.0-pro", false},
-		{"gemini-3-pro-preview", false}, // Custom/preview models now allowed
-		{"gemini-1.5-pro", false},
-		{"gpt-4", false},
-		{"", false},
-		{"any-custom-model", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			t.Parallel()
-			err := ValidateValue(KeyGeminiModel, tt.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateValue(gemini.model, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
 			}
 		})
 	}

@@ -115,15 +115,13 @@ func runLLMDoctor(cmd *cobra.Command, args []string) error {
 		issues = append(issues, fmt.Sprintf("Invalid provider: %s", cfg.Provider))
 	}
 
-	// Check 2: API Key (except GeminiWeb)
-	if cfg.Provider != llm.ProviderGeminiWeb {
-		fmt.Print("Checking API key... ")
-		if cfg.APIKey != "" {
-			fmt.Println("configured")
-		} else {
-			fmt.Println("not configured")
-			issues = append(issues, "API key not configured")
-		}
+	// Check 2: API Key
+	fmt.Print("Checking API key... ")
+	if cfg.APIKey != "" {
+		fmt.Println("configured")
+	} else {
+		fmt.Println("not configured")
+		issues = append(issues, "API key not configured")
 	}
 
 	// Check 3: Model
@@ -182,10 +180,6 @@ func runLLMDoctor(cmd *cobra.Command, args []string) error {
 		fmt.Println("  1. Get API key from: https://aistudio.google.com/app/apikey")
 		fmt.Println("  2. Configure: shotgun-cli config set llm.api-key YOUR_KEY")
 		fmt.Println("  3. (Optional) Set model: shotgun-cli config set llm.model gemini-2.5-flash")
-	case llm.ProviderGeminiWeb:
-		fmt.Println("  1. Install: go install github.com/diogo/geminiweb/cmd/geminiweb@latest")
-		fmt.Println("  2. Configure: geminiweb auto-login")
-		fmt.Println("  3. Enable: shotgun-cli config set gemini.enabled true")
 	}
 
 	return nil
@@ -204,7 +198,6 @@ func runLLMList(cmd *cobra.Command, args []string) error {
 		{llm.ProviderOpenAI, "OpenAI", "GPT-4o, GPT-4, o1, o3", "https://platform.openai.com/api-keys"},
 		{llm.ProviderAnthropic, "Anthropic", "Claude 4, Claude 3.5", "https://console.anthropic.com/settings/keys"},
 		{llm.ProviderGemini, "Google Gemini", "Gemini 2.5, Gemini 2.0", "https://aistudio.google.com/app/apikey"},
-		{llm.ProviderGeminiWeb, "GeminiWeb", "Browser-based (no API key)", "N/A"},
 	}
 
 	current := viper.GetString(config.KeyLLMProvider)

@@ -99,14 +99,6 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 		// Output keys
 		"output.format\tOutput format (markdown/text)",
 		"output.clipboard\tCopy to clipboard (true/false)",
-		// Gemini keys
-		"gemini.enabled\tEnable Gemini integration (true/false)",
-		"gemini.binary-path\tPath to geminiweb binary",
-		"gemini.model\tGemini model (gemini-2.5-flash/pro, gemini-3.0-pro)",
-		"gemini.timeout\tTimeout in seconds for Gemini requests",
-		"gemini.browser-refresh\tBrowser for cookie refresh (auto/chrome/firefox)",
-		"gemini.auto-send\tAuto-send to Gemini after generation (true/false)",
-		"gemini.save-response\tSave Gemini response to file (true/false)",
 	}
 
 	return configKeys, cobra.ShellCompDirectiveNoFileComp
@@ -128,9 +120,6 @@ func boolValueCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 		"context.include-tree",
 		"context.include-summary",
 		"output.clipboard",
-		"gemini.enabled",
-		"gemini.auto-send",
-		"gemini.save-response",
 	}
 
 	for _, boolKey := range boolKeys {

@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -73,8 +72,8 @@ it will be created in the appropriate location for your platform.
 Supported configuration keys:
 
   LLM Provider:
-    llm.provider              - LLM provider: openai, anthropic, gemini, geminiweb (default: "geminiweb")
-    llm.api-key               - API key for the provider (required for openai, anthropic, gemini)
+    llm.provider              - LLM provider: openai, anthropic, gemini (default: "openai")
+    llm.api-key               - API key for the provider (required)
     llm.base-url              - Custom API endpoint URL (for OpenRouter, Azure, etc.)
     llm.model                 - Model to use (e.g., gpt-4o, claude-sonnet-4-20250514, gemini-2.5-flash)
     llm.timeout               - Request timeout in seconds (default: 300)
@@ -101,15 +100,8 @@ Supported configuration keys:
     output.format             - Output format: markdown, text (default: "markdown")
     output.clipboard          - Copy to clipboard (default: true)
 
-  GeminiWeb (legacy):
-    gemini.enabled            - Enable GeminiWeb integration (default: false)
-    gemini.binary-path        - Path to geminiweb binary
-    gemini.model              - Model for GeminiWeb (default: "gemini-2.5-flash")
-    gemini.timeout            - Timeout in seconds (default: 300)
-    gemini.browser-refresh    - Browser refresh method: auto, chrome, firefox, edge
-
-Examples:
-  # Configure OpenAI
+  Examples:
+    # Configure OpenAI
   shotgun-cli config set llm.provider openai
   shotgun-cli config set llm.api-key sk-your-api-key
   shotgun-cli config set llm.model gpt-4o
@@ -203,7 +195,7 @@ func showCurrentConfig() error {
 	}
 
 	// Display by category
-	categoryOrder := []string{"scanner", "context", "template", "output", "llm", "gemini"}
+	categoryOrder := []string{"scanner", "context", "template", "output", "llm"}
 
 	for _, category := range categoryOrder {
 		if keys, exists := categories[category]; exists {
@@ -245,45 +237,7 @@ func showCurrentConfig() error {
 	}
 
 	// Show Gemini integration status
-	fmt.Println(styles.TitleStyle.Render("[GEMINI STATUS]"))
-	status := getGeminiStatusSummary()
-	statusStyled := styles.StatsValueStyle.Render(status)
-	if strings.Contains(status, "ready") {
-		statusStyled = styles.SuccessStyle.Render(status)
-	} else if strings.Contains(status, "needs configuration") {
-		statusStyled = styles.WarningStyle.Render(status)
-	} else {
-		statusStyled = styles.ErrorStyle.Render(status)
-	}
-	fmt.Printf("  %s = %s\n", styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", "integration")), statusStyled)
-	fmt.Println()
-
 	return nil
-}
-
-// getGeminiStatusSummary returns a brief status summary for Gemini integration.
-func getGeminiStatusSummary() string {
-	if !viper.GetBool(config.KeyGeminiEnabled) {
-		return "disabled"
-	}
-
-	// Lazy import to avoid circular dependency - check directly
-	home, _ := os.UserHomeDir()
-	cookiesPath := filepath.Join(home, ".geminiweb", "cookies.json")
-
-	// Check if geminiweb exists in PATH
-	_, err := exec.LookPath("geminiweb")
-	if err != nil {
-		return "✗ geminiweb not found (run: shotgun-cli gemini doctor)"
-	}
-
-	// Check cookies
-	info, err := os.Stat(cookiesPath)
-	if err != nil || info.Size() <= 2 {
-		return "⚠ needs configuration (run: shotgun-cli gemini doctor)"
-	}
-
-	return "✓ ready"
 }
 
 func setConfigValue(key, value string) error {

@@ -16,10 +16,6 @@ type Config struct {
 	Model   string // Model to use
 	Timeout int    // Timeout in seconds
 
-	// GeminiWeb-specific configurations (legacy).
-	BinaryPath     string
-	BrowserRefresh string
-
 	// Optional configurations.
 	MaxTokens   int     // Max tokens in response
 	Temperature float64 // Temperature (0.0 - 2.0)
@@ -46,11 +42,6 @@ func DefaultConfigs() map[ProviderType]Config {
 			Model:    "gemini-2.5-flash",
 			Timeout:  300,
 		},
-		ProviderGeminiWeb: {
-			Provider: ProviderGeminiWeb,
-			Model:    "gemini-2.5-flash",
-			Timeout:  300,
-		},
 	}
 }
 
@@ -64,18 +55,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid provider: %s", c.Provider)
 	}
 
-	// GeminiWeb doesn't require API key.
-	if c.Provider != ProviderGeminiWeb {
-		if c.APIKey == "" {
-			return fmt.Errorf("api-key is required for provider %s", c.Provider)
-		}
+	if c.APIKey == "" {
+		return fmt.Errorf("api-key is required for provider %s", c.Provider)
 	}
 
 	if c.Model == "" {
 		return fmt.Errorf("model is required")
 	}
 
-	if c.BaseURL != "" && c.Provider != ProviderGeminiWeb {
+	if c.BaseURL != "" {
 		if _, err := url.Parse(c.BaseURL); err != nil {
 			return fmt.Errorf("invalid base-url: %w", err)
 		}

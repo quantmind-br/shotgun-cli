@@ -81,21 +81,12 @@ func launchTUIWizard() {
 
 	wizardConfig := &ui.WizardConfig{
 		LLM: ui.LLMConfig{
-			Provider:       viper.GetString(config.KeyLLMProvider),
-			APIKey:         viper.GetString(config.KeyLLMAPIKey),
-			BaseURL:        viper.GetString(config.KeyLLMBaseURL),
-			Model:          viper.GetString(config.KeyLLMModel),
-			Timeout:        viper.GetInt(config.KeyLLMTimeout),
-			SaveResponse:   viper.GetBool(config.KeyGeminiSaveResponse),
-			BinaryPath:     viper.GetString(config.KeyGeminiBinaryPath),
-			BrowserRefresh: viper.GetString(config.KeyGeminiBrowserRefresh),
-		},
-		Gemini: ui.GeminiConfig{
-			BinaryPath:     viper.GetString(config.KeyGeminiBinaryPath),
-			Model:          viper.GetString(config.KeyGeminiModel),
-			Timeout:        viper.GetInt(config.KeyGeminiTimeout),
-			BrowserRefresh: viper.GetString(config.KeyGeminiBrowserRefresh),
-			SaveResponse:   viper.GetBool(config.KeyGeminiSaveResponse),
+			Provider:     viper.GetString(config.KeyLLMProvider),
+			APIKey:       viper.GetString(config.KeyLLMAPIKey),
+			BaseURL:      viper.GetString(config.KeyLLMBaseURL),
+			Model:        viper.GetString(config.KeyLLMModel),
+			Timeout:      viper.GetInt(config.KeyLLMTimeout),
+			SaveResponse: viper.GetBool(config.KeyLLMSaveResponse),
 		},
 		Context: ui.ContextConfig{
 			IncludeTree:    viper.GetBool(config.KeyContextIncludeTree),
@@ -247,20 +238,12 @@ func setConfigDefaults() {
 	viper.SetDefault(config.KeyOutputFormat, "markdown")
 	viper.SetDefault(config.KeyOutputClipboard, true)
 
-	viper.SetDefault(config.KeyLLMProvider, "geminiweb")
+	viper.SetDefault(config.KeyLLMProvider, "openai")
 	viper.SetDefault(config.KeyLLMAPIKey, "")
 	viper.SetDefault(config.KeyLLMBaseURL, "")
 	viper.SetDefault(config.KeyLLMModel, "")
 	viper.SetDefault(config.KeyLLMTimeout, 300)
 	viper.SetDefault(config.KeyLLMSaveResponse, true)
-
-	viper.SetDefault(config.KeyGeminiEnabled, false)
-	viper.SetDefault(config.KeyGeminiBinaryPath, "")
-	viper.SetDefault(config.KeyGeminiModel, "gemini-2.5-flash")
-	viper.SetDefault(config.KeyGeminiTimeout, 300)
-	viper.SetDefault(config.KeyGeminiBrowserRefresh, "auto")
-	viper.SetDefault(config.KeyGeminiAutoSend, false)
-	viper.SetDefault(config.KeyGeminiSaveResponse, true)
 }
 
 func updateLoggingLevel() {

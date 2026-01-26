@@ -20,18 +20,14 @@ var contextSendCmd = &cobra.Command{
 	Short: "Send a context file to Gemini",
 	Long: `Send an existing context file (or stdin) directly to Google Gemini.
 
-This command sends the content of a file or stdin to Gemini and captures
-the response. It requires geminiweb to be installed and configured.
-
-Prerequisites:
-  1. Install geminiweb: go install github.com/diogo/geminiweb/cmd/geminiweb@latest
-  2. Configure authentication: geminiweb auto-login
+This command sends the content of a file or stdin to the configured LLM provider
+and captures the response.
 
 Examples:
   shotgun-cli context send prompt.md
   shotgun-cli context send prompt.md -o response.md
   cat prompt.md | shotgun-cli context send
-  shotgun-cli context send prompt.md -m gemini-3.0-pro
+  shotgun-cli context send prompt.md -m gemini-2.0-pro
   shotgun-cli context send prompt.md --raw`,
 
 	Args: cobra.MaximumNArgs(1),
@@ -77,18 +73,6 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no content to send (file or stdin is empty)")
 	}
 
-	// Check if any LLM provider is enabled/configured
-	provider := viper.GetString(config.KeyLLMProvider)
-
-	// Backward compatibility: if llm.provider is geminiweb, check gemini.enabled
-	if provider == "" || provider == "geminiweb" {
-		if !viper.GetBool(config.KeyGeminiEnabled) {
-			return fmt.Errorf("LLM integration is disabled. Enable with: " +
-				"shotgun-cli config set gemini.enabled true\n" +
-				"Or configure a different provider: shotgun-cli llm list")
-		}
-	}
-
 	// Get flag overrides
 	model, _ := cmd.Flags().GetString("model")
 	timeout, _ := cmd.Flags().GetInt("timeout")
@@ -96,7 +80,7 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 	raw, _ := cmd.Flags().GetBool("raw")
 
 	// Check save-response config if no output file specified
-	saveResponse := viper.GetBool(config.KeyLLMSaveResponse) || viper.GetBool(config.KeyGeminiSaveResponse)
+	saveResponse := viper.GetBool(config.KeyLLMSaveResponse)
 	if outputFile == "" && saveResponse {
 		// Auto-generate output filename
 		timestamp := time.Now().Format("20060102-150405")

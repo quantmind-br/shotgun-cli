@@ -239,10 +239,10 @@ func TestConfigSelect_View_WithEmptyOption(t *testing.T) {
 	t.Parallel()
 
 	sel := NewConfigSelect(config.ConfigMetadata{
-		Key:         config.KeyGeminiBrowserRefresh,
+		Key:         "test_empty_option",
 		Type:        config.TypeEnum,
-		Description: "Browser refresh",
-		EnumOptions: []string{"", "auto", "chrome"},
+		Description: "Test Empty Option",
+		EnumOptions: []string{"", "option1", "option2"},
 	}, "")
 
 	sel.SetWidth(60)

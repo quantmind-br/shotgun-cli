@@ -33,16 +33,6 @@ func BuildLLMConfig() llm.Config {
 		cfg.Timeout = defaults.Timeout
 	}
 
-	// GeminiWeb-specific configurations.
-	if provider == llm.ProviderGeminiWeb {
-		cfg.BinaryPath = viper.GetString(config.KeyGeminiBinaryPath)
-		cfg.BrowserRefresh = viper.GetString(config.KeyGeminiBrowserRefresh)
-		// Use gemini model if llm.model is not set.
-		if viper.GetString(config.KeyLLMModel) == "" {
-			cfg.Model = viper.GetString(config.KeyGeminiModel)
-		}
-	}
-
 	return cfg
 }
 

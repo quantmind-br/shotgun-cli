@@ -922,7 +922,7 @@ func TestWizardHandleGenerationError(t *testing.T) {
 	}
 }
 
-func TestWizardGeminiLifecycle(t *testing.T) {
+func TestWizardLLMLifecycle(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
@@ -937,14 +937,14 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 	wizard.step = StepReview
 	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, wizard.getTaskDesc(), "", "")
 
-	// Test GeminiProgressMsg
+	// Test LLMProgressMsg
 	model, _ := wizard.Update(screens.LLMProgressMsg{Stage: "sending"})
 	wizard = model.(*WizardModel)
 	if wizard.progress.Stage != "sending" {
 		t.Errorf("expected progress stage 'sending', got %q", wizard.progress.Stage)
 	}
 
-	// Test GeminiCompleteMsg
+	// Test LLMCompleteMsg
 	model, _ = wizard.Update(screens.LLMCompleteMsg{
 		Response:   "AI response here",
 		OutputFile: "/tmp/response.md",
@@ -956,11 +956,11 @@ func TestWizardGeminiLifecycle(t *testing.T) {
 		t.Errorf("expected response file '/tmp/response.md', got %q", wizard.llmResponseFile)
 	}
 	if wizard.llmSending {
-		t.Error("geminiSending should be false after completion")
+		t.Error("llmSending should be false after completion")
 	}
 }
 
-func TestWizardHandleGeminiError(t *testing.T) {
+func TestWizardHandleLLMError(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
@@ -970,12 +970,12 @@ func TestWizardHandleGeminiError(t *testing.T) {
 	wizard.review = screens.NewReview(map[string]bool{}, tree, nil, "", "", "")
 	wizard.llmSending = true
 
-	testErr := fmt.Errorf("geminiweb: connection timeout")
+	testErr := fmt.Errorf("gemini: connection timeout")
 	model, _ := wizard.Update(screens.LLMErrorMsg{Err: testErr})
 	wizard = model.(*WizardModel)
 
 	if wizard.llmSending {
-		t.Error("geminiSending should be false after error")
+		t.Error("llmSending should be false after error")
 	}
 	// Error is handled by review screen, check that no panic occurred
 }
@@ -1890,91 +1890,6 @@ func TestWizardBuildLLMSendConfig_Gemini(t *testing.T) {
 	}
 }
 
-func TestWizardBuildLLMSendConfig_GeminiWeb(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.generatedFilePath = "/tmp/test.md"
-	wizard.wizardConfig = &WizardConfig{
-		LLM: LLMConfig{
-			Provider:   "geminiweb",
-			BinaryPath: "/path/to/geminiweb",
-			Model:      "gemini-2.0-pro",
-			Timeout:    300,
-		},
-	}
-
-	cfg := wizard.buildLLMSendConfig()
-
-	if cfg.Provider != "geminiweb" {
-		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
-	}
-	if cfg.BinaryPath != "/path/to/geminiweb" {
-		t.Errorf("expected BinaryPath '/path/to/geminiweb', got '%s'", cfg.BinaryPath)
-	}
-}
-
-func TestWizardBuildLLMSendConfig_GeminiWeb_LegacyConfig(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.generatedFilePath = "/tmp/test.md"
-	wizard.wizardConfig = &WizardConfig{
-		LLM: LLMConfig{
-			Provider: "",
-		},
-		Gemini: GeminiConfig{
-			BinaryPath: "/path/to/geminiweb",
-			Model:      "gemini-2.5-pro",
-			Timeout:    300,
-		},
-	}
-
-	cfg := wizard.buildLLMSendConfig()
-
-	if cfg.Provider != "geminiweb" {
-		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
-	}
-	if cfg.Model != "gemini-2.5-pro" {
-		t.Errorf("expected model 'gemini-2.5-pro', got '%s'", cfg.Model)
-	}
-	if cfg.BinaryPath != "/path/to/geminiweb" {
-		t.Errorf("expected BinaryPath '/path/to/geminiweb', got '%s'", cfg.BinaryPath)
-	}
-}
-
-func TestWizardBuildLLMSendConfig_GeminiWeb_MixedConfig(t *testing.T) {
-	t.Parallel()
-
-	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
-	wizard.generatedFilePath = "/tmp/test.md"
-	wizard.wizardConfig = &WizardConfig{
-		LLM: LLMConfig{
-			Provider:   "geminiweb",
-			Model:      "llm-model",
-			Timeout:    60,
-			BinaryPath: "",
-		},
-		Gemini: GeminiConfig{
-			BinaryPath: "/path/to/geminiweb",
-			Model:      "gemini-2.5-pro",
-			Timeout:    300,
-		},
-	}
-
-	cfg := wizard.buildLLMSendConfig()
-
-	if cfg.Provider != "geminiweb" {
-		t.Errorf("expected provider 'geminiweb', got '%s'", cfg.Provider)
-	}
-	if cfg.Model != "llm-model" {
-		t.Errorf("expected model 'llm-model' (from LLM config), got '%s'", cfg.Model)
-	}
-	if cfg.BinaryPath != "/path/to/geminiweb" {
-		t.Errorf("expected BinaryPath from legacy config, got '%s'", cfg.BinaryPath)
-	}
-}
-
 func TestWizardBuildLLMSendConfig_SaveResponse(t *testing.T) {
 	t.Parallel()
 
@@ -2006,8 +1921,8 @@ func TestWizardBuildLLMSendConfig_NoConfig(t *testing.T) {
 
 	cfg := wizard.buildLLMSendConfig()
 
-	if cfg.Provider != "geminiweb" {
-		t.Errorf("expected default provider 'geminiweb', got '%s'", cfg.Provider)
+	if cfg.Provider != "" {
+		t.Errorf("expected default provider '', got '%s'", cfg.Provider)
 	}
 }
 
@@ -2184,7 +2099,7 @@ func TestWizardHandleRescanRequest_AllSteps(t *testing.T) {
 	}
 }
 
-func TestWizardGeminiSendingFlagLifecycle(t *testing.T) {
+func TestWizardLLMSendingFlagLifecycle(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
@@ -2201,20 +2116,20 @@ func TestWizardGeminiSendingFlagLifecycle(t *testing.T) {
 
 	// Initial state
 	if wizard.llmSending {
-		t.Error("expected geminiSending to be false initially")
+		t.Error("expected llmSending to be false initially")
 	}
 
-	// After handleSendToGemini (may or may not set flag depending on provider availability)
+	// After handleSendToLLM (may or may not set flag depending on provider availability)
 	_ = wizard.handleSendToLLM()
 
 	// Simulate completion
 	wizard.llmSending = false
 	if wizard.llmSending {
-		t.Error("expected geminiSending to be false after completion")
+		t.Error("expected llmSending to be false after completion")
 	}
 }
 
-func TestWizardHandleGeminiProgress(t *testing.T) {
+func TestWizardHandleLLMProgress(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
@@ -2232,7 +2147,7 @@ func TestWizardHandleGeminiProgress(t *testing.T) {
 	}
 }
 
-func TestWizardHandleGeminiComplete(t *testing.T) {
+func TestWizardHandleLLMComplete(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
@@ -2249,17 +2164,17 @@ func TestWizardHandleGeminiComplete(t *testing.T) {
 	wizard.handleLLMComplete(msg)
 
 	if wizard.llmSending {
-		t.Error("expected geminiSending to be false after completion")
+		t.Error("expected llmSending to be false after completion")
 	}
 	if wizard.progress.Visible {
 		t.Error("expected progress to be invisible after completion")
 	}
 	if wizard.llmResponseFile != msg.OutputFile {
-		t.Errorf("expected geminiResponseFile to be %s, got %s", msg.OutputFile, wizard.llmResponseFile)
+		t.Errorf("expected llmResponseFile to be %s, got %s", msg.OutputFile, wizard.llmResponseFile)
 	}
 }
 
-func TestWizardHandleGeminiError_ClearsState(t *testing.T) {
+func TestWizardHandleLLMError_ClearsState(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
@@ -2274,7 +2189,7 @@ func TestWizardHandleGeminiError_ClearsState(t *testing.T) {
 	wizard.handleLLMError(msg)
 
 	if wizard.llmSending {
-		t.Error("expected geminiSending to be false after error")
+		t.Error("expected llmSending to be false after error")
 	}
 	if wizard.progress.Visible {
 		t.Error("expected progress to be invisible after error")

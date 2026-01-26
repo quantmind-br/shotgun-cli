@@ -18,7 +18,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
-	"github.com/quantmind-br/shotgun-cli/internal/platform/geminiweb"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
@@ -42,16 +41,12 @@ type ProgressOutput struct {
 }
 
 type GenerateConfig struct {
-	RootPath      string
-	Include       []string
-	Exclude       []string
-	Output        string
-	MaxSize       int64
-	EnforceLimit  bool
-	SendGemini    bool
-	GeminiModel   string
-	GeminiOutput  string
-	GeminiTimeout int
+	RootPath     string
+	Include      []string
+	Exclude      []string
+	Output       string
+	MaxSize      int64
+	EnforceLimit bool
 	// Template configuration
 	Template   string            // Template name to use
 	Task       string            // Task description for LLM
@@ -151,12 +146,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	maxSizeStr, _ := cmd.Flags().GetString("max-size")
 	enforceLimit, _ := cmd.Flags().GetBool("enforce-limit")
 
-	// Gemini flags
-	sendGemini, _ := cmd.Flags().GetBool("send-gemini")
-	geminiModel, _ := cmd.Flags().GetString("gemini-model")
-	geminiOutput, _ := cmd.Flags().GetString("gemini-output")
-	geminiTimeout, _ := cmd.Flags().GetInt("gemini-timeout")
-
 	// Template flags
 	templateName, _ := cmd.Flags().GetString("template")
 	task, _ := cmd.Flags().GetString("task")
@@ -210,19 +199,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		output = fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
 	}
 
-	// Use config defaults for Gemini if not specified via flags
-	if geminiModel == "" {
-		geminiModel = viper.GetString(cfgkeys.KeyGeminiModel)
-	}
-	if geminiTimeout == 0 {
-		geminiTimeout = viper.GetInt(cfgkeys.KeyGeminiTimeout)
-	}
-
-	// Enable gemini via config if auto-send is enabled AND gemini is enabled
-	if !sendGemini && viper.GetBool(cfgkeys.KeyGeminiAutoSend) && viper.GetBool(cfgkeys.KeyGeminiEnabled) {
-		sendGemini = true
-	}
-
 	return GenerateConfig{
 		RootPath:       absPath,
 		Include:        include,
@@ -230,10 +206,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		Output:         output,
 		MaxSize:        maxSize,
 		EnforceLimit:   enforceLimit,
-		SendGemini:     sendGemini,
-		GeminiModel:    geminiModel,
-		GeminiOutput:   geminiOutput,
-		GeminiTimeout:  geminiTimeout,
 		Template:       templateName,
 		Task:           task,
 		Rules:          rules,
@@ -303,13 +275,6 @@ func generateContextHeadless(cfg GenerateConfig) error {
 	}
 
 	printGenerationSummary(result, cfg)
-
-	if cfg.SendGemini {
-		if err := sendToGemini(cfg, result.Content); err != nil {
-			log.Error().Err(err).Msg("Failed to send to Gemini")
-			fmt.Printf("❌ Gemini: %v\n", err)
-		}
-	}
 
 	return nil
 }
@@ -394,61 +359,6 @@ func printGenerationSummary(result *app.GenerateResult, cfg GenerateConfig) {
 	fmt.Printf("🎯 Size limit: %s\n", utils.FormatBytes(cfg.MaxSize))
 }
 
-func sendToGemini(cfg GenerateConfig, content string) error {
-	// Check if Gemini is enabled
-	if !viper.GetBool(cfgkeys.KeyGeminiEnabled) {
-		return fmt.Errorf("gemini integration is disabled, enable with: shotgun-cli config set geminiweb.enabled true")
-	}
-
-	// Check availability
-	if !geminiweb.IsAvailable() {
-		return fmt.Errorf("geminiweb not found. Run 'shotgun-cli gemini doctor' for help")
-	}
-
-	if !geminiweb.IsConfigured() {
-		return fmt.Errorf("geminiweb not configured. Run 'shotgun-cli gemini doctor' for help")
-	}
-
-	// Build gemini config
-	geminiCfg := geminiweb.Config{
-		BinaryPath:     viper.GetString(cfgkeys.KeyGeminiBinaryPath),
-		Model:          cfg.GeminiModel,
-		Timeout:        cfg.GeminiTimeout,
-		BrowserRefresh: viper.GetString(cfgkeys.KeyGeminiBrowserRefresh),
-		Verbose:        viper.GetBool(cfgkeys.KeyVerbose),
-	}
-
-	executor := geminiweb.NewExecutor(geminiCfg)
-
-	fmt.Printf("\n🤖 Sending to Gemini (%s)...\n", geminiCfg.Model)
-
-	ctx := context.Background()
-	result, err := executor.Send(ctx, content)
-	if err != nil {
-		return fmt.Errorf("failed to send to Gemini: %w", err)
-	}
-
-	// Determine output file
-	geminiOutput := cfg.GeminiOutput
-	if geminiOutput == "" {
-		geminiOutput = strings.TrimSuffix(cfg.Output, ".md") + "_response.md"
-	}
-
-	// Save response
-	if viper.GetBool(cfgkeys.KeyGeminiSaveResponse) {
-		if err := os.WriteFile(geminiOutput, []byte(result.Response), 0600); err != nil {
-			return fmt.Errorf("failed to save response: %w", err)
-		}
-		fmt.Printf("✅ Gemini response saved to: %s\n", geminiOutput)
-	} else {
-		fmt.Printf("\n--- Gemini Response ---\n%s\n", result.Response)
-	}
-
-	fmt.Printf("⏱️  Response time: %s\n", geminiweb.FormatDuration(result.Duration))
-
-	return nil
-}
-
 // renderProgressHuman renders progress for humans
 func renderProgressHuman(p ProgressOutput) {
 	if p.Total > 0 {
@@ -492,12 +402,6 @@ func init() {
 	contextGenerateCmd.Flags().StringP("output", "o", "", "Output file (default: shotgun-prompt-YYYYMMDD-HHMMSS.md)")
 	contextGenerateCmd.Flags().String("max-size", "10MB", "Maximum context size (e.g., 5MB, 1GB, 500KB)")
 	contextGenerateCmd.Flags().Bool("enforce-limit", true, "Enforce context size limit (default: true)")
-
-	// Gemini integration flags
-	contextGenerateCmd.Flags().Bool("send-gemini", false, "Send generated context to Gemini")
-	contextGenerateCmd.Flags().String("gemini-model", "", "Gemini model (gemini-2.5-flash, gemini-2.5-pro)")
-	contextGenerateCmd.Flags().String("gemini-output", "", "File to save Gemini response")
-	contextGenerateCmd.Flags().Int("gemini-timeout", 0, "Timeout in seconds for Gemini request")
 
 	// Template configuration flags
 	contextGenerateCmd.Flags().StringP("template", "t", "", "Template name (e.g., makePlan, analyzeBug)")

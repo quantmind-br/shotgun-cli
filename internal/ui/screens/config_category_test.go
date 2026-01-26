@@ -22,7 +22,6 @@ func TestNewConfigCategory(t *testing.T) {
 		{"Template category", config.CategoryTemplate, 1},
 		{"Output category", config.CategoryOutput, 2},
 		{"LLM category", config.CategoryLLM, 6},
-		{"Gemini category", config.CategoryGemini, 7},
 	}
 
 	for _, tt := range tests {

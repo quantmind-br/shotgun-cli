@@ -56,7 +56,7 @@ Shotgun CLI implements a **Clean Architecture/Hexagonal Architecture** pattern w
 1. **Presentation/Adapter Layer** (`cmd`, `internal/ui`): Handles user interaction through CLI commands and interactive TUI wizard
 2. **Application Layer** (`internal/app`): Orchestrates business logic and provides a unified API (`ContextService`) for presentation layers
 3. **Core/Domain Layer** (`internal/core`): Contains pure business logic for context generation, file scanning, template management, and token estimation
-4. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (LLM providers, `http` client, `geminiweb`, clipboard operations)
+4. **Infrastructure/Platform Layer** (`internal/platform`): Implements external system integrations (LLM providers, `http` client, clipboard operations)
 
 ### Technology Stack and Frameworks
 
@@ -181,56 +181,7 @@ By using the `BaseClient` and the shared client, LLM providers (OpenAI, Anthropi
 
 ## LLM Provider Configuration
 
-shotgun-cli supports multiple LLM providers including OpenAI, Anthropic, Google Gemini API, and GeminiWeb (browser-based).
-
-### GeminiWeb Provider
-
-GeminiWeb is a browser-based integration that uses the `geminiweb` CLI tool for Google Gemini access without requiring an API key.
-
-#### Setup
-
-1. **Install geminiweb**:
-   ```bash
-   go install github.com/diogo/geminiweb/cmd/geminiweb@latest
-   ```
-
-2. **Configure authentication** (browser-based):
-   ```bash
-   geminiweb auto-login
-   ```
-   This will open a browser window for Google authentication and store cookies in `~/.geminiweb/cookies.json`.
-
-3. **Configure shotgun-cli**:
-   ```bash
-   shotgun-cli config set llm.provider geminiweb
-   shotgun-cli config set gemini.enabled true
-   ```
-
-#### Cookies File Setup
-
-The `geminiweb` tool stores authentication cookies in:
-- **Linux/macOS**: `~/.geminiweb/cookies.json`
-- **Windows**: `%USERPROFILE%\.geminiweb\cookies.json`
-
-The cookies file is created automatically when you run `geminiweb auto-login`. If authentication expires, simply run the command again to refresh the cookies.
-
-#### Verification
-
-Check if the provider is configured correctly:
-```bash
-shotgun-cli llm status
-shotgun-cli llm doctor
-```
-
-#### Configuration Options
-
-- `llm.provider`: Set to `geminiweb`
-- `gemini.binary-path`: Optional custom path to geminiweb binary
-- `gemini.browser-refresh`: Auto-refresh cookies using browser (`auto`, `chrome`, `firefox`, `edge`, etc.)
-- `gemini.model`: Model to use (default: `gemini-2.5-flash`)
-- `gemini.timeout`: Request timeout in seconds (default: `300`)
-
-For more information on LLM providers, see `.serena/memories/llm_providers.md`.
+shotgun-cli supports multiple LLM providers including OpenAI, Anthropic, and Google Gemini API.
 
 ### LLM Diagnostic Commands
 
@@ -297,7 +248,6 @@ When issues are found, the doctor provides specific next steps for each provider
 - **OpenAI**: API key setup link and configuration commands
 - **Anthropic**: API key setup link and configuration commands
 - **Gemini**: API key setup link and configuration commands
-- **GeminiWeb**: Installation and authentication steps
 
 #### `shotgun-cli llm list`
 
@@ -314,7 +264,6 @@ Supported LLM Providers:
   openai      - OpenAI (GPT-4o, GPT-4, o1, o3)
 * anthropic   - Anthropic (Claude 4, Claude 3.5)
   gemini      - Google Gemini (Gemini 2.5, Gemini 2.0)
-  geminiweb   - GeminiWeb (Browser-based (no API key))
 
 Configure with:
   shotgun-cli config set llm.provider <provider>
@@ -354,7 +303,7 @@ shotgun-cli config
 ```
 
 This opens a full-screen TUI where you can:
-- Navigate between configuration categories (Scanner, Context, Template, Output, LLM Provider, Gemini Integration)
+- Navigate between configuration categories (Scanner, Context, Template, Output, LLM Provider)
 - Edit values with real-time validation
 - Toggle boolean settings with Space
 - Select from dropdown options for enum values
@@ -398,7 +347,6 @@ shotgun-cli config show
 scanner.max-files: 1000 (default)
 scanner.max-file-size: 10MB (default)
 llm.provider: anthropic (config file)
-gemini.enabled: true (config file)
 output.format: markdown (config file)
 ```
 
@@ -420,9 +368,6 @@ shotgun-cli config set llm.provider openai
 
 # Set API key
 shotgun-cli config set llm.api-key sk-...
-
-# Set Gemini model
-shotgun-cli config set gemini.model gemini-2.5-pro
 ```
 
 **Validation**: Values are validated before being saved. Invalid values will return an error:
@@ -472,23 +417,11 @@ Error: failed to parse integer value
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `llm.provider` | string | - | LLM provider: `openai`, `anthropic`, `gemini`, `geminiweb` |
+| `llm.provider` | string | - | LLM provider: `openai`, `anthropic`, `gemini` |
 | `llm.api-key` | string | - | API key for the provider |
 | `llm.base-url` | URL | - | Custom base URL for API requests |
 | `llm.model` | string | - | Model name to use |
 | `llm.timeout` | int | 300 | Request timeout in seconds (1-3600) |
-
-#### Gemini Integration Settings
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `gemini.enabled` | bool | false | Enable Gemini integration |
-| `gemini.binary-path` | path | geminiweb | Path to geminiweb binary |
-| `gemini.model` | string | gemini-2.5-flash | Gemini model to use |
-| `gemini.timeout` | int | 120 | Gemini request timeout in seconds |
-| `gemini.browser-refresh` | string | auto | Browser for cookie refresh: `auto`, `chrome`, `firefox`, `edge`, `chromium`, `opera` |
-| `gemini.auto-send` | bool | false | Automatically send to Gemini after generation |
-| `gemini.save-response` | bool | false | Save Gemini response to file |
 
 ### Configuration Validation
 
@@ -513,18 +446,11 @@ The configuration system provides centralized validation through `internal/confi
 | `template.custom-path` | `validatePath` | Valid path (empty allowed) | "failed to expand home directory", "parent path exists but is not a directory" |
 | `output.format` | `validateOutputFormat` | "markdown" or "text" | "expected 'markdown' or 'text'" |
 | `output.clipboard` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
-| `llm.provider` | `validateLLMProvider` | openai, anthropic, gemini, geminiweb | "expected one of: openai, anthropic, gemini, geminiweb" |
+| `llm.provider` | `validateLLMProvider` | openai, anthropic, gemini | "expected one of: openai, anthropic, gemini" |
 | `llm.api-key` | None | Any string | N/A |
 | `llm.base-url` | `validateURL` | Empty or starts with http:// or https:// | "URL must start with http:// or https://" |
 | `llm.model` | None | Any string (provider-specific validation) | N/A |
 | `llm.timeout` | `validateTimeout` | Integer between 1 and 3600 seconds | "timeout must be positive", "timeout too large (max 3600 seconds)" |
-| `gemini.enabled` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
-| `gemini.binary-path` | `validatePath` | Valid path (empty allowed) | "failed to expand home directory", "parent path exists but is not a directory" |
-| `gemini.model` | `validateGeminiModel` | gemini-2.5-flash, gemini-2.5-pro, gemini-3.0-pro | "expected one of: gemini-2.5-flash, gemini-2.5-pro, gemini-3.0-pro" |
-| `gemini.timeout` | `validateTimeout` | Integer between 1 and 3600 seconds | "timeout must be positive", "timeout too large (max 3600 seconds)" |
-| `gemini.browser-refresh` | `validateBrowserRefresh` | Empty, auto, chrome, firefox, edge, chromium, opera | "expected one of: auto, chrome, firefox, edge, chromium, opera (or empty to disable)" |
-| `gemini.auto-send` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
-| `gemini.save-response` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 
 #### Validation Rules Detail
 
@@ -541,18 +467,16 @@ The configuration system provides centralized validation through `internal/confi
 - Case-insensitive suffixes
 - Uses `utils.ParseSize()` for parsing
 
-**Boolean Validation** (all `*enabled`, `*include*`, `*skip*`, `*respect*`, `auto-send`, `save-response`, `clipboard`):
+**Boolean Validation** (all `*enabled`, `*include*`, `*skip*`, `*respect*`, `clipboard`):
 - Only accepts: `true` or `false`
 - Case-insensitive: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`
 - Does NOT accept: `yes`, `no`, `1`, `0`, `on`, `off`
 
 **String Enum Validation**:
-- `llm.provider`: `openai`, `anthropic`, `gemini`, `geminiweb`
+- `llm.provider`: `openai`, `anthropic`, `gemini`
 - `output.format`: `markdown`, `text`
-- `gemini.model`: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-3.0-pro`
-- `gemini.browser-refresh`: `""`, `auto`, `chrome`, `firefox`, `edge`, `chromium`, `opera` (case-sensitive)
 
-**Path Validation** (`template.custom-path`, `gemini.binary-path`):
+**Path Validation** (`template.custom-path`):
 - Empty string is allowed
 - Expands `~/` to home directory
 - Parent directory must exist or be creatable
@@ -563,7 +487,7 @@ The configuration system provides centralized validation through `internal/confi
 - Must start with `http://` or `https://`
 - Basic URL format validation only
 
-**Timeout Validation** (`llm.timeout`, `gemini.timeout`):
+**Timeout Validation** (`llm.timeout`):
 - Must be a positive integer
 - Range: 1-3600 seconds (1 hour max)
 
@@ -577,9 +501,9 @@ The `ConvertValue()` function converts validated string values to their appropri
 | Boolean keys | `strings.ToLower == "true"` | `bool` |
 | All other keys | Identity | `string` |
 
-**Integer Keys**: `scanner.max-files`, `scanner.workers`, `llm.timeout`, `gemini.timeout`
+**Integer Keys**: `scanner.max-files`, `scanner.workers`, `llm.timeout`
 
-**Boolean Keys**: All `*enabled`, `*include*`, `*skip*`, `*respect*`, `auto-send`, `save-response`, `clipboard` keys
+**Boolean Keys**: All `*enabled`, `*include*`, `*skip*`, `*respect*`, `clipboard` keys
 
 #### Testing
 
@@ -587,27 +511,11 @@ Configuration validation is tested in `internal/config/validator_test.go`:
 
 - `TestIsValidKey`: Valid key detection
 - `TestValidKeys`: No duplicates in valid keys list
-- `TestValidateValue_*`: Per-key validation tests (workers, max-files, size format, boolean, provider, format, timeout, URL, browser-refresh, path, model)
+- `TestValidateValue_*`: Per-key validation tests (workers, max-files, size format, boolean, provider, format, timeout, URL, path)
 - `TestConvertValue_*`: Type conversion tests
 - `TestValidatePath_*`: Path validation with existing files
-- `TestValidateBrowserRefresh_Direct`: Direct validator function tests
-- `TestValidateGeminiModel`: Gemini model validation
 
 All validation tests use `t.Parallel()` for efficient execution.
-
-### Gemini Status
-
-The `getGeminiStatusSummary` function provides a status summary for Gemini integration:
-
-- **disabled**: Gemini integration is disabled
-- **✗ geminiweb not found**: geminiweb binary not in PATH
-- **✓ configured**: Gemini is properly configured
-- **⚠ needs configuration**: Gemini enabled but not fully configured
-
-Check status with:
-```bash
-shotgun-cli llm status
-```
 
 ### Testing
 
@@ -615,7 +523,6 @@ Configuration functions are tested in `cmd/config_test.go`:
 - `TestShowCurrentConfig_*`: Display configuration in various formats
 - `TestSetConfigValue_*`: Set and validate configuration values
 - `TestGetDefaultConfigPath_*`: Config file path resolution
-- `TestGetGeminiStatusSummary_*`: Gemini status detection
 - `TestGetConfigSource_*`: Configuration source detection
 
 ## CMD Helper Functions
@@ -670,7 +577,6 @@ formatDuration(5 * time.Minute)         // "300.0s"
 ```go
 displayURL("", llm.ProviderOpenAI)     // "(default: https://api.openai.com/v1)"
 displayURL("", llm.ProviderAnthropic)  // "(default: https://api.anthropic.com)"
-displayURL("", llm.ProviderGeminiWeb)  // "(default)"
 displayURL("https://custom.proxy.com", llm.ProviderOpenAI) // "https://custom.proxy.com"
 ```
 
@@ -1326,7 +1232,6 @@ The wizard supports multiple LLM providers through a unified configuration:
 | OpenAI | `openai` | `api_key` | `base_url`, `model`, `timeout` |
 | Anthropic | `anthropic` | `api_key` | `base_url`, `model`, `timeout` |
 | Gemini | `gemini` | `api_key` | `base_url`, `model`, `timeout` |
-| GeminiWeb | `geminiweb` | (none - uses browser auth) | `binary_path`, `browser_refresh`, `model` |
 
 **Configuration Example**:
 
@@ -1336,18 +1241,6 @@ llm:
   api_key: "sk-ant-..."
   model: "claude-sonnet-4-20250514"
   timeout: 300
-  save_response: true
-```
-
-**GeminiWeb Legacy Config** (automatically merged):
-
-```yaml
-gemini:
-  enabled: true
-  binary_path: "/path/to/geminiweb"
-  model: "gemini-2.0-pro"
-  timeout: 300
-  browser_refresh: "auto"
   save_response: true
 ```
 

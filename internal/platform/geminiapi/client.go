@@ -14,10 +14,13 @@ const (
 	defaultMaxTokens = 8192
 )
 
+// Client is the Google Gemini API implementation of the LLM provider.
 type Client struct {
 	*llmbase.BaseClient
 }
 
+// NewClient creates a new Gemini API client with the given configuration.
+// It validates the API key and sets default values for BaseURL, Model, MaxTokens, and Timeout if not provided.
 func NewClient(cfg llm.Config) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("api key is required")
@@ -54,6 +57,7 @@ func NewClient(cfg llm.Config) (*Client, error) {
 	}, nil
 }
 
+// Send sends a content string to the Gemini API and returns the result.
 func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) {
 	result, err := c.BaseClient.Send(ctx, content, c)
 	if err != nil {
@@ -62,6 +66,7 @@ func (c *Client) Send(ctx context.Context, content string) (*llm.Result, error) 
 	return result, nil
 }
 
+// SendWithProgress sends a content string to the Gemini API and reports progress via the callback.
 func (c *Client) SendWithProgress(ctx context.Context, content string, progress func(stage string)) (*llm.Result, error) {
 	result, err := c.BaseClient.SendWithProgress(ctx, content, c, progress)
 	if err != nil {
@@ -70,6 +75,7 @@ func (c *Client) SendWithProgress(ctx context.Context, content string, progress 
 	return result, nil
 }
 
+// BuildRequest constructs the Gemini-specific request body.
 func (c *Client) BuildRequest(content string) (interface{}, error) {
 	return GenerateRequest{
 		Contents: []Content{
@@ -83,6 +89,7 @@ func (c *Client) BuildRequest(content string) (interface{}, error) {
 	}, nil
 }
 
+// ParseResponse extracts the result from the Gemini API response.
 func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error) {
 	genResp, ok := response.(*GenerateResponse)
 	if !ok {
@@ -120,18 +127,23 @@ func (c *Client) ParseResponse(response interface{}, rawJSON []byte) (*llm.Resul
 	}, nil
 }
 
+// GetEndpoint returns the Gemini API endpoint including the model and API key.
 func (c *Client) GetEndpoint() string {
 	return fmt.Sprintf("/models/%s:generateContent?key=%s", c.Model, c.APIKey)
 }
 
+// GetHeaders returns the necessary headers for Gemini API requests.
+// For Gemini, authentication is handled via query parameters, so this returns an empty map.
 func (c *Client) GetHeaders() map[string]string {
 	return map[string]string{}
 }
 
+// NewResponse returns a new instance of the Gemini response structure for unmarshaling.
 func (c *Client) NewResponse() interface{} {
 	return &GenerateResponse{}
 }
 
+// GetProviderName returns the display name of the provider ("Gemini").
 func (c *Client) GetProviderName() string {
 	return c.ProviderName
 }

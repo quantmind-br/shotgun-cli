@@ -1,5 +1,7 @@
 package app
 
+// CLIConfig holds the global configuration for CLI commands.
+// It maps directly to Viper configuration keys.
 type CLIConfig struct {
 	RootPath     string
 	Include      []string
@@ -32,12 +34,16 @@ type CLIConfig struct {
 type ProgressMode string
 
 const (
-	ProgressNone  ProgressMode = "none"
+	// ProgressNone disables progress reporting.
+	ProgressNone ProgressMode = "none"
+	// ProgressHuman enables human-readable progress reporting (default).
 	ProgressHuman ProgressMode = "human"
-	ProgressJSON  ProgressMode = "json"
+	// ProgressJSON enables JSON-formatted progress reporting for machine consumption.
+	ProgressJSON ProgressMode = "json"
 )
 
-// ProgressOutput represents a progress event for output
+// ProgressOutput represents a structured progress event.
+// It is used for JSON output generation during long-running operations.
 type ProgressOutput struct {
 	Timestamp string  `json:"timestamp"`
 	Stage     string  `json:"stage"`
