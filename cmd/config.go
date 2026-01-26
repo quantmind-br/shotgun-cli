@@ -9,12 +9,14 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/ui"
+	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
 )
 
 var configCmd = &cobra.Command{
@@ -205,11 +207,14 @@ func showCurrentConfig() error {
 
 	for _, category := range categoryOrder {
 		if keys, exists := categories[category]; exists {
-			fmt.Printf("[%s]\n", strings.ToUpper(category))
+			fmt.Printf("%s\n", styles.TitleStyle.Render("["+strings.ToUpper(category)+"]"))
 			for _, key := range keys {
 				value := viper.Get(key)
 				source := getConfigSource(key)
-				fmt.Printf("  %-25s = %-15v (%s)\n", key, formatValue(value), source)
+				keyStyled := styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", key))
+				valStyled := styles.StatsValueStyle.Render(fmt.Sprintf("%-15v", formatValue(value)))
+				srcStyled := lipgloss.NewStyle().Foreground(styles.MutedColor).Render(fmt.Sprintf("(%s)", source))
+				fmt.Printf("  %s = %s %s\n", keyStyled, valStyled, srcStyled)
 			}
 			fmt.Println()
 		}
@@ -226,20 +231,31 @@ func showCurrentConfig() error {
 			}
 		}
 		if !found {
-			fmt.Printf("[%s]\n", strings.ToUpper(category))
+			fmt.Printf("%s\n", styles.TitleStyle.Render("["+strings.ToUpper(category)+"]"))
 			for _, key := range keys {
 				value := viper.Get(key)
 				source := getConfigSource(key)
-				fmt.Printf("  %-25s = %-15v (%s)\n", key, formatValue(value), source)
+				keyStyled := styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", key))
+				valStyled := styles.StatsValueStyle.Render(fmt.Sprintf("%-15v", formatValue(value)))
+				srcStyled := lipgloss.NewStyle().Foreground(styles.MutedColor).Render(fmt.Sprintf("(%s)", source))
+				fmt.Printf("  %s = %s %s\n", keyStyled, valStyled, srcStyled)
 			}
 			fmt.Println()
 		}
 	}
 
 	// Show Gemini integration status
-	fmt.Println("[GEMINI STATUS]")
+	fmt.Println(styles.TitleStyle.Render("[GEMINI STATUS]"))
 	status := getGeminiStatusSummary()
-	fmt.Printf("  %-25s = %s\n", "integration", status)
+	statusStyled := styles.StatsValueStyle.Render(status)
+	if strings.Contains(status, "ready") {
+		statusStyled = styles.SuccessStyle.Render(status)
+	} else if strings.Contains(status, "needs configuration") {
+		statusStyled = styles.WarningStyle.Render(status)
+	} else {
+		statusStyled = styles.ErrorStyle.Render(status)
+	}
+	fmt.Printf("  %s = %s\n", styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", "integration")), statusStyled)
 	fmt.Println()
 
 	return nil
