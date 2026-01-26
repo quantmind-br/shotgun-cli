@@ -120,19 +120,14 @@ func (m *ConfigToggleModel) View() string {
 func (m *ConfigToggleModel) renderToggle() string {
 	var toggle string
 
-	onStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
-	offStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
-
 	if m.value {
-		onStyle = lipgloss.NewStyle().Foreground(styles.SuccessColor).Bold(true)
-		toggle = "  " + offStyle.Render("OFF") + "  " +
-			lipgloss.NewStyle().Foreground(styles.SuccessColor).Render("◉━━") +
-			"  " + onStyle.Render("ON")
+		bracketStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+		textStyle := lipgloss.NewStyle().Foreground(styles.SuccessColor).Bold(true)
+		toggle = bracketStyle.Render("[") + textStyle.Render("ENABLED") + bracketStyle.Render("]")
 	} else {
-		offStyle = lipgloss.NewStyle().Foreground(styles.ErrorColor).Bold(true)
-		toggle = "  " + offStyle.Render("OFF") + "  " +
-			lipgloss.NewStyle().Foreground(styles.ErrorColor).Render("━━◉") +
-			"  " + onStyle.Render("ON")
+		bracketStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+		textStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
+		toggle = bracketStyle.Render("[") + textStyle.Render("DISABLED") + bracketStyle.Render("]")
 	}
 
 	hint := ""

@@ -147,11 +147,12 @@ func TestConfigToggle_View(t *testing.T) {
 		name    string
 		value   bool
 		focused bool
+		expect  string
 	}{
-		{"true unfocused", true, false},
-		{"false unfocused", false, false},
-		{"true focused", true, true},
-		{"false focused", false, true},
+		{"true unfocused", true, false, "ENABLED"},
+		{"false unfocused", false, false, "DISABLED"},
+		{"true focused", true, true, "ENABLED"},
+		{"false focused", false, true, "DISABLED"},
 	}
 
 	for _, tt := range tests {
@@ -172,8 +173,7 @@ func TestConfigToggle_View(t *testing.T) {
 			assert.NotEmpty(t, view)
 			assert.Contains(t, view, config.KeyScannerSkipBinary)
 			assert.Contains(t, view, "Test description")
-			assert.Contains(t, view, "ON")
-			assert.Contains(t, view, "OFF")
+			assert.Contains(t, view, tt.expect)
 		})
 	}
 }
