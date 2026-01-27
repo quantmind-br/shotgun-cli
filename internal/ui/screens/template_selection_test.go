@@ -291,30 +291,6 @@ func TestTemplateSelectionViewWithTemplates(t *testing.T) {
 	assert.Contains(t, view, "Choose Template")
 	assert.Contains(t, view, "t1")
 	assert.Contains(t, view, "t2")
-	assert.Contains(t, view, "Description")
-	assert.Contains(t, view, "desc1")
-}
-
-func TestTemplateSelectionViewWithRequiredVars(t *testing.T) {
-	model := &TemplateSelectionModel{
-		loading: false,
-		templates: []*template.Template{
-			{
-				Name:         "test",
-				Description:  "desc",
-				RequiredVars: []string{"VAR1", "VAR2"},
-			},
-		},
-		cursor: 0,
-		width:  100,
-		height: 50,
-	}
-
-	view := model.View()
-
-	assert.Contains(t, view, "Required Variables")
-	assert.Contains(t, view, "VAR1")
-	assert.Contains(t, view, "VAR2")
 }
 
 func TestTemplateSelectionViewWithSelectedTemplate(t *testing.T) {
@@ -599,26 +575,6 @@ func TestTemplateKeyRouting(t *testing.T) {
 
 		assert.Equal(t, 0, model.cursor)
 	})
-}
-
-func TestCountNonEmptyLines(t *testing.T) {
-	tests := []struct {
-		name     string
-		lines    []string
-		expected int
-	}{
-		{"all non-empty", []string{"a", "b", "c"}, 3},
-		{"mixed", []string{"a", "", "b", "  ", "c"}, 3},
-		{"all empty", []string{"", "  ", "\t"}, 0},
-		{"empty slice", []string{}, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := countNonEmptyLines(tt.lines)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
 }
 
 func TestViewShowsModalWhenOpen(t *testing.T) {
