@@ -12,6 +12,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func isExpectedProviderError(err error) bool {
+	if err == nil {
+		return true
+	}
+	errStr := err.Error()
+	expectedPatterns := []string{
+		"gemini", "Gemini", "LLM", "not available",
+		"API error", "request failed", "401", "Incorrect API key",
+	}
+	for _, pattern := range expectedPatterns {
+		if strings.Contains(errStr, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestContextSendCmd_PreRunE(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -166,61 +183,39 @@ func TestRunContextSend_Flags(t *testing.T) {
 	err := os.WriteFile(testFile, []byte("Test content"), 0o600)
 	require.NoError(t, err)
 
+	setupCmd := func() *cobra.Command {
+		cmd := &cobra.Command{}
+		cmd.Flags().String("output", "", "")
+		cmd.Flags().String("model", "", "")
+		cmd.Flags().Int("timeout", 0, "")
+		cmd.Flags().Bool("raw", false, "")
+		return cmd
+	}
+
 	t.Run("custom model flag parsing", func(t *testing.T) {
 		viper.Reset()
 		viper.Set("llm.provider", "openai")
 		viper.Set("llm.api-key", "test-key")
-
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "gemini-3.0-pro", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
-
-		// Set viper config
 		viper.Set("gemini.model", "default-model")
 
-		// Test may succeed or fail depending on gemini availability
+		cmd := setupCmd()
+		_ = cmd.Flags().Set("model", "gemini-3.0-pro")
+
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error (provider errors or API errors)
-		if err != nil {
-			errStr := err.Error()
-			isExpectedError := strings.Contains(errStr, "gemini") ||
-				strings.Contains(errStr, "Gemini") ||
-				strings.Contains(errStr, "LLM") ||
-				strings.Contains(errStr, "not available") ||
-				strings.Contains(errStr, "API error") ||
-				strings.Contains(errStr, "request failed") ||
-				strings.Contains(errStr, "401") ||
-				strings.Contains(errStr, "Incorrect API key")
-			assert.True(t, isExpectedError, "unexpected error: %v", err)
-		}
+		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
 	})
 
 	t.Run("custom timeout flag parsing", func(t *testing.T) {
 		viper.Reset()
 		viper.Set("llm.provider", "openai")
 		viper.Set("llm.api-key", "test-key")
-
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 30, "")
-		cmd.Flags().Bool("raw", false, "")
-
-		// Set viper config
 		viper.Set("gemini.timeout", 60)
 
-		// Test may succeed or fail depending on gemini availability
+		cmd := setupCmd()
+		_ = cmd.Flags().Set("timeout", "30")
+
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error
-		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "gemini") ||
-				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available") ||
-				strings.Contains(err.Error(), "401") ||
-				strings.Contains(err.Error(), "Incorrect API key"))
-		}
+		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
 	})
 
 	t.Run("output to file flag", func(t *testing.T) {
@@ -229,22 +224,11 @@ func TestRunContextSend_Flags(t *testing.T) {
 		viper.Set("llm.api-key", "test-key")
 
 		outputFile := tempDir + "/response.txt"
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", outputFile, "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
+		cmd := setupCmd()
+		_ = cmd.Flags().Set("output", outputFile)
 
-		// Test may succeed or fail depending on gemini availability
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error
-		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "gemini") ||
-				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available") ||
-				strings.Contains(err.Error(), "401") ||
-				strings.Contains(err.Error(), "Incorrect API key"))
-		}
+		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
 	})
 
 	t.Run("raw output flag", func(t *testing.T) {
@@ -252,26 +236,14 @@ func TestRunContextSend_Flags(t *testing.T) {
 		viper.Set("llm.provider", "openai")
 		viper.Set("llm.api-key", "test-key")
 
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", true, "")
+		cmd := setupCmd()
+		_ = cmd.Flags().Set("raw", "true")
 
-		// Test may succeed or fail depending on gemini availability
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error
-		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "gemini") ||
-				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available") ||
-				strings.Contains(err.Error(), "401") ||
-				strings.Contains(err.Error(), "Incorrect API key"))
-		}
+		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
 	})
 
 	t.Run("viper config integration", func(t *testing.T) {
-		// Set up viper config
 		viper.Reset()
 		viper.Set("llm.provider", "openai")
 		viper.Set("llm.api-key", "test-key")
@@ -281,22 +253,10 @@ func TestRunContextSend_Flags(t *testing.T) {
 		viper.Set("gemini.browser-refresh", "always")
 		viper.Set("verbose", true)
 
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "") // Empty so it uses viper
-		cmd.Flags().Int("timeout", 0, "")   // Empty so it uses viper
-		cmd.Flags().Bool("raw", false, "")
+		cmd := setupCmd()
 
-		// Test may succeed or fail depending on gemini availability
 		err := runContextSend(cmd, []string{testFile})
-		// If it fails, check it's the right kind of error
-		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "gemini") ||
-				strings.Contains(err.Error(), "LLM") ||
-				strings.Contains(err.Error(), "not available") ||
-				strings.Contains(err.Error(), "401") ||
-				strings.Contains(err.Error(), "Incorrect API key"))
-		}
+		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
 	})
 }
 

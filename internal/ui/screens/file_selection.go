@@ -35,7 +35,6 @@ type FileSelectionModel struct {
 
 	maxSizeBytes int64
 	maxSizeStr   string
-	totalTokens  int
 }
 
 func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool, maxSizeStr string) *FileSelectionModel {

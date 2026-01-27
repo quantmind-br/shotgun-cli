@@ -835,7 +835,8 @@ func (m *WizardModel) initStep() tea.Cmd {
 	switch m.step {
 	case StepFileSelection:
 		if m.getFileTree() != nil {
-			m.fileSelection = screens.NewFileSelection(m.getFileTree(), m.getSelectedFiles(), m.wizardConfig.Context.MaxSize)
+			maxSize := m.wizardConfig.Context.MaxSize
+			m.fileSelection = screens.NewFileSelection(m.getFileTree(), m.getSelectedFiles(), maxSize)
 			m.fileSelection.SetSize(m.width, m.height)
 		}
 	case StepTemplateSelection:

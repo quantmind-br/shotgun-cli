@@ -64,38 +64,47 @@ func runLLMStatus(cmd *cobra.Command, args []string) error {
 
 	_, _ = fmt.Fprintln(w, styles.TitleStyle.Render("=== LLM Configuration ==="))
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintf(w, "%s\t%s\n", styles.StatsLabelStyle.Render("Provider:"), styles.StatsValueStyle.Render(string(cfg.Provider)))
-	_, _ = fmt.Fprintf(w, "%s\t%s\n", styles.StatsLabelStyle.Render("Model:"), styles.StatsValueStyle.Render(cfg.Model))
-	_, _ = fmt.Fprintf(w, "%s\t%s\n", styles.StatsLabelStyle.Render("Base URL:"), styles.StatsValueStyle.Render(displayURL(cfg.BaseURL, cfg.Provider)))
-	_, _ = fmt.Fprintf(w, "%s\t%s\n", styles.StatsLabelStyle.Render("API Key:"), styles.StatsValueStyle.Render(cfg.MaskAPIKey()))
-	_, _ = fmt.Fprintf(w, "%s\t%s\n", styles.StatsLabelStyle.Render("Timeout:"), styles.StatsValueStyle.Render(fmt.Sprintf("%ds", cfg.Timeout)))
+
+	label := styles.StatsLabelStyle.Render
+	value := styles.StatsValueStyle.Render
+
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", label("Provider:"), value(string(cfg.Provider)))
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", label("Model:"), value(cfg.Model))
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", label("Base URL:"), value(displayURL(cfg.BaseURL, cfg.Provider)))
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", label("API Key:"), value(cfg.MaskAPIKey()))
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", label("Timeout:"), value(fmt.Sprintf("%ds", cfg.Timeout)))
 
 	_ = w.Flush()
 
-	// Test provider
 	fmt.Println()
 	provider, err := CreateLLMProvider(cfg)
 	if err != nil {
-		fmt.Printf("%s %s\n", styles.StatsLabelStyle.Render("Status:"), styles.ErrorStyle.Render("Not ready - "+err.Error()))
+		statusLabel := label("Status:")
+		statusValue := styles.ErrorStyle.Render("Not ready - " + err.Error())
+		fmt.Printf("%s %s\n", statusLabel, statusValue)
 		return nil
 	}
 
 	if err := provider.ValidateConfig(); err != nil {
-		fmt.Printf("%s %s\n", styles.StatsLabelStyle.Render("Status:"), styles.WarningStyle.Render("Not configured - "+err.Error()))
+		statusLabel := label("Status:")
+		statusValue := styles.WarningStyle.Render("Not configured - " + err.Error())
+		fmt.Printf("%s %s\n", statusLabel, statusValue)
 		return nil
 	}
 
 	if !provider.IsAvailable() {
-		fmt.Printf("%s %s\n", styles.StatsLabelStyle.Render("Status:"), styles.ErrorStyle.Render("Not available"))
+		statusLabel := label("Status:")
+		fmt.Printf("%s %s\n", statusLabel, styles.ErrorStyle.Render("Not available"))
 		return nil
 	}
 
 	if !provider.IsConfigured() {
-		fmt.Printf("%s %s\n", styles.StatsLabelStyle.Render("Status:"), styles.WarningStyle.Render("Not configured"))
+		statusLabel := label("Status:")
+		fmt.Printf("%s %s\n", statusLabel, styles.WarningStyle.Render("Not configured"))
 		return nil
 	}
 
-	fmt.Printf("%s %s\n", styles.StatsLabelStyle.Render("Status:"), styles.SuccessStyle.Render("Ready"))
+	fmt.Printf("%s %s\n", label("Status:"), styles.SuccessStyle.Render("Ready"))
 	return nil
 }
 
