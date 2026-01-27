@@ -37,11 +37,11 @@ Enhance the usability and visual consistency of `shotgun-cli` by implementing a 
 - **Refactored CLI**: `cmd/llm.go`, `cmd/config.go` (styled output).
 
 ### Definition of Done
-- [ ] File Selection screen shows a visual token budget bar that updates with selections.
-- [ ] CLI commands (`llm status`, `config show`) output styled text (colors/bold).
-- [ ] File Tree shows a visual scrollbar instead of "↑ more above" text (only when content exceeds viewport).
-- [ ] No regression in layout on 40x10 terminals.
-- [ ] Progress bar logic in `UsageBar` mirrors existing `review.go` thresholds exactly.
+- [x] File Selection screen shows a visual token budget bar that updates with selections.
+- [x] CLI commands (`llm status`, `config show`) output styled text (colors/bold).
+- [x] File Tree shows a visual scrollbar instead of "↑ more above" text (only when content exceeds viewport).
+- [x] No regression in layout on 40x10 terminals.
+- [x] Progress bar logic in `UsageBar` mirrors existing `review.go` thresholds exactly.
 
 ### Must Have
 - Visual progress bar on File Selection.
@@ -67,10 +67,10 @@ Enhance the usability and visual consistency of `shotgun-cli` by implementing a 
 **CRITICAL**: Verification must cover TUI interaction and visual correctness.
 
 **For TUI changes:**
-- [ ] Run `go run .` (Wizard):
+- [x] Run `go run .` (Wizard):
     - **Step 1 (File Selection)**: Select files until >80% context limit. Verify bar turns yellow/red.
     - **Scrollbar**: Navigate a long directory. Verify scrollbar moves correctly.
-- [ ] Run `go run . llm status` (CLI):
+- [x] Run `go run . llm status` (CLI):
     - Verify output uses colors/bold styles instead of plain text.
 
 ---
@@ -192,8 +192,8 @@ go run . llm status # Check CLI styling
 ```
 
 ### Final Checklist
-- [ ] UsageBar component created and tested.
-- [ ] File Selection screen shows progress bar.
-- [ ] Review screen shows progress bar.
-- [ ] CLI commands are styled.
-- [ ] File tree has working scrollbars.
+- [x] UsageBar component created and tested.
+- [x] File Selection screen shows progress bar.
+- [x] Review screen shows progress bar.
+- [x] CLI commands are styled.
+- [x] File tree has working scrollbars.

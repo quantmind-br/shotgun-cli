@@ -37,11 +37,11 @@ Simplificar a tela de seleção de template removendo o painel de detalhes later
 - `internal/ui/screens/template_selection_test.go` atualizado para nova interface
 
 ### Definition of Done
-- [ ] `go test -race ./internal/ui/screens/...` passa sem falhas
-- [ ] `golangci-lint run ./internal/ui/screens/...` sem erros
-- [ ] Tela renderiza apenas lista de templates (sem painel de detalhes)
-- [ ] Modal de preview (tecla 'v') funciona corretamente
-- [ ] Interface funciona em terminais pequenos (40x10)
+- [x] `go test -race ./internal/ui/screens/...` passa sem falhas
+- [x] `golangci-lint run ./internal/ui/screens/...` sem erros
+- [x] Tela renderiza apenas lista de templates (sem painel de detalhes)
+- [x] Modal de preview (tecla 'v') funciona corretamente
+- [x] Interface funciona em terminais pequenos (40x10)
 
 ### Must Have
 - Lista de templates com estilo atual (cursor, checkmark para selecionado)
@@ -90,7 +90,7 @@ Task 1 (Simplify View) → Task 2 (Remove Dead Code) → Task 3 (Update Tests)
 
 ## TODOs
 
-- [ ] 1. Simplify View() method to render only template list
+- [x] 1. Simplify View() method to render only template list
 
   **What to do**:
   - Remove two-column layout from `View()` method
@@ -126,7 +126,7 @@ Task 1 (Simplify View) → Task 2 (Remove Dead Code) → Task 3 (Update Tests)
 
 ---
 
-- [ ] 2. Remove dead code: renderTemplateDetails and countNonEmptyLines
+- [x] 2. Remove dead code: renderTemplateDetails and countNonEmptyLines
 
   **What to do**:
   - Remove `renderTemplateDetails()` method (lines 289-376)
@@ -162,7 +162,7 @@ Task 1 (Simplify View) → Task 2 (Remove Dead Code) → Task 3 (Update Tests)
 
 ---
 
-- [ ] 3. Update tests to reflect simplified interface
+- [x] 3. Update tests to reflect simplified interface
 
   **What to do**:
   - Update `TestTemplateSelectionViewWithTemplates`: Remove assertions for "Description" and "desc1"
