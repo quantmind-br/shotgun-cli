@@ -10,24 +10,25 @@ shotgun-cli/
 │   ├── template.go               # Template management
 │   ├── diff.go                   # Diff splitting tools
 │   ├── config.go                 # Configuration management
-│   ├── llm.go                    # LLM provider management (NEW)
-│   ├── providers.go              # Provider registry initialization (NEW)
-│   ├── config_llm.go             # LLM configuration helpers (NEW)
+│   ├── llm.go                    # LLM provider management
+│   ├── providers.go              # Provider registry initialization
+│   ├── config_llm.go             # LLM configuration helpers
 │   ├── completion.go             # Shell completion
 │   ├── send.go                   # Send context to LLM
-│   ├── gemini.go                 # Legacy Gemini web integration
 │   └── *_test.go                 # CLI command tests
 │
 ├── internal/
-│   ├── app/                      # Application Layer (NEW)
+│   ├── app/                      # Application Layer
 │   │   ├── service.go            # ContextService - main orchestration
-│   │   ├── context.go            # Service types (GenerateConfig, GenerateResult)
-│   │   ├── providers.go          # Provider initialization
+│   │   ├── context.go            # Service types (GenerateConfig, GenerateResult, LLMSendConfig)
+│   │   ├── config.go             # CLI config types (CLIConfig, ProgressMode)
+│   │   ├── providers.go          # DefaultProviderRegistry initialization
 │   │   └── *_test.go
 │   │
-│   ├── config/                   # Configuration Management (NEW)
+│   ├── config/                   # Configuration Management
 │   │   ├── keys.go               # Configuration key constants
-│   │   └── validator.go          # Config validation logic
+│   │   ├── validator.go          # Config validation logic
+│   │   └── metadata.go           # Config metadata (types, categories, descriptions)
 │   │
 │   ├── core/                     # Core business logic
 │   │   ├── scanner/              # File system scanning
@@ -35,7 +36,7 @@ shotgun-cli/
 │   │   ├── template/             # Template management
 │   │   ├── ignore/               # Gitignore pattern matching
 │   │   ├── tokens/               # Token estimation
-│   │   ├── llm/                  # LLM provider abstraction (NEW)
+│   │   ├── llm/                  # LLM provider abstraction
 │   │   │   ├── provider.go       # Provider interface
 │   │   │   ├── config.go         # LLM config types
 │   │   │   └── registry.go       # Provider registry
@@ -43,16 +44,22 @@ shotgun-cli/
 │   │
 │   ├── ui/                       # TUI components (Bubble Tea)
 │   │   ├── wizard.go             # Main wizard orchestration (WizardModel)
+│   │   ├── config_wizard.go      # Configuration TUI
+│   │   ├── scan_coordinator.go   # File scanning state machine
+│   │   ├── generate_coordinator.go # Context generation state machine
 │   │   ├── screens/              # Individual wizard steps
 │   │   ├── components/           # Reusable UI components
 │   │   └── styles/               # Theme and styling (Lip Gloss)
 │   │
-│   ├── platform/                 # Platform-specific code
-│   │   ├── clipboard/            # Cross-platform clipboard
-│   │   ├── openai/               # OpenAI provider implementation (NEW)
-│   │   ├── anthropic/            # Anthropic provider implementation (NEW)
-│   │   ├── geminiapi/            # Gemini API provider (NEW)
-│   │   └── gemini/               # Gemini web integration (legacy)
+│   ├── platform/                 # Infrastructure implementations
+│   │   ├── openai/               # OpenAI provider implementation
+│   │   ├── anthropic/            # Anthropic provider implementation
+│   │   ├── geminiapi/            # Gemini API provider
+│   │   ├── llmbase/              # Shared LLM base client (Strategy pattern)
+│   │   │   ├── base_client.go    # BaseClient with common Provider logic
+│   │   │   └── sender.go         # Sender interface for provider-specific logic
+│   │   ├── http/                 # Shared HTTP client (JSONClient)
+│   │   └── clipboard/            # Cross-platform clipboard
 │   │
 │   ├── assets/                   # Embedded resources
 │   │   ├── embed.go              # go:embed directive
@@ -73,31 +80,33 @@ The application follows Clean Architecture/Hexagonal Architecture principles:
 
 ### 1. Application Layer (`internal/app/`)
 - **ContextService**: Main orchestration service that coordinates scanning, generation, and LLM operations
-- Provides high-level API: `Generate()`, `GenerateWithProgress()`, `SendToLLM()`
+- Provides high-level API: `Generate()`, `GenerateWithProgress()`, `SendToLLM()`, `SendToLLMWithProgress()`
 - Uses functional options pattern for dependency injection
-- Located in: `internal/app/service.go`
+- **DefaultProviderRegistry**: Unified registry for creating LLM providers
 
 ### 2. Core/Domain Layer (`internal/core/`)
 Pure business logic with no external dependencies:
 - **scanner**: File system scanning with ignore pattern matching
 - **context**: Context generation from file trees
 - **template**: Template loading and rendering
-- **llm**: LLM provider abstraction interface
+- **llm**: LLM provider abstraction interface and registry
 - **tokens**: Token estimation utilities
 - **ignore**: Gitignore-style pattern engine
 - **diff**: Diff splitting utilities
 
-### 3. Infrastructure/Platform Layer (`internal/platform/`, `cmd/`)
+### 3. Infrastructure/Platform Layer (`internal/platform/`)
 External system integrations:
 - **openai**: OpenAI API client
 - **anthropic**: Anthropic/Claude API client
 - **geminiapi**: Google Gemini API client
-- **gemini**: Browser-based Gemini integration
+- **llmbase**: Shared base client implementation
+- **http**: Shared HTTP/JSON client
 - **clipboard**: Cross-platform clipboard operations
 
 ### 4. Configuration Layer (`internal/config/`)
 - Centralized configuration key constants
-- Validation logic
+- Validation logic for all config values
+- Config metadata with types, categories, and descriptions
 
 ### 5. Presentation Layer (`cmd/`, `internal/ui/`)
 - CLI command definitions (Cobra)
@@ -105,22 +114,6 @@ External system integrations:
 - User input handling
 
 ## Key Interfaces
-
-### Scanner Interface (`internal/core/scanner/scanner.go`)
-```go
-type Scanner interface {
-    Scan(ctx context.Context, config ScanConfig) (*FileNode, error)
-    ScanWithProgress(rootPath string, config *ScanConfig, progress chan<- Progress) (*FileNode, error)
-}
-```
-
-### Context Generator (`internal/core/context/generator.go`)
-```go
-type ContextGenerator interface {
-    Generate(files []*scanner.FileNode, config GenerateConfig) (*ContextData, error)
-    GenerateWithProgress(files []*scanner.FileNode, config GenerateConfig, progress chan<- GenProgress) (*ContextData, error)
-}
-```
 
 ### LLM Provider (`internal/core/llm/provider.go`)
 ```go
@@ -135,12 +128,10 @@ type Provider interface {
 ```
 
 ### LLM Base Client (`internal/platform/llmbase/`)
-A shared base implementation for HTTP-based providers that uses the Strategy pattern to minimize code duplication.
+A shared base implementation for HTTP-based providers that uses the Strategy pattern.
 
-- **BaseClient** (`base_client.go`): Implements common logic for `llm.Provider` interface (Name, IsAvailable, IsConfigured, ValidateConfig). It handles HTTP request execution and progress reporting.
-- **Sender** (`sender.go`): Interface for provider-specific logic.
-
-HTTP providers (OpenAI, Anthropic, GeminiAPI) embed `*llmbase.BaseClient` and implement the `llmbase.Sender` interface:
+- **BaseClient** (`base_client.go`): Implements common logic for `llm.Provider` interface
+- **Sender** (`sender.go`): Interface for provider-specific logic
 
 ```go
 type Sender interface {
@@ -153,12 +144,13 @@ type Sender interface {
 }
 ```
 
-### Context Service (`internal/app/service.go`)
+### Context Service (`internal/app/context.go`)
 ```go
 type ContextService interface {
     Generate(ctx context.Context, cfg GenerateConfig) (*GenerateResult, error)
     GenerateWithProgress(ctx context.Context, cfg GenerateConfig, progress ProgressCallback) (*GenerateResult, error)
     SendToLLM(ctx context.Context, content string, provider llm.Provider) (*llm.Result, error)
+    SendToLLMWithProgress(ctx context.Context, content string, cfg LLMSendConfig, progress LLMProgressCallback) (*llm.Result, error)
 }
 ```
 
@@ -178,40 +170,20 @@ type ContextService interface {
 The LLM provider system uses a registry pattern for extensibility:
 
 ```go
-// In cmd/providers.go
-providerRegistry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
+// In internal/app/providers.go
+DefaultProviderRegistry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
     return openai.NewClient(cfg)
 })
 ```
 
-Supported providers:
+Supported providers (3):
 - `ProviderOpenAI`: OpenAI API (GPT-4o, GPT-4, o1, o3)
 - `ProviderAnthropic`: Anthropic API (Claude 4, Claude 3.5)
 - `ProviderGemini`: Google Gemini API
-- `ProviderGeminiWeb`: Browser-based Gemini integration
-
 
 ## TUI Architecture
 
-The TUI Wizard uses the "Model of Models" pattern with dedicated coordinators for asynchronous operations.
-
-### Component Structure
-
-```
-internal/ui/
-├── wizard.go             # Main orchestrator (WizardModel)
-├── scan_coordinator.go   # File scanning state machine
-├── generate_coordinator.go # Context generation state machine
-├── screens/              # Individual wizard steps
-│   ├── file_selection.go
-│   ├── template_selection.go
-│   ├── task_input.go
-│   ├── rules_input.go
-│   └── review.go
-└── components/           # Reusable UI components
-    ├── progress.go
-    └── tree.go
-```
+The TUI Wizard uses the "Model of Models" pattern with dedicated coordinators.
 
 ### Coordinator Responsibilities
 

@@ -23,9 +23,6 @@ dist/
 out/
 bin/
 
-# Application-specific output files
-shotgun-prompt*.md
-
 # Dependency directories
 vendor/
 

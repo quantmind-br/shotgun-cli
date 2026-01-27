@@ -30,7 +30,7 @@ func (m *WizardModel) getSelectedFiles() map[string]bool {
 - `WizardModel` orchestrates all 5 steps
 - Steps defined as constants: `StepFileSelection`, `StepTemplateSelection`, `StepTaskInput`, `StepRulesInput`, `StepReview`
 - Handles navigation between steps and async operations
-- Screen-specific state delegated to screen models (not stored in WizardModel)
+- Screen-specific state delegated to screen models
 
 ### Message Types
 ```go
@@ -44,11 +44,13 @@ GenerationProgressMsg   // Progress during context generation
 GenerationCompleteMsg   // Generation completed
 GenerationErrorMsg      // Generation failed
 
+// LLM messages (provider-agnostic)
+LLMProgressMsg     // Progress during LLM send
+LLMCompleteMsg     // LLM send completed
+LLMErrorMsg        // LLM send failed
+
 // Clipboard
 ClipboardCompleteMsg    // Clipboard copy done
-
-// Gemini integration
-GeminiSendMsg, GeminiProgressMsg, GeminiCompleteMsg, GeminiErrorMsg
 ```
 
 ### Step Handling Pattern
@@ -74,16 +76,6 @@ type FileSelectionModel struct {
 - Directory toggle: `d` key
 
 ### File Tree Component (`internal/ui/components/tree.go`)
-```go
-type FileTreeModel struct {
-    root        *scanner.FileNode
-    selections  map[string]bool
-    expanded    map[string]bool
-    showIgnored bool
-    filter      string
-    // ...
-}
-```
 Key methods:
 - `MoveUp()`, `MoveDown()` - Navigation
 - `ExpandNode()`, `CollapseNode()` - Tree expansion
@@ -102,6 +94,7 @@ Key methods:
 ### Review Screen (`internal/ui/screens/review.go`)
 - Preview of generated content
 - Generation trigger on F8
+- LLM send trigger on F9
 
 ## Styling (`internal/ui/styles/theme.go`)
 - Uses Lip Gloss for styling
@@ -126,13 +119,35 @@ File Selection:
 - F5: Rescan
 ```
 
+## TUI Coordinator Pattern
+
+The wizard uses dedicated coordinators for asynchronous operations in `internal/ui/`:
+
+### ScanCoordinator (`scan_coordinator.go`)
+Manages file system scanning state machine:
+- `Start(rootPath, config)` - Initiates async scan
+- `Poll()` - Checks for progress updates
+- `Result()` - Returns `(*scanner.FileNode, error)`
+
+### GenerateCoordinator (`generate_coordinator.go`)
+Manages context generation state machine:
+- `Start(config)` - Initiates async generation
+- `Poll()` - Checks for progress updates
+- `Result()` - Returns `(string, error)`
+
+### Coordinator Message Flow
+
+1. **Start**: `wizard.Update` calls `coordinator.Start()` → returns `tea.Cmd`
+2. **Poll**: `coordinator.Poll()` checks channels and returns `Batch(Msg, NextPoll)`
+3. **Progress**: UI receives progress messages
+4. **Completion**: Coordinator signals completion, UI retrieves result via `Result()`
+
 ## Async Operations Pattern
 
 Use Bubble Tea commands for async work:
 ```go
 func scanDirectoryCmd(root string, config scanner.ScanConfig) tea.Cmd {
     return func() tea.Msg {
-        // Do async work
         result, err := scanner.Scan(root, config)
         if err != nil {
             return ScanErrorMsg{Error: err}
@@ -142,9 +157,9 @@ func scanDirectoryCmd(root string, config scanner.ScanConfig) tea.Cmd {
 }
 ```
 
-### Iterative Polling Pattern (Scan/Generate)
+### Iterative Polling Pattern
 
-For long-running operations with progress reporting, use iterative polling:
+For long-running operations with progress reporting:
 
 ```go
 func (m *WizardModel) iterativeScanCmd() tea.Cmd {
@@ -166,49 +181,22 @@ func (m *WizardModel) iterativeScanCmd() tea.Cmd {
 }
 ```
 
-**Important:** The `default` case MUST include a `time.Sleep` to yield to the Bubble Tea event loop. Without this, the recursive call creates a busy-loop that blocks the UI, causing the application to appear frozen on large directories.
-
-### Progress Stages
-
-Scanner progress uses stages to indicate current phase:
-- `"counting"` - First pass counting files (no progress numbers yet)
-- `"scanning"` - Second pass building file tree (with progress)
-- `"complete"` - Scan finished
+**Important:** The `default` case MUST include `time.Sleep` to yield to the Bubble Tea event loop.
 
 ## Testing Patterns
 
-### CommandRunner Interface (GeminiWeb)
+### CommandRunner Interface
 
-For deterministic testing of external binary execution (like `geminiweb`), use the `CommandRunner` interface pattern:
+For deterministic testing of external operations:
 
 ```go
-// Production uses DefaultRunner
-type DefaultRunner struct{}
-func (r *DefaultRunner) LookPath(file string) (string, error) {
-    return exec.LookPath(file)
-}
-func (r *DefaultRunner) Run(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error) {
-    cmd := exec.CommandContext(ctx, name, args...)
-    cmd.Stdin = stdin
-    return cmd.Output()
-}
-
-// Tests use MockRunner
 type MockRunner struct {
     LookPathFunc func(file string) (string, error)
     RunFunc      func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, error)
 }
 ```
 
-**Benefits:**
-- Tests don't depend on installed binaries
-- Can simulate error conditions
-- No network calls in tests
-- Deterministic and fast
-
 ### Screen Model Test Helpers
-
-For testing wizard behavior, use the test helper functions:
 
 ```go
 // Set selections via screen model
@@ -219,13 +207,12 @@ func setWizardSelectedFiles(wizard *WizardModel, selections map[string]bool) {
         wizard.fileSelection.SetSelectionsForTest(selections)
     }
 }
-
-// Set task description via screen model  
-func setWizardTaskDesc(wizard *WizardModel, taskDesc string) {
-    if wizard.taskInput == nil {
-        wizard.taskInput = screens.NewTaskInput(taskDesc)
-    } else {
-        wizard.taskInput.SetValueForTest(taskDesc)
-    }
-}
 ```
+
+## Configuration TUI (`internal/ui/config_wizard.go`)
+
+Separate TUI for interactive configuration:
+- Navigate between configuration categories
+- Edit values with real-time validation
+- Toggle boolean settings with Space
+- Save all changes with Ctrl+S

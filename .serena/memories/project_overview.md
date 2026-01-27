@@ -8,7 +8,7 @@ shotgun-cli is a cross-platform CLI tool that generates LLM-optimized codebase c
 - **Headless CLI Mode**: Commands for automation (`context generate`, `template`, `diff`, `config`, `llm`)
 - **Smart File Filtering**: Gitignore-style pattern matching with include/exclude support
 - **Template System**: Multi-source template loading with custom overrides
-- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google Gemini API, and GeminiWeb
+- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google Gemini API
 - **Cross-platform**: Linux, macOS, and Windows support
 
 ## Two Modes of Operation
@@ -28,11 +28,10 @@ shotgun-cli is a cross-platform CLI tool that generates LLM-optimized codebase c
    - `shotgun-cli send` - Send context to LLM
 
 ## LLM Providers
-The tool supports multiple AI providers through a unified interface:
+The tool supports three AI providers through a unified interface:
 - **OpenAI**: GPT-4o, GPT-4, o1, o3 models
 - **Anthropic**: Claude 4, Claude 3.5 Sonnet
 - **Google Gemini API**: Gemini 2.5 Flash, Gemini 2.0 Pro
-- **GeminiWeb**: Browser-based integration (no API key required)
 
 ## Output Format
 Generated context includes:

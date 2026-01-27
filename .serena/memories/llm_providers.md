@@ -2,11 +2,11 @@
 
 ## Overview
 
-shotgun-cli supports multiple LLM providers through a unified interface. The provider abstraction allows easy switching between different AI services while maintaining consistent behavior across the application.
+shotgun-cli supports three LLM providers through a unified interface. All providers use HTTP APIs and share common base infrastructure.
 
 ## Provider Interface
 
-All providers implement the `llm.Provider` interface defined in `internal/core/llm/provider.go`:
+All providers implement `llm.Provider` from `internal/core/llm/provider.go`:
 
 ```go
 type Provider interface {
@@ -21,31 +21,42 @@ type Provider interface {
 
 ## BaseClient Architecture
 
-Most HTTP-based providers (OpenAI, Anthropic, Gemini API) follow a structured architecture using a shared `BaseClient` located in `internal/platform/llmbase/`.
+All HTTP-based providers use a shared `BaseClient` in `internal/platform/llmbase/`:
 
-- **BaseClient**: Implements the `llm.Provider` interface methods that are identical across providers. It handles HTTP request execution using the shared `JSONClient`.
-- **Sender Interface**: Defines the provider-specific strategy (request building, response parsing, endpoints, headers).
+- **BaseClient**: Implements common Provider methods and HTTP execution
+- **Sender Interface**: Provider-specific strategy for request/response handling
 
-Concrete providers embed `*llmbase.BaseClient` and implement the `llmbase.Sender` interface.
+Providers embed `*llmbase.BaseClient` and implement `llmbase.Sender`:
+
+```go
+type Sender interface {
+    BuildRequest(content string) (interface{}, error)
+    ParseResponse(response interface{}, rawJSON []byte) (*llm.Result, error)
+    GetEndpoint() string
+    GetHeaders() map[string]string
+    NewResponse() interface{}
+    GetProviderName() string
+}
+```
 
 ## Supported Providers
 
 ### 1. OpenAI (`ProviderOpenAI`)
 - **Location**: `internal/platform/openai/`
 - **Models**: GPT-4o, GPT-4, o1, o3-mini
-- **API Base**: `https://api.openai.com/v1` (default)
+- **Default Base URL**: `https://api.openai.com/v1`
 - **Configuration**:
   - `llm.provider`: openai
   - `llm.api-key`: Your OpenAI API key
   - `llm.model`: Model name (default: gpt-4o)
-  - `llm.base-url`: Optional custom endpoint (for OpenRouter, Azure, etc.)
+  - `llm.base-url`: Optional custom endpoint
   - `llm.timeout`: Request timeout in seconds
 - **Get API Key**: https://platform.openai.com/api-keys
 
 ### 2. Anthropic (`ProviderAnthropic`)
 - **Location**: `internal/platform/anthropic/`
 - **Models**: Claude 4 Sonnet (20250514), Claude 3.5 Sonnet
-- **API Base**: `https://api.anthropic.com` (default)
+- **Default Base URL**: `https://api.anthropic.com`
 - **Configuration**:
   - `llm.provider`: anthropic
   - `llm.api-key`: Your Anthropic API key
@@ -57,7 +68,7 @@ Concrete providers embed `*llmbase.BaseClient` and implement the `llmbase.Sender
 ### 3. Google Gemini API (`ProviderGemini`)
 - **Location**: `internal/platform/geminiapi/`
 - **Models**: gemini-2.5-flash, gemini-2.0-flash-exp
-- **API Base**: `https://generativelanguage.googleapis.com/v1beta` (default)
+- **Default Base URL**: `https://generativelanguage.googleapis.com/v1beta`
 - **Configuration**:
   - `llm.provider`: gemini
   - `llm.api-key`: Your Gemini API key
@@ -65,111 +76,86 @@ Concrete providers embed `*llmbase.BaseClient` and implement the `llmbase.Sender
   - `llm.timeout`: Request timeout in seconds
 - **Get API Key**: https://aistudio.google.com/app/apikey
 
-### 4. GeminiWeb (`ProviderGeminiWeb`)
-- **Location**: `internal/platform/gemini/`
-- **Description**: Browser-based integration using the `geminiweb` CLI tool
-- **Configuration**:
-  - `llm.provider`: geminiweb
-  - `gemini.enabled`: true
-  - `gemini.binary-path`: Path to geminiweb binary
-- **Setup**:
-  ```bash
-  go install github.com/diogo/geminiweb/cmd/geminiweb@latest
-  geminiweb auto-login
-  ```
-- **Note**: This provider doesn't require an API key but requires the geminiweb tool
-
 ## Provider Registry
 
-Providers are registered in `cmd/providers.go`:
+Providers are registered in `internal/app/providers.go`:
 
 ```go
-providerRegistry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
-    return openai.NewClient(cfg)
-})
+var DefaultProviderRegistry = llm.NewRegistry()
+
+func init() {
+    DefaultProviderRegistry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
+        return openai.NewClient(cfg)
+    })
+    DefaultProviderRegistry.Register(llm.ProviderAnthropic, func(cfg llm.Config) (llm.Provider, error) {
+        return anthropic.NewClient(cfg)
+    })
+    DefaultProviderRegistry.Register(llm.ProviderGemini, func(cfg llm.Config) (llm.Provider, error) {
+        return geminiapi.NewClient(cfg)
+    })
+}
 ```
 
 ## Configuration Keys
 
-All provider configuration uses the `internal/config/keys.go` constants:
+From `internal/config/keys.go`:
 
 ```go
 const (
-    KeyLLMProvider   = "llm.provider"
-    KeyLLMAPIKey     = "llm.api-key"
-    KeyLLMBaseURL    = "llm.base-url"
-    KeyLLMModel      = "llm.model"
-    KeyLLMTimeout    = "llm.timeout"
-    // ...
+    KeyLLMProvider = "llm.provider"
+    KeyLLMAPIKey   = "llm.api-key"
+    KeyLLMBaseURL  = "llm.base-url"
+    KeyLLMModel    = "llm.model"
+    KeyLLMTimeout  = "llm.timeout"
 )
 ```
 
-## Configuration Commands
+## CLI Commands
 
 ### Set Provider
 ```bash
 shotgun-cli config set llm.provider openai
 shotgun-cli config set llm.provider anthropic
 shotgun-cli config set llm.provider gemini
-shotgun-cli config set llm.provider geminiweb
 ```
 
-### Set API Key
+### LLM Management Commands
 ```bash
-shotgun-cli config set llm.api-key YOUR_API_KEY
+shotgun-cli llm status   # Show current config and status
+shotgun-cli llm doctor   # Run diagnostics
+shotgun-cli llm list     # List all supported providers
 ```
 
-### Set Model
-```bash
-shotgun-cli config set llm.model gpt-4o
-```
+## Using Providers in Code
 
-### Set Custom Base URL (for OpenRouter, Azure, etc.)
-```bash
-shotgun-cli config set llm.base-url https://openrouter.ai/api/v1
-```
-
-## LLM Management Commands
-
-### Check Status
-```bash
-shotgun-cli llm status
-```
-Shows current provider, model, API key status, and readiness.
-
-### Run Diagnostics
-```bash
-shotgun-cli llm doctor
-```
-Comprehensive diagnostics with specific guidance for fixing issues.
-
-### List Providers
-```bash
-shotgun-cli llm list
-```
-Shows all supported providers with descriptions.
-
-## Usage in Code
-
-### Creating a Provider
+### Via ContextService (Recommended)
 ```go
-import "github.com/quantmind-br/shotgun-cli/cmd"
-
-cfg := BuildLLMConfig()
-provider, err := CreateLLMProvider(cfg)
+svc := app.NewContextService()
+result, err := svc.SendToLLMWithProgress(ctx, content, app.LLMSendConfig{
+    Provider:     llm.ProviderOpenAI,
+    APIKey:       "your-api-key",
+    Model:        "gpt-4o",
+    SaveResponse: true,
+    OutputPath:   "./response.md",
+}, func(stage string) {
+    fmt.Printf("Progress: %s\n", stage)
+})
 ```
 
-### Using ContextService
+### Via Registry Directly
 ```go
-import "github.com/quantmind-br/shotgun-cli/internal/app"
-
-service := app.NewContextService()
-result, err := service.SendToLLM(ctx, content, provider)
+cfg := llm.Config{
+    Provider: llm.ProviderOpenAI,
+    APIKey:   "your-key",
+    Model:    "gpt-4o",
+}
+provider, err := app.DefaultProviderRegistry.Create(cfg.Provider, cfg)
+result, err := provider.Send(ctx, content)
 ```
 
 ## Provider Result
 
-All providers return a `llm.Result`:
+All providers return `*llm.Result`:
 
 ```go
 type Result struct {
@@ -184,7 +170,7 @@ type Result struct {
 
 ## Custom Endpoints
 
-The OpenAI-compatible interface allows using custom endpoints:
+OpenAI-compatible endpoints work with the OpenAI provider:
 
 ### OpenRouter
 ```bash
@@ -201,15 +187,10 @@ shotgun-cli config set llm.base-url https://YOUR_RESOURCE.openai.azure.com/opena
 shotgun-cli config set llm.api-key YOUR_AZURE_KEY
 ```
 
-## Testing Provider Configuration
+## Adding a New Provider
 
-```bash
-# Check if configured correctly
-shotgun-cli llm status
-
-# Run diagnostics
-shotgun-cli llm doctor
-
-# Test with actual send
-shotgun-cli send --provider openai myfile.md
-```
+1. Create package in `internal/platform/<provider>/`
+2. Create struct embedding `*llmbase.BaseClient`
+3. Implement `llmbase.Sender` interface (6 methods)
+4. Register in `internal/app/providers.go`
+5. Add provider constant to `internal/core/llm/provider.go`

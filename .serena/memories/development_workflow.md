@@ -15,6 +15,9 @@ make install
 # Install system-wide (requires sudo)
 make install-system
 
+# Uninstall from system and GOPATH
+make uninstall
+
 # Clean build artifacts
 make clean
 ```
@@ -44,6 +47,9 @@ go test ./internal/core/llm/...
 
 # Run single test
 go test -run TestFunctionName ./pkg
+
+# Verbose output
+go test -v ./...
 ```
 
 ## Code Quality
@@ -52,7 +58,7 @@ go test -run TestFunctionName ./pkg
 # Format code
 make fmt
 
-# Run golangci-lint (config: .golangci.yml)
+# Run golangci-lint (config: .golangci-local.yml)
 make lint
 
 # Run go vet
@@ -62,19 +68,26 @@ make vet
 make fmt lint vet test
 ```
 
+## Coverage Requirements
+
+- **85% minimum** (enforced by CI)
+- Target **90%+ for new code**
+- Check coverage: `go tool cover -func=coverage.out | grep total`
+- HTML report: `go tool cover -html=coverage.out`
+
 ## Release
 
 ```bash
 # Build release artifacts with Goreleaser
-make release
+make release VERSION=1.2.3
+
+# Create and push tag
+make release-tag VERSION=1.2.3
+make release-push VERSION=1.2.3
+
+# Test release locally
+make release-snapshot
 ```
-
-## Project Configuration Files
-
-- `.golangci.yml` - Linter configuration
-- `.goreleaser.yaml` - Release automation
-- `.shotgunignore` - Patterns to ignore when using shotgun-cli on itself
-- `Makefile` - Build automation
 
 ## Dependencies
 
@@ -86,53 +99,46 @@ make deps
 go mod tidy
 ```
 
-## Key Go Commands
-
-```bash
-# Generate (if using go:generate)
-make generate
-
-# Verify module checksums
-go mod verify
-```
-
 ## CLI Commands During Development
 
 ### Testing LLM Integration
 ```bash
 # Check LLM status
-./shotgun-cli llm status
+./build/shotgun-cli llm status
 
 # Run LLM diagnostics
-./shotgun-cli llm doctor
+./build/shotgun-cli llm doctor
 
 # List available providers
-./shotgun-cli llm list
+./build/shotgun-cli llm list
 
 # Send context to LLM
-./shotgun-cli send context.md --provider openai
+./build/shotgun-cli send context.md --provider openai
 ```
 
 ### Testing Context Generation
 ```bash
-# Generate context interactively
-./shotgun-cli
+# Generate context interactively (TUI)
+./build/shotgun-cli
 
 # Generate context from CLI
-./shotgun-cli context generate --path . --output context.md
+./build/shotgun-cli context generate --path . --output context.md
 
 # List templates
-./shotgun-cli template list
+./build/shotgun-cli template list
 ```
 
 ### Configuration Management
 ```bash
 # Show all configuration
-./shotgun-cli config show
+./build/shotgun-cli config show
+
+# Interactive config TUI
+./build/shotgun-cli config
 
 # Set configuration values
-./shotgun-cli config set llm.provider openai
-./shotgun-cli config set llm.api-key sk-...
+./build/shotgun-cli config set llm.provider openai
+./build/shotgun-cli config set llm.api-key sk-...
 ```
 
 ## Development Tips
@@ -141,19 +147,13 @@ go mod verify
 2. **E2E tests**: Located in `test/e2e/`, tests CLI commands
 3. **Embedded templates**: Add new templates to `internal/assets/templates/`
 4. **Config defaults**: Set in `cmd/root.go` → `setConfigDefaults()`
-5. **Provider registry**: Add new providers in `cmd/providers.go`
+5. **Provider registry**: Register new providers in `internal/app/providers.go`
 
 ## Debugging
 
 ### Enable Debug Logging
 ```bash
-SHOTGUN_LOG_LEVEL=debug ./shotgun-cli
-```
-
-### Test with Specific Directory
-```bash
-cd /path/to/test/directory
-./shotgun-cli
+SHOTGUN_LOG_LEVEL=debug ./build/shotgun-cli
 ```
 
 ### Run with Race Detector
@@ -161,25 +161,30 @@ cd /path/to/test/directory
 make test-race
 ```
 
-### Generate Coverage Report
+## Environment Variables
+
+All config keys can be set via environment variables with `SHOTGUN_` prefix:
+
 ```bash
-make coverage
-go tool cover -html=coverage.out
+export SHOTGUN_LLM_PROVIDER=openai
+export SHOTGUN_LLM_API_KEY=sk-...
+export SHOTGUN_LLM_MODEL=gpt-4o
 ```
 
 ## Key Development Areas
 
 ### Adding a New LLM Provider
 1. Create provider package in `internal/platform/<provider>/`
-2. Implement `llm.Provider` interface
-3. Register in `cmd/providers.go`
-4. Add to `internal/core/llm/provider.go` `AllProviders()`
+2. Embed `*llmbase.BaseClient` and implement `llmbase.Sender` interface
+3. Register in `internal/app/providers.go`
+4. Add provider constant to `internal/core/llm/provider.go` `AllProviders()`
 5. Update documentation
 
 ### Adding a New Configuration Key
 1. Add constant to `internal/config/keys.go`
-2. Add to default config in `cmd/root.go`
-3. Update documentation
+2. Add metadata to `internal/config/metadata.go`
+3. Add validation to `internal/config/validator.go`
+4. Add to default config in `cmd/root.go`
 
 ### Adding a New CLI Command
 1. Create `cmd/<command>.go`
@@ -193,9 +198,7 @@ go tool cover -html=coverage.out
 - `$GOPATH/bin/shotgun-cli` - User installation
 - `/usr/local/bin/shotgun-cli` - System installation
 
-## Application Layer Service
-
-When working with the application layer (`internal/app/`):
+## Application Layer Service Usage
 
 ```go
 // Create service with defaults
@@ -205,21 +208,21 @@ service := app.NewContextService()
 service := app.NewContextService(
     app.WithScanner(customScanner),
     app.WithGenerator(customGenerator),
+    app.WithRegistry(customRegistry),
 )
 
 // Generate context
 result, err := service.Generate(ctx, cfg)
 
-// Send to LLM
-llmResult, err := service.SendToLLM(ctx, content, provider)
+// Send to LLM with progress
+result, err := service.SendToLLMWithProgress(ctx, content, llmConfig, progressCallback)
 ```
 
-## Environment Variables
+## Project Configuration Files
 
-All config keys can be set via environment variables with `SHOTGUN_` prefix:
-
-```bash
-export SHOTGUN_LLM_PROVIDER=openai
-export SHOTGUN_LLM_API_KEY=sk-...
-export SHOTGUN_LLM_MODEL=gpt-4o
-```
+- `.golangci-local.yml` - Local linter configuration
+- `.golangci.yml` - CI linter configuration
+- `.goreleaser.yaml` - Release automation
+- `.shotgunignore` - Patterns to ignore when scanning
+- `Makefile` - Build automation
+- `go.mod` - Go module definition (Go 1.24)

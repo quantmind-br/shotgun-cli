@@ -1,3 +1,11 @@
+# PROJECT KNOWLEDGE BASE
+
+**Generated:** 2026-01-26T20:48:00Z  
+**Commit:** c93b9c6  
+**Branch:** main
+
+---
+
 # Agent Instructions
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
