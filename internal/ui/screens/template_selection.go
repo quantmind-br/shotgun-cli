@@ -145,36 +145,8 @@ func (m *TemplateSelectionModel) View() string {
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Create two-column layout
-	listWidth := 35
-	detailsWidth := m.width - listWidth - 5
-	if detailsWidth < 30 {
-		detailsWidth = 30
-	}
-
-	// Render template list
-	listContent := m.renderTemplateList()
-	detailsContent := m.renderTemplateDetails()
-
-	// Side by side layout
-	listStyle := lipgloss.NewStyle().
-		Width(listWidth).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.BorderColor).
-		Padding(0, 1)
-
-	detailsStyle := lipgloss.NewStyle().
-		Width(detailsWidth).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.SecondaryColor).
-		Padding(0, 1)
-
-	listBox := listStyle.Render(listContent)
-	detailsBox := detailsStyle.Render(detailsContent)
-
-	// Join horizontally
-	combined := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailsBox)
-	content.WriteString(combined)
+	// Render template list directly
+	content.WriteString(m.renderTemplateList())
 
 	footer := m.renderFooter()
 	content.WriteString("\n\n")
@@ -286,95 +258,6 @@ func (m *TemplateSelectionModel) formatTemplateLine(i int) string {
 	return line
 }
 
-func (m *TemplateSelectionModel) renderTemplateDetails() string {
-	if m.cursor < 0 || m.cursor >= len(m.templates) {
-		return "Select a template to see details"
-	}
-
-	selectedTemplate := m.templates[m.cursor]
-	var content strings.Builder
-
-	// Template name
-	nameLabel := styles.SubtitleStyle.Render("Template: ")
-	nameValue := styles.StatsValueStyle.Render(selectedTemplate.Name)
-	content.WriteString(nameLabel)
-	content.WriteString(nameValue)
-	content.WriteString("\n")
-	content.WriteString(styles.RenderSeparator(40))
-	content.WriteString("\n\n")
-
-	// Description
-	descLabel := styles.TitleStyle.Render("📋 Description")
-	content.WriteString(descLabel)
-	content.WriteString("\n")
-	descText := lipgloss.NewStyle().Foreground(styles.TextColor).Render(selectedTemplate.Description)
-	content.WriteString(descText)
-	content.WriteString("\n\n")
-
-	// Required variables
-	if len(selectedTemplate.RequiredVars) > 0 {
-		varsLabel := styles.TitleStyle.Render("🔧 Required Variables")
-		content.WriteString(varsLabel)
-		content.WriteString("\n")
-		for _, variable := range selectedTemplate.RequiredVars {
-			varStyle := lipgloss.NewStyle().Foreground(styles.Nord15)
-			bullet := lipgloss.NewStyle().Foreground(styles.MutedColor).Render("  • ")
-			content.WriteString(bullet)
-			content.WriteString(varStyle.Render(variable))
-			content.WriteString("\n")
-		}
-		content.WriteString("\n")
-	}
-
-	if selectedTemplate.Content != "" {
-		previewLabel := styles.TitleStyle.Render("👁 Preview")
-		content.WriteString(previewLabel)
-		content.WriteString("\n")
-
-		lines := strings.Split(selectedTemplate.Content, "\n")
-
-		usedLines := 12
-		if len(selectedTemplate.RequiredVars) > 0 {
-			usedLines += len(selectedTemplate.RequiredVars) + 2
-		}
-
-		availableHeight := m.height - usedLines
-		maxPreviewLines := 8
-		if availableHeight > maxPreviewLines {
-			maxPreviewLines = availableHeight
-			if maxPreviewLines > 15 {
-				maxPreviewLines = 15
-			}
-		}
-
-		previewLines := 0
-		for _, line := range lines {
-			if previewLines >= maxPreviewLines {
-				break
-			}
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" {
-				if len(trimmed) > 50 {
-					trimmed = trimmed[:47] + "..."
-				}
-				lineStyled := styles.CodeStyle.Render("  " + trimmed)
-				content.WriteString(lineStyled)
-				content.WriteString("\n")
-				previewLines++
-			}
-		}
-
-		remainingLines := countNonEmptyLines(lines) - previewLines
-		if remainingLines > 0 {
-			moreLines := lipgloss.NewStyle().Foreground(styles.MutedColor).Italic(true)
-			hint := moreLines.Render(fmt.Sprintf("  ... (%d more lines) [Press 'v' to view full]", remainingLines))
-			content.WriteString(hint)
-		}
-	}
-
-	return content.String()
-}
-
 func (m *TemplateSelectionModel) renderFooter() string {
 	line1 := []string{
 		"↑/↓: Navigate",
@@ -467,16 +350,6 @@ func (m *TemplateSelectionModel) scrollToEnd() {
 		maxScroll = 0
 	}
 	m.previewScrollY = maxScroll
-}
-
-func countNonEmptyLines(lines []string) int {
-	count := 0
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			count++
-		}
-	}
-	return count
 }
 
 func (m *TemplateSelectionModel) renderFullPreviewModal() string {
