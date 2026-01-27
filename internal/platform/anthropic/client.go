@@ -24,39 +24,17 @@ type Client struct {
 // NewClient creates a new Anthropic client with the given configuration.
 // It validates the API key and sets default values for BaseURL, Model, MaxTokens, and Timeout if not provided.
 func NewClient(cfg llm.Config) (*Client, error) {
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("api key is required")
+	base, err := llmbase.NewBaseClientWithDefaults(cfg, llmbase.DefaultConfig{
+		BaseURL:   defaultBaseURL,
+		Model:     "claude-sonnet-4-20250514",
+		MaxTokens: defaultMaxTokens,
+		Timeout:   300 * time.Second,
+	}, "Anthropic")
+	if err != nil {
+		return nil, err
 	}
 
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		baseURL = defaultBaseURL
-	}
-
-	timeout := time.Duration(cfg.Timeout) * time.Second
-	if timeout == 0 {
-		timeout = 300 * time.Second
-	}
-
-	model := cfg.Model
-	if model == "" {
-		model = "claude-sonnet-4-20250514"
-	}
-
-	maxTokens := cfg.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = defaultMaxTokens
-	}
-
-	return &Client{
-		BaseClient: llmbase.NewBaseClient(llmbase.Config{
-			APIKey:    cfg.APIKey,
-			BaseURL:   baseURL,
-			Model:     model,
-			MaxTokens: maxTokens,
-			Timeout:   timeout,
-		}, "Anthropic"),
-	}, nil
+	return &Client{BaseClient: base}, nil
 }
 
 // Send sends a content string to the Anthropic API and returns the result.

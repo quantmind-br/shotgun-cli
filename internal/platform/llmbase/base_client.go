@@ -28,6 +28,14 @@ type Config struct {
 	Timeout   time.Duration
 }
 
+// DefaultConfig holds provider-specific default values.
+type DefaultConfig struct {
+	BaseURL   string
+	Model     string
+	MaxTokens int
+	Timeout   time.Duration
+}
+
 // NewBaseClient creates a new BaseClient with the given configuration.
 func NewBaseClient(cfg Config, providerName string) *BaseClient {
 	timeout := cfg.Timeout
@@ -45,6 +53,48 @@ func NewBaseClient(cfg Config, providerName string) *BaseClient {
 		MaxTokens:    cfg.MaxTokens,
 		ProviderName: providerName,
 	}
+}
+
+// NewBaseClientWithDefaults creates a BaseClient from llm.Config with provider defaults applied.
+// This factory validates the API key and applies default values for BaseURL, Model, MaxTokens, and Timeout.
+func NewBaseClientWithDefaults(cfg llm.Config, defaults DefaultConfig, providerName string) (*BaseClient, error) {
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("api key is required")
+	}
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = defaults.BaseURL
+	}
+
+	timeout := time.Duration(cfg.Timeout) * time.Second
+	if timeout == 0 {
+		timeout = defaults.Timeout
+		if timeout == 0 {
+			timeout = 300 * time.Second
+		}
+	}
+
+	model := cfg.Model
+	if model == "" {
+		model = defaults.Model
+	}
+
+	maxTokens := cfg.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = defaults.MaxTokens
+	}
+
+	return &BaseClient{
+		JSONClient: platformhttp.NewJSONClient(platformhttp.ClientConfig{
+			BaseURL: baseURL,
+			Timeout: timeout,
+		}),
+		APIKey:       cfg.APIKey,
+		Model:        model,
+		MaxTokens:    maxTokens,
+		ProviderName: providerName,
+	}, nil
 }
 
 // Name returns the provider name.
