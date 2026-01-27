@@ -5,33 +5,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 )
 
 // mockGenerator is a test double for ContextGenerator
 type mockGenerator struct {
-	generateFunc               func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error)
-	generateWithProgressFunc   func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error)
-	generateWithProgressExFunc func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error)
+	generateFunc               func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error)
+	generateWithProgressFunc   func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error)
+	generateWithProgressExFunc func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error)
 }
 
-func (m *mockGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+func (m *mockGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 	if m.generateFunc != nil {
 		return m.generateFunc(root, selections, config)
 	}
 	return "", nil
 }
 
-func (m *mockGenerator) GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error) {
+func (m *mockGenerator) GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error) {
 	if m.generateWithProgressFunc != nil {
 		return m.generateWithProgressFunc(root, selections, config, progress)
 	}
 	return "", nil
 }
 
-func (m *mockGenerator) GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error) {
+func (m *mockGenerator) GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error) {
 	if m.generateWithProgressExFunc != nil {
 		return m.generateWithProgressExFunc(root, selections, config, progress)
 	}
@@ -59,7 +59,7 @@ func TestGenerateCoordinator_Start(t *testing.T) {
 	t.Parallel()
 
 	mockGen := &mockGenerator{
-		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 			return "generated content", nil
 		},
 	}
@@ -100,11 +100,11 @@ func TestGenerateCoordinator_Poll_DuringGeneration(t *testing.T) {
 	mockGen := &mockGenerator{}
 	coord := NewGenerateCoordinator(mockGen)
 
-	coord.progressCh = make(chan context.GenProgress, 10)
+	coord.progressCh = make(chan contextgen.GenProgress, 10)
 	coord.done = make(chan bool)
 
 	go func() {
-		coord.progressCh <- context.GenProgress{Stage: "testing", Message: "working"}
+		coord.progressCh <- contextgen.GenProgress{Stage: "testing", Message: "working"}
 	}()
 
 	cmd := coord.Poll()
@@ -118,7 +118,7 @@ func TestGenerateCoordinator_Result_Success(t *testing.T) {
 
 	expectedContent := "final result"
 	mockGen := &mockGenerator{
-		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 			return expectedContent, nil
 		},
 	}
@@ -154,7 +154,7 @@ func TestGenerateCoordinator_Result_Error(t *testing.T) {
 
 	expectedErr := fmt.Errorf("generation failed")
 	mockGen := &mockGenerator{
-		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 			return "", expectedErr
 		},
 	}

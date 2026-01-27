@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/stretchr/testify/assert"
@@ -31,15 +31,15 @@ type mockGenerator struct {
 	err     error
 }
 
-func (m *mockGenerator) Generate(tree *scanner.FileNode, selections map[string]bool, config ctxgen.GenerateConfig) (string, error) {
+func (m *mockGenerator) Generate(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 	return m.content, m.err
 }
 
-func (m *mockGenerator) GenerateWithProgress(tree *scanner.FileNode, selections map[string]bool, config ctxgen.GenerateConfig, progress func(string)) (string, error) {
+func (m *mockGenerator) GenerateWithProgress(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error) {
 	return m.content, m.err
 }
 
-func (m *mockGenerator) GenerateWithProgressEx(tree *scanner.FileNode, selections map[string]bool, config ctxgen.GenerateConfig, progress func(ctxgen.GenProgress)) (string, error) {
+func (m *mockGenerator) GenerateWithProgressEx(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error) {
 	return m.content, m.err
 }
 

@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/app"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
@@ -156,7 +156,7 @@ func NewWizard(
 		contextService:      svc,
 		progressComponent:   components.NewProgress(),
 		scanCoordinator:     NewScanCoordinator(scanner.NewFileSystemScanner()),
-		generateCoordinator: NewGenerateCoordinator(context.NewDefaultContextGenerator()),
+		generateCoordinator: NewGenerateCoordinator(contextgen.NewDefaultContextGenerator()),
 	}
 }
 

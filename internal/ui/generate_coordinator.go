@@ -4,7 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
@@ -27,22 +27,22 @@ type GenerateConfig struct {
 }
 
 type GenerateCoordinator struct {
-	generator  context.ContextGenerator
+	generator  contextgen.ContextGenerator
 	config     *GenerateConfig
-	progressCh chan context.GenProgress
+	progressCh chan contextgen.GenProgress
 	done       chan bool
 	content    string
 	genErr     error
 	started    bool
 }
 
-func NewGenerateCoordinator(gen context.ContextGenerator) *GenerateCoordinator {
+func NewGenerateCoordinator(gen contextgen.ContextGenerator) *GenerateCoordinator {
 	return &GenerateCoordinator{generator: gen}
 }
 
 func (c *GenerateCoordinator) Start(cfg *GenerateConfig) tea.Cmd {
 	c.config = cfg
-	c.progressCh = make(chan context.GenProgress, 100)
+	c.progressCh = make(chan contextgen.GenProgress, 100)
 	c.done = make(chan bool)
 	c.started = false
 	c.content = ""
@@ -126,8 +126,8 @@ func (c *GenerateCoordinator) schedulePoll() tea.Cmd {
 	})
 }
 
-func (c *GenerateCoordinator) buildGeneratorConfig() *context.GenerateConfig {
-	return &context.GenerateConfig{
+func (c *GenerateCoordinator) buildGeneratorConfig() *contextgen.GenerateConfig {
+	return &contextgen.GenerateConfig{
 		TemplateVars: map[string]string{
 			"TASK":           c.config.TaskDesc,
 			"RULES":          c.config.Rules,

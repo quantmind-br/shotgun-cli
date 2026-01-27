@@ -9,12 +9,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/quantmind-br/shotgun-cli/internal/app"
-	"github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
+	"github.com/stretchr/testify/require"
 )
 
 type mockContextService struct {
@@ -61,26 +62,26 @@ func (m *wizardTestMockScanner) ScanWithProgress(rootPath string, config *scanne
 
 // wizardTestMockGenerator is a test double for ContextGenerator
 type wizardTestMockGenerator struct {
-	generateFunc               func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error)
-	generateWithProgressFunc   func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error)
-	generateWithProgressExFunc func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error)
+	generateFunc               func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error)
+	generateWithProgressFunc   func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error)
+	generateWithProgressExFunc func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error)
 }
 
-func (m *wizardTestMockGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+func (m *wizardTestMockGenerator) Generate(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 	if m.generateFunc != nil {
 		return m.generateFunc(root, selections, config)
 	}
 	return "", nil
 }
 
-func (m *wizardTestMockGenerator) GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(string)) (string, error) {
+func (m *wizardTestMockGenerator) GenerateWithProgress(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error) {
 	if m.generateWithProgressFunc != nil {
 		return m.generateWithProgressFunc(root, selections, config, progress)
 	}
 	return "", nil
 }
 
-func (m *wizardTestMockGenerator) GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig, progress func(context.GenProgress)) (string, error) {
+func (m *wizardTestMockGenerator) GenerateWithProgressEx(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error) {
 	if m.generateWithProgressExFunc != nil {
 		return m.generateWithProgressExFunc(root, selections, config, progress)
 	}
@@ -188,7 +189,7 @@ func TestWizardHandlesGenerationLifecycle(t *testing.T) {
 	tempDir := t.TempDir()
 	wizard := NewWizard(tempDir, &scanner.ScanConfig{}, nil, nil)
 	mockGen := &wizardTestMockGenerator{
-		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config context.GenerateConfig) (string, error) {
+		generateFunc: func(root *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
 			return "generated content", nil
 		},
 	}
@@ -2528,4 +2529,47 @@ func TestWizard_isTerminalTooSmall(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWizard_F9KeyPress_TriggersSendToLLM(t *testing.T) {
+	t.Parallel()
+
+	// Setup wizard in correct state
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, &WizardConfig{
+		LLM: LLMConfig{
+			Provider: "gemini",
+			APIKey:   "test-key",
+			Model:    "test-model",
+		},
+	}, nil)
+
+	// Set state to Review with generated content
+	wizard.step = StepReview
+	wizard.generatedContent = "test content"
+
+	// Simulate F9 key press
+	f9Msg := tea.KeyMsg{Type: tea.KeyF9}
+	_, cmd := wizard.Update(f9Msg)
+
+	require.NotNil(t, cmd, "F9 should return a command after generation")
+	require.True(t, wizard.llmSending, "llmSending should be true after F9")
+}
+
+func TestWizard_F9KeyPress_NoContentDoesNothing(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, &WizardConfig{
+		LLM: LLMConfig{
+			Provider: "gemini",
+			APIKey:   "test-key",
+		},
+	}, nil)
+
+	wizard.step = StepReview
+	wizard.generatedContent = "" // No content
+
+	f9Msg := tea.KeyMsg{Type: tea.KeyF9}
+	_, _ = wizard.Update(f9Msg)
+
+	require.False(t, wizard.llmSending, "llmSending should remain false when no content")
 }

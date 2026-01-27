@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	ctxgen "github.com/quantmind-br/shotgun-cli/internal/core/context"
+	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
@@ -17,7 +17,7 @@ import (
 // generator, and LLM provider components.
 type DefaultContextService struct {
 	scanner   scanner.Scanner
-	generator ctxgen.ContextGenerator
+	generator contextgen.ContextGenerator
 	registry  *llm.Registry
 }
 
@@ -29,7 +29,7 @@ type ServiceOption func(*DefaultContextService)
 func NewContextService(opts ...ServiceOption) *DefaultContextService {
 	svc := &DefaultContextService{
 		scanner:   scanner.NewFileSystemScanner(),
-		generator: ctxgen.NewDefaultContextGenerator(),
+		generator: contextgen.NewDefaultContextGenerator(),
 		registry:  DefaultProviderRegistry,
 	}
 	for _, opt := range opts {
@@ -53,7 +53,7 @@ func WithScanner(s scanner.Scanner) ServiceOption {
 }
 
 // WithGenerator configures the service to use a specific context generator implementation.
-func WithGenerator(g ctxgen.ContextGenerator) ServiceOption {
+func WithGenerator(g contextgen.ContextGenerator) ServiceOption {
 	return func(svc *DefaultContextService) {
 		svc.generator = g
 	}
@@ -128,7 +128,7 @@ func (s *DefaultContextService) GenerateWithProgress(
 
 	report("generating", "Generating context...", 0, 0)
 
-	genConfig := ctxgen.GenerateConfig{
+	genConfig := contextgen.GenerateConfig{
 		MaxTotalSize:   cfg.MaxSize,
 		TemplateVars:   cfg.TemplateVars,
 		Template:       cfg.Template,
@@ -139,7 +139,7 @@ func (s *DefaultContextService) GenerateWithProgress(
 
 	var content string
 	if progress != nil {
-		content, err = s.generator.GenerateWithProgressEx(tree, selections, genConfig, func(p ctxgen.GenProgress) {
+		content, err = s.generator.GenerateWithProgressEx(tree, selections, genConfig, func(p contextgen.GenProgress) {
 			report("generating", p.Message, 0, 0)
 		})
 	} else {
