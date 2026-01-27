@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,6 +12,7 @@ const scanPollInterval = 50 * time.Millisecond
 
 // ScanCoordinator manages the file scanning state machine.
 type ScanCoordinator struct {
+	mu         sync.Mutex
 	scanner    scanner.Scanner
 	rootPath   string
 	config     *scanner.ScanConfig
@@ -71,11 +73,15 @@ func (c *ScanCoordinator) Poll() tea.Cmd {
 
 // Result returns the scan result and any error that occurred.
 func (c *ScanCoordinator) Result() (*scanner.FileNode, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.result, c.scanErr
 }
 
 // IsComplete checks if the scan has finished (either successfully or with an error).
 func (c *ScanCoordinator) IsComplete() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.result != nil || c.scanErr != nil
 }
 
@@ -95,8 +101,10 @@ func (c *ScanCoordinator) iterativeScanCmd() tea.Cmd {
 					c.config,
 					c.progressCh,
 				)
+				c.mu.Lock()
 				c.result = tree
 				c.scanErr = err
+				c.mu.Unlock()
 			}()
 		}
 

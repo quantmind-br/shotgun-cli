@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,6 +28,7 @@ type GenerateConfig struct {
 }
 
 type GenerateCoordinator struct {
+	mu         sync.Mutex
 	generator  contextgen.ContextGenerator
 	config     *GenerateConfig
 	progressCh chan contextgen.GenProgress
@@ -78,10 +80,14 @@ func (c *GenerateCoordinator) Poll() tea.Cmd {
 }
 
 func (c *GenerateCoordinator) Result() (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.content, c.genErr
 }
 
 func (c *GenerateCoordinator) IsComplete() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.content != "" || c.genErr != nil
 }
 
@@ -102,8 +108,10 @@ func (c *GenerateCoordinator) iterativeGenerateCmd() tea.Cmd {
 					c.config.Selections,
 					genConfig,
 				)
+				c.mu.Lock()
 				c.content = content
 				c.genErr = err
+				c.mu.Unlock()
 			}()
 		}
 
