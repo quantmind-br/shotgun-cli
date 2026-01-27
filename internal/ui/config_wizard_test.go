@@ -20,8 +20,8 @@ func TestNewConfigWizard(t *testing.T) {
 	assert.False(t, wizard.ConfirmingQuit())
 	assert.Empty(t, wizard.SavedMessage())
 	assert.Empty(t, wizard.ErrorMessage())
-	assert.Len(t, wizard.categories, 6)
-	assert.Len(t, wizard.categoryScreens, 6)
+	assert.Len(t, wizard.categories, 5)
+	assert.Len(t, wizard.categoryScreens, 5)
 }
 
 func TestConfigWizard_Init(t *testing.T) {
@@ -83,12 +83,12 @@ func TestConfigWizard_CategoryNavigation_Wrap(t *testing.T) {
 	wizard.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 
 	wizard.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	assert.Equal(t, 5, wizard.ActiveCategory())
+	assert.Equal(t, 4, wizard.ActiveCategory())
 
 	wizard.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, 0, wizard.ActiveCategory())
 
-	wizard.activeCategory = 5
+	wizard.activeCategory = 4
 	wizard.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, 0, wizard.ActiveCategory())
 }

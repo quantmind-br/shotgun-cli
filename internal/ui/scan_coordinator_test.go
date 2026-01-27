@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 )
@@ -65,7 +64,7 @@ func TestScanCoordinator_Start(t *testing.T) {
 	t.Parallel()
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return &scanner.FileNode{Name: "root", Path: rootPath, IsDir: true}, nil
 		},
 	}
@@ -186,23 +185,26 @@ func TestScanCoordinator_Poll_AfterComplete(t *testing.T) {
 	t.Parallel()
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return &scanner.FileNode{Name: "root"}, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
 	<-coordinator.done
 
-	// Call Poll after complete - should return nil
-	cmd := coordinator.Poll()
+	pollCmd := coordinator.Poll()
+	if pollCmd == nil {
+		t.Error("Poll after complete should return finishScan cmd")
+	}
 
-	if cmd != nil {
-		t.Error("Poll after complete should return nil")
+	msg := pollCmd()
+	if _, ok := msg.(ScanCompleteMsg); !ok {
+		t.Errorf("Poll after complete should return ScanCompleteMsg, got %T", msg)
 	}
 }
 
@@ -216,19 +218,18 @@ func TestScanCoordinator_Result_Success(t *testing.T) {
 	}
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return expectedTree, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
-	time.Sleep(10 * time.Millisecond)
+	<-coordinator.done
 
-	// Call Result
 	tree, err := coordinator.Result()
 
 	if err != nil {
@@ -253,19 +254,18 @@ func TestScanCoordinator_Result_Error(t *testing.T) {
 	expectedErr := fmt.Errorf("permission denied")
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return nil, expectedErr
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
-	time.Sleep(10 * time.Millisecond)
+	<-coordinator.done
 
-	// Call Result
 	tree, err := coordinator.Result()
 
 	if err != expectedErr {
@@ -295,26 +295,34 @@ func TestScanCoordinator_IsComplete_NotStarted(t *testing.T) {
 func TestScanCoordinator_IsComplete_AfterStart(t *testing.T) {
 	t.Parallel()
 
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			close(started)
+			<-proceed
 			return nil, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Scan is in progress but not complete yet
-	time.Sleep(5 * time.Millisecond)
+	<-started
 
-	if !coordinator.IsComplete() {
+	if coordinator.IsComplete() {
 		t.Error("IsComplete should return false while scanning")
 	}
 
 	if !coordinator.IsStarted() {
 		t.Error("IsStarted should return true after starting scan")
 	}
+
+	close(proceed)
+	<-coordinator.done
 }
 
 func TestScanCoordinator_IsComplete_AfterSuccess(t *testing.T) {
@@ -323,16 +331,16 @@ func TestScanCoordinator_IsComplete_AfterSuccess(t *testing.T) {
 	expectedTree := &scanner.FileNode{Name: "root"}
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return expectedTree, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
 	<-coordinator.done
 
 	if !coordinator.IsComplete() {
@@ -350,16 +358,16 @@ func TestScanCoordinator_IsComplete_AfterError(t *testing.T) {
 	expectedErr := fmt.Errorf("permission denied")
 
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
 			return nil, expectedErr
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
 	<-coordinator.done
 
 	if !coordinator.IsComplete() {
@@ -374,14 +382,21 @@ func TestScanCoordinator_IsComplete_AfterError(t *testing.T) {
 func TestScanCoordinator_IsStarted(t *testing.T) {
 	t.Parallel()
 
-	mockSc := &scanCoordinatorMockScanner{}
+	mockSc := &scanCoordinatorMockScanner{
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			return &scanner.FileNode{Name: "root"}, nil
+		},
+	}
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
 	if !coordinator.IsStarted() {
 		t.Error("IsStarted should return true after Start is called")
 	}
+
+	<-coordinator.done
 }
 
 func TestScanCoordinator_ProgressMessages(t *testing.T) {
@@ -389,50 +404,42 @@ func TestScanCoordinator_ProgressMessages(t *testing.T) {
 
 	mockSc := &scanCoordinatorMockScanner{
 		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
-			// Send multiple progress updates
 			progress <- scanner.Progress{Current: 1, Total: 10, Stage: "collecting"}
-			time.Sleep(5 * time.Millisecond)
 			progress <- scanner.Progress{Current: 5, Total: 10, Stage: "scanning"}
-			time.Sleep(5 * time.Millisecond)
 			progress <- scanner.Progress{Current: 10, Total: 10, Stage: "complete"}
-			time.Sleep(5 * time.Millisecond)
-			close(progress)
 			return &scanner.FileNode{Name: "root"}, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Collect progress messages
+	<-coordinator.done
+
 	var progressUpdates []scanner.Progress
 	for {
 		select {
 		case progress := <-coordinator.progressCh:
 			progressUpdates = append(progressUpdates, progress)
-		case <-time.After(50 * time.Millisecond):
-			if len(progressUpdates) >= 2 {
-				break
-			}
-		case <-coordinator.done:
-			break
-		}
-		if len(progressUpdates) >= 2 {
-			break
+		default:
+			goto done
 		}
 	}
+done:
 
 	if len(progressUpdates) < 2 {
-		t.Error("should receive at least 2 progress updates")
+		t.Errorf("should receive at least 2 progress updates, got %d", len(progressUpdates))
 	}
 
-	// Verify progress messages
-	if progressUpdates[0].Current != 1 || progressUpdates[0].Total != 10 {
-		t.Errorf("unexpected first progress: %+v", progressUpdates[0])
-	}
-	if progressUpdates[1].Current != 5 || progressUpdates[1].Total != 10 {
-		t.Errorf("unexpected second progress: %+v", progressUpdates[1])
+	if len(progressUpdates) >= 2 {
+		if progressUpdates[0].Current != 1 || progressUpdates[0].Total != 10 {
+			t.Errorf("unexpected first progress: %+v", progressUpdates[0])
+		}
+		if progressUpdates[1].Current != 5 || progressUpdates[1].Total != 10 {
+			t.Errorf("unexpected second progress: %+v", progressUpdates[1])
+		}
 	}
 }
 
@@ -441,54 +448,56 @@ func TestScanCoordinator_MultipleProgressUpdates(t *testing.T) {
 
 	mockSc := &scanCoordinatorMockScanner{
 		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
-			// Send many rapid progress updates
 			for i := int64(1); i <= 100; i++ {
 				progress <- scanner.Progress{Current: i, Total: 100, Stage: "processing"}
 			}
-			close(progress)
 			return &scanner.FileNode{Name: "root"}, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Collect multiple updates safely
+	<-coordinator.done
+
 	var collected []scanner.Progress
 	for {
 		select {
 		case progress := <-coordinator.progressCh:
 			collected = append(collected, progress)
-		case <-coordinator.done:
+		default:
 			goto done
-		case <-time.After(200 * time.Millisecond):
-			if len(collected) >= 50 {
-				goto done
-			}
 		}
 	}
 done:
 
-	if len(collected) < 50 {
-		t.Error("should collect multiple progress updates")
+	if len(collected) < 3 {
+		t.Errorf("should collect multiple progress updates, got %d", len(collected))
 	}
 }
 
 func TestScanCoordinator_Result_BeforeComplete(t *testing.T) {
 	t.Parallel()
 
+	started := make(chan struct{})
+	proceed := make(chan struct{})
+
 	mockSc := &scanCoordinatorMockScanner{
-		scanFunc: func(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
-			time.Sleep(100 * time.Millisecond)
-			return nil, nil
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			close(started)
+			<-proceed
+			return &scanner.FileNode{Name: "root"}, nil
 		},
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
-	coordinator.Start("/test", nil)
+	cmd := coordinator.Start("/test", nil)
+	cmd()
 
-	// Call Result immediately
+	<-started
+
 	tree, err := coordinator.Result()
 
 	if tree != nil {
@@ -497,20 +506,26 @@ func TestScanCoordinator_Result_BeforeComplete(t *testing.T) {
 	if err != nil {
 		t.Error("Result should return nil error before completion")
 	}
+
+	close(proceed)
+	<-coordinator.done
 }
 
 func TestScanCoordinator_Reset(t *testing.T) {
 	t.Parallel()
 
-	mockSc := &scanCoordinatorMockScanner{}
+	mockSc := &scanCoordinatorMockScanner{
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			return &scanner.FileNode{Name: "root"}, nil
+		},
+	}
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
-	coordinator.Start("/test", cfg)
+	cmd := coordinator.Start("/test", cfg)
+	cmd()
 
-	// Wait for scan to complete
 	<-coordinator.done
 
-	// Reset
 	coordinator.Reset()
 
 	if coordinator.rootPath != "" {

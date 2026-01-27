@@ -357,7 +357,8 @@ func (m *ConfigCategoryModel) GetChanges() map[string]interface{} {
 		key := item.metadata.Key
 
 		if item.fieldField != nil {
-			changes[key] = item.fieldField.Value()
+			// Trim whitespace from string fields to prevent issues like trailing spaces in API keys
+			changes[key] = strings.TrimSpace(item.fieldField.Value())
 		} else if item.fieldToggle != nil {
 			changes[key] = item.fieldToggle.Value()
 		} else if item.fieldSelect != nil {
