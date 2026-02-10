@@ -71,3 +71,13 @@ Core defines interfaces; platform/app implement:
 - Global state anywhere in internal/
 - Skipping progress callbacks (breaks TUI)
 - Direct HTTP in providers (use platform/http/JSONClient)
+
+## Hierarchy
+
+```
+internal/AGENTS.md (this file)
+├── ui/AGENTS.md           → TUI wizard
+├── app/AGENTS.md          → Application services
+├── core/AGENTS.md         → Domain logic
+└── platform/AGENTS.md     → Infrastructure
+```

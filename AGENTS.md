@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-01-26T20:48:00Z  
-**Commit:** c93b9c6  
+**Generated:** 2026-01-28T00:24:32Z  
+**Commit:** 14ebfe7  
 **Branch:** main
 
 ---
@@ -317,3 +317,14 @@ func (m *WizardModel) getSelectedFiles() map[string]bool {
 }
 ```
 
+## Hierarchy
+
+```
+AGENTS.md (this file)
+├── cmd/AGENTS.md              → CLI commands
+└── internal/AGENTS.md         → Internal architecture
+    ├── ui/AGENTS.md           → TUI wizard
+    ├── app/AGENTS.md          → Application services
+    ├── core/AGENTS.md         → Domain logic
+    └── platform/AGENTS.md     → Infrastructure
+```
