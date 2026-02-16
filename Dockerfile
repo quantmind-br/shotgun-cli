@@ -1,5 +1,5 @@
 # Multi-stage build for Go application
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 # Set build arguments
 ARG BUILDPLATFORM
