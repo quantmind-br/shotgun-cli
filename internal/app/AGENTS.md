@@ -8,7 +8,7 @@ Orchestration layer between CLI/TUI and Core. **No framework dependencies.**
 
 ## KEY SERVICES
 
-### ContextService (`context.go`)
+### ContextService (`service.go`, `service_llm.go`)
 Main API for context generation and LLM operations.
 
 ```go
@@ -28,7 +28,7 @@ result, err := svc.SendToLLMWithProgress(ctx, content, config, callback)
 ```
 
 ### ProviderRegistry (`providers.go`)
-Unified factory for LLM providers.
+Unified factory for LLM providers. Stores factory functions, not instances.
 
 ```go
 // Create provider
@@ -40,46 +40,24 @@ DefaultProviderRegistry.Register(llm.ProviderMyProvider, func(cfg llm.Config) (l
 })
 ```
 
+**Registered**: OpenAI, Anthropic, Gemini (via `init()` in providers.go)
+
 ## CONFIG TYPES
 
-| Type | Purpose |
+| Type | File | Purpose |
+|------|------|---------|
+| `CLIConfig` | `config.go` | CLI flag parsing, Viper-bound |
+| `GenerateConfig` | `service.go` | Context generation parameters |
+| `LLMSendConfig` | `service_llm.go` | LLM send parameters (provider, key, model, output) |
+
+## KEY FILES
+
+| File | Purpose |
 |------|---------|
-| `CLIConfig` | CLI flag parsing |
-| `GenerateConfig` | Service layer configuration |
-| `LLMSendConfig` | LLM operation parameters |
-
-## PATTERNS
-
-### Service Initialization
-```go
-func NewContextService() *ContextService {
-    return &ContextService{
-        scanner:       scanner.NewFilesystemScanner(),
-        generator:     contextgen.NewGenerator(),
-        templateMgr:   template.NewManager(),
-        providerReg:   DefaultProviderRegistry,
-    }
-}
-```
-
-### Progress Callbacks
-All async operations support progress reporting:
-```go
-func (s *ContextService) GenerateWithProgress(
-    ctx context.Context,
-    cfg GenerateConfig,
-    progress func(stage string),
-) (*GenerateResult, error)
-```
-
-## WHERE TO LOOK
-
-| Task | File |
-|------|------|
-| Context generation | `context.go` |
-| LLM operations | `context.go` (SendToLLM*) |
-| Provider registry | `providers.go` |
-| Config types | `config.go` |
+| `service.go` | ContextService: Generate, GenerateWithProgress |
+| `service_llm.go` | ContextService: SendToLLM*, provider creation |
+| `providers.go` | DefaultProviderRegistry, provider init |
+| `config.go` | CLIConfig, config-to-service bridging |
 
 ## TESTING
 
@@ -87,8 +65,11 @@ func (s *ContextService) GenerateWithProgress(
 go test -v -race ./internal/app/...
 ```
 
+**Mock patterns** in `service_test.go`: `mockScanner`, `mockGenerator`, `mockProvider` — all implement core interfaces.
+
 ## ANTI-PATTERNS
 
 - Importing `ui` or `cmd` packages
 - Using Viper directly (accept config via parameters)
 - Creating global service instances
+- Skipping progress callbacks in async methods

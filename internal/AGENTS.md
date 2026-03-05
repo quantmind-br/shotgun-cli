@@ -10,11 +10,12 @@ Clean Architecture implementation. **Core is pure domain logic; Platform is infr
 
 ```
 app/       → Application (orchestration, ContextService, ProviderRegistry)
-core/      → Domain (scanner, context, template, llm, tokens, diff, ignore)
+core/      → Domain (scanner, contextgen, template, llm, tokens, diff, ignore)
 platform/  → Infrastructure (openai, anthropic, geminiapi, llmbase, http, clipboard)
 ui/        → Presentation (TUI wizard, screens, components, coordinators)
 config/    → Configuration (keys, validator, metadata)
 assets/    → Embedded (templates)
+utils/     → Shared utilities (conversion helpers)
 ```
 
 ## CRITICAL IMPORT RULES
@@ -22,12 +23,12 @@ assets/    → Embedded (templates)
 | Package | CAN import from | CANNOT import from |
 |---------|-----------------|-------------------|
 | `core/*` | stdlib only | app, platform, ui, cmd |
-| `app/` | core, platform | ui, cmd |
 | `platform/*` | core (interfaces) | app, ui, cmd |
+| `app/` | core, platform | ui, cmd |
 | `ui/` | app, core | cmd |
 | `config/` | stdlib only | anything else |
 
-**Violation = architecture break. LSP/linter will catch.**
+**Violation = architecture break. Linter will catch.**
 
 ## SHARED PATTERNS
 
@@ -50,27 +51,27 @@ Every operation has a Config struct with DefaultConfig():
 ### Interface-First
 Core defines interfaces; platform/app implement:
 - `Scanner` → `FilesystemScanner`
-- `Provider` → `openai.Client`, `anthropic.Client`
+- `Provider` → `openai.Client`, `anthropic.Client`, `geminiapi.Client`
 - `ContextGenerator` → `DefaultContextGenerator`
 
 ## WHERE TO LOOK
 
 | Task | Location |
 |------|----------|
-| Add LLM provider | platform/\<name\>/ + app/providers.go |
-| Add config key | config/keys.go + config/metadata.go + config/validator.go |
-| Add CLI command | ../cmd/\<name\>.go |
-| Add TUI screen | ui/screens/\<name\>.go + ui/wizard.go |
-| Modify scanning | core/scanner/ |
-| Modify context output | core/context/ |
-| Modify ignore logic | core/ignore/ |
+| Add LLM provider | `platform/<name>/` + `app/providers.go` |
+| Add config key | `config/keys.go` + `config/metadata.go` + `config/validator.go` |
+| Add CLI command | `../cmd/<name>.go` |
+| Add TUI screen | `ui/screens/<name>.go` + `ui/wizard.go` |
+| Modify scanning | `core/scanner/` |
+| Modify context output | `core/contextgen/` |
+| Modify ignore logic | `core/ignore/` |
 
 ## ANTI-PATTERNS
 
 - Importing `viper` in core/ or platform/ (use DI)
 - Global state anywhere in internal/
 - Skipping progress callbacks (breaks TUI)
-- Direct HTTP in providers (use platform/http/JSONClient)
+- Direct HTTP in providers (use `platform/http/JSONClient`)
 
 ## Hierarchy
 

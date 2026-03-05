@@ -398,6 +398,16 @@ func TestConfigWizard_CtrlS(t *testing.T) {
 	assert.NotNil(t, cmd)
 }
 
+func TestConfigWizard_F2_Save(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewConfigWizard()
+	wizard.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
+
+	_, cmd := wizard.Update(tea.KeyMsg{Type: tea.KeyF2})
+	assert.NotNil(t, cmd)
+}
+
 func TestConfigWizard_UnknownMsg(t *testing.T) {
 	t.Parallel()
 

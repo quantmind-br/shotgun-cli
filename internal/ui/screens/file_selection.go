@@ -145,11 +145,15 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg) tea.Cmd {
 		return func() tea.Msg {
 			return RescanRequestMsg{}
 		}
-	case "ctrl+c":
+	case "x":
 		m.tree.ClearFilter()
 	}
 
 	return nil
+}
+
+func (m *FileSelectionModel) IsFilterMode() bool {
+	return m.filterMode
 }
 
 func (m *FileSelectionModel) syncSelections() {
@@ -216,13 +220,14 @@ func (m *FileSelectionModel) View() string {
 			"a/A: All/None",
 			"i: Ignored",
 			"/: Filter",
+			"x: Clear",
 		}
 		line2 := []string{
 			"F5: Rescan",
 			"F7: Back",
 			"F8: Next",
-			"F1: Help",
-			"Ctrl+Q: Quit",
+			"F1/?: Help",
+			"q: Quit",
 		}
 		footer = styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	}

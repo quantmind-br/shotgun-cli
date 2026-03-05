@@ -368,16 +368,14 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString(header)
 	content.WriteString("\n\n")
 
-	// Global shortcuts
 	content.WriteString(styles.TitleStyle.Render("Global Shortcuts"))
 	content.WriteString("\n")
-	content.WriteString("  F1              Toggle this help screen\n")
-	content.WriteString("  F7 / Ctrl+P     Previous step\n")
-	content.WriteString("  F8 / Ctrl+N     Next step\n")
-	content.WriteString("  Ctrl+Q          Quit application\n")
+	content.WriteString("  F1 / ?          Toggle this help screen\n")
+	content.WriteString("  F7 / Alt+←      Previous step\n")
+	content.WriteString("  F8 / Alt+→      Next step\n")
+	content.WriteString("  q / Ctrl+Q      Quit application\n")
 	content.WriteString("\n")
 
-	// File selection shortcuts
 	content.WriteString(styles.TitleStyle.Render("File Selection (Step 1)"))
 	content.WriteString("\n")
 	content.WriteString("  ↑/↓ or k/j  Navigate up/down\n")
@@ -387,11 +385,10 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  A           Deselect all visible files\n")
 	content.WriteString("  i           Toggle showing ignored files\n")
 	content.WriteString("  /           Enter filter mode (fuzzy search)\n")
-	content.WriteString("  Ctrl+C      Clear filter\n")
+	content.WriteString("  x           Clear filter\n")
 	content.WriteString("  F5          Rescan directory\n")
 	content.WriteString("\n")
 
-	// Template selection shortcuts
 	content.WriteString(styles.TitleStyle.Render("Template Selection (Step 2)"))
 	content.WriteString("\n")
 	content.WriteString("  ↑/↓ or k/j  Navigate templates\n")
@@ -406,7 +403,6 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("    Esc/q     Close modal\n")
 	content.WriteString("\n")
 
-	// Text input shortcuts
 	content.WriteString(styles.TitleStyle.Render("Text Input (Steps 3-4)"))
 	content.WriteString("\n")
 	content.WriteString("  Type        Enter text\n")
@@ -414,7 +410,6 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  Backspace   Delete character\n")
 	content.WriteString("\n")
 
-	// Review shortcuts
 	content.WriteString(styles.TitleStyle.Render("Review (Step 5)"))
 	content.WriteString("\n")
 	content.WriteString("  F8          Generate context\n")
@@ -422,7 +417,7 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  F9          Send to LLM (if configured)\n")
 	content.WriteString("\n")
 
-	footer := styles.RenderFooter([]string{"F1: Close Help", "Ctrl+Q: Quit"})
+	footer := styles.RenderFooter([]string{"F1/?: Close Help", "q: Quit"})
 	content.WriteString(footer)
 
 	return content.String()
@@ -461,12 +456,21 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
+	// When help is showing, only allow closing it
+	if m.showHelp {
+		switch msg.String() {
+		case "f1", "esc", "?", "q":
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
 	// Process navigation shortcuts
 	switch msg.String() {
-	case "f8", "ctrl+pgdn", "ctrl+n":
+	case "f8", "alt+right":
 		cmd = m.handleNextStep()
 		cmds = append(cmds, cmd)
-	case "f7", "ctrl+p":
+	case "f7", "alt+left":
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
 	case "f9":
@@ -475,11 +479,21 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case "f10", "ctrl+pgup":
-		cmd = m.handlePrevStep()
-		cmds = append(cmds, cmd)
 	case "f1":
 		m.showHelp = !m.showHelp
+	case "?":
+		if !m.isTextInputActive() {
+			m.showHelp = !m.showHelp
+		} else {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+		}
+	case "q":
+		if !m.isTextInputActive() {
+			return m, tea.Quit
+		}
+		cmd = m.handleStepInput(msg)
+		cmds = append(cmds, cmd)
 	default:
 		cmd = m.handleStepInput(msg)
 		cmds = append(cmds, cmd)
@@ -490,6 +504,18 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// isTextInputActive returns true when the current step accepts free text input,
+// preventing single-key shortcuts (q, ?) from being intercepted.
+func (m *WizardModel) isTextInputActive() bool {
+	if m.step == StepTaskInput || m.step == StepRulesInput {
+		return true
+	}
+	if m.step == StepFileSelection && m.fileSelection != nil && m.fileSelection.IsFilterMode() {
+		return true
+	}
+	return false
 }
 
 func (m *WizardModel) handleNextStep() tea.Cmd {

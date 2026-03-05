@@ -360,14 +360,14 @@ func TestWizardKeyboardNavigation(t *testing.T) {
 		t.Fatalf("expected to advance to template selection")
 	}
 
-	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
+	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF7})
 	wizard = model.(*WizardModel)
 	if wizard.step != StepFileSelection {
 		t.Fatalf("expected to move back to file selection")
 	}
 }
 
-func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
+func TestWizardKeyboardNavigation_AltRight_AdvancesStep(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -422,7 +422,7 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 				tt.setupFunc(wizard)
 			}
 
-			msg := tea.KeyMsg{Type: tea.KeyCtrlN}
+			msg := tea.KeyMsg{Type: tea.KeyRight, Alt: true}
 			model, _ := wizard.Update(msg)
 			result := model.(*WizardModel)
 
@@ -433,7 +433,7 @@ func TestWizardKeyboardNavigation_CtrlN_AdvancesStep(t *testing.T) {
 	}
 }
 
-func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
+func TestWizardKeyboardNavigation_AltLeft_GoesBack(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -476,7 +476,7 @@ func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
 				tt.setupFunc(wizard)
 			}
 
-			msg := tea.KeyMsg{Type: tea.KeyCtrlP}
+			msg := tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
 			model, _ := wizard.Update(msg)
 			result := model.(*WizardModel)
 
@@ -487,13 +487,13 @@ func TestWizardKeyboardNavigation_CtrlP_GoesBack(t *testing.T) {
 	}
 }
 
-func TestWizardKeyboardNavigation_CtrlP_FirstStep_NoOp(t *testing.T) {
+func TestWizardKeyboardNavigation_AltLeft_FirstStep_NoOp(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewWizard("/tmp", &scanner.ScanConfig{}, nil, nil)
 	wizard.step = StepFileSelection
 
-	msg := tea.KeyMsg{Type: tea.KeyCtrlP}
+	msg := tea.KeyMsg{Type: tea.KeyLeft, Alt: true}
 	model, _ := wizard.Update(msg)
 	result := model.(*WizardModel)
 
@@ -546,30 +546,27 @@ func TestWizardHelp_ShowsNewShortcuts(t *testing.T) {
 
 	view := wizard.View()
 
-	if !strings.Contains(view, "Ctrl+N") {
-		t.Error("expected help to contain 'Ctrl+N'")
+	if !strings.Contains(view, "Alt+→") {
+		t.Error("expected help to contain 'Alt+→'")
 	}
-	if !strings.Contains(view, "Ctrl+P") {
-		t.Error("expected help to contain 'Ctrl+P'")
+	if !strings.Contains(view, "Alt+←") {
+		t.Error("expected help to contain 'Alt+←'")
 	}
 }
 
 func TestWizardHelpToggle(t *testing.T) {
 	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
 
-	// Initially help should be hidden
 	if wizard.showHelp {
 		t.Fatal("expected showHelp to be false initially")
 	}
 
-	// Press F1 to show help
 	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF1})
 	wizard = model.(*WizardModel)
 	if !wizard.showHelp {
 		t.Fatal("expected showHelp to be true after pressing F1")
 	}
 
-	// View should contain help content
 	view := wizard.View()
 	if !strings.Contains(view, "Help") {
 		t.Fatal("expected view to contain 'Help' when showHelp is true")
@@ -578,11 +575,97 @@ func TestWizardHelpToggle(t *testing.T) {
 		t.Fatal("expected view to contain 'Global Shortcuts'")
 	}
 
-	// Press F1 again to hide help
 	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyF1})
 	wizard = model.(*WizardModel)
 	if wizard.showHelp {
 		t.Fatal("expected showHelp to be false after pressing F1 again")
+	}
+}
+
+func TestWizardHelpToggle_QuestionMark(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepFileSelection
+
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	wizard = model.(*WizardModel)
+	if !wizard.showHelp {
+		t.Fatal("expected ? to toggle help on")
+	}
+
+	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	wizard = model.(*WizardModel)
+	if wizard.showHelp {
+		t.Fatal("expected ? to close help when showing")
+	}
+}
+
+func TestWizardHelpToggle_QuestionMarkIgnoredInTextInput(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepTaskInput
+	wizard.taskInput = screens.NewTaskInput("")
+
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	wizard = model.(*WizardModel)
+	if wizard.showHelp {
+		t.Fatal("expected ? to be ignored during text input")
+	}
+}
+
+func TestWizardHelpMode_BlocksOtherKeys(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
+	setWizardFileTree(wizard, &scanner.FileNode{Name: "root", Path: "/workspace", IsDir: true})
+	setWizardSelectedFiles(wizard, map[string]bool{"file.go": true})
+	wizard.step = StepFileSelection
+	wizard.showHelp = true
+
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF8})
+	wizard = model.(*WizardModel)
+	if wizard.step != StepFileSelection {
+		t.Fatal("expected F8 to be blocked while help is showing")
+	}
+	if !wizard.showHelp {
+		t.Fatal("expected help to remain showing after non-close key")
+	}
+
+	model, _ = wizard.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	wizard = model.(*WizardModel)
+	if wizard.showHelp {
+		t.Fatal("expected Esc to close help")
+	}
+}
+
+func TestWizardQuit_Q_Key(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepFileSelection
+
+	_, cmd := wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if cmd == nil {
+		t.Fatal("expected q to produce quit command")
+	}
+}
+
+func TestWizardQuit_Q_IgnoredInTextInput(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/workspace", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepTaskInput
+	wizard.taskInput = screens.NewTaskInput("")
+
+	_, cmd := wizard.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	batchCmd := cmd()
+	if batchCmd == nil {
+		return
+	}
+	if _, ok := batchCmd.(tea.QuitMsg); ok {
+		t.Fatal("expected q to NOT quit during text input")
 	}
 }
 
@@ -711,8 +794,8 @@ func TestWizardBackwardNavigationSkipsCorrectly(t *testing.T) {
 	wizard.step = StepReview
 	wizard.review = screens.NewReview(wizard.getSelectedFiles(), tree, tmpl, "", "", "")
 
-	// Press F7/F10 to go back - should skip Rules and Task, go to Template Selection
-	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
+	// Press F7 to go back - should skip Rules and Task, go to Template Selection
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF7})
 	wizard = model.(*WizardModel)
 
 	if wizard.step != StepTemplateSelection {
@@ -736,8 +819,8 @@ func TestWizardBackwardFromRulesWithNoTask(t *testing.T) {
 	wizard.step = StepRulesInput
 	wizard.rulesInput = screens.NewRulesInput("")
 
-	// Press F7/F10 to go back - should skip Task, go to Template Selection
-	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF10})
+	// Press F7 to go back - should skip Task, go to Template Selection
+	model, _ := wizard.Update(tea.KeyMsg{Type: tea.KeyF7})
 	wizard = model.(*WizardModel)
 
 	if wizard.step != StepTemplateSelection {

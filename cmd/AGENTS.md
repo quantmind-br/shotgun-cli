@@ -4,9 +4,9 @@ Parent: [../AGENTS.md](../AGENTS.md)
 
 ## OVERVIEW
 
-Cobra command definitions. **Composition root** - wires dependencies, delegates to `app.ContextService`.
+Cobra command definitions. **Composition root** — wires dependencies, delegates to `app.ContextService`.
 
-## COMMAND HIERARCHY
+## COMMAND TREE
 
 ```
 shotgun-cli (root)
@@ -14,28 +14,42 @@ shotgun-cli (root)
 ├── context
 │   └── generate     → Headless context generation
 ├── config
-│   ├── [no args]    → Config TUI
-│   ├── show         → Display config
-│   └── set          → Update config
+│   ├── [no args]    → Config TUI (interactive editor)
+│   ├── show         → Display config with sources
+│   └── set          → Update config (validates before saving)
 ├── llm
 │   ├── status       → Provider status
-│   ├── doctor       → Diagnostics
-│   └── list         → List providers
+│   ├── doctor       → Diagnostics with fix guidance
+│   └── list         → List providers (* marks current)
 ├── template
 │   ├── list/render/import/export
 ├── diff
-│   └── split        → Split large diffs
-├── send             → Send to LLM
-└── completion       → Shell completion
+│   └── split        → Split large diffs at file boundaries
+├── send             → Send context to LLM provider
+└── completion       → Shell completion (bash/zsh/fish/powershell)
 ```
+
+## KEY FILES
+
+| File | Purpose |
+|------|---------|
+| `root.go` | Main entry, TUI launch, Viper config init, logging setup |
+| `providers.go` | LLM provider registry init (OpenAI, Anthropic, Gemini) |
+| `config_llm.go` | `BuildLLMConfig()`, `BuildLLMConfigWithOverrides()`, `CreateLLMProvider()` |
+| `context.go` | Context generate command, progress rendering (human/JSON/none) |
+| `send.go` | Send to LLM command, `formatDuration()` helper |
+| `config.go` | Config show/set + interactive Config TUI launcher |
+| `llm.go` | LLM status/doctor/list, `displayURL()` helper |
+| `template.go` | Template list/render/import/export |
+| `diff.go` | Diff split command |
+| `completion.go` | Shell completion generation |
 
 ## ADDING A NEW COMMAND
 
 1. Create `cmd/<name>.go`
-2. Define command: `var <name>Cmd = &cobra.Command{...}`
-3. Add in `init()`: `rootCmd.AddCommand(<name>Cmd)` or parent
+2. Define: `var <name>Cmd = &cobra.Command{...}`
+3. Register in `init()`: `rootCmd.AddCommand(<name>Cmd)` or parent
 4. Create `cmd/<name>_test.go` with table-driven tests
-5. Document in parent AGENTS.md
 
 ## PATTERNS
 
@@ -55,21 +69,17 @@ viper.GetString(config.KeyLLMProvider)
 ```
 
 ### Service Delegation
-CLI commands delegate to `app.ContextService`:
 ```go
 svc := app.NewContextService()
 result, err := svc.Generate(ctx, cfg)
 ```
 
-## KEY FILES
-
-| File | Purpose |
-|------|---------|
-| `root.go` | Main entry, TUI launch, config defaults |
-| `providers.go` | LLM provider registry init |
-| `config_llm.go` | LLM config helpers |
-| `context.go` | Context generation command |
-| `send.go` | Send to LLM command |
+### Config Initialization Flow
+`main.go` → `cmd.Execute()` → `rootCmd` → `cobra.OnInitialize(initConfig)`:
+1. Sets up zerolog logging
+2. Loads config from `~/.config/shotgun-cli/config.yaml`
+3. Binds env vars (prefix: `SHOTGUN_`)
+4. Sets defaults via `setConfigDefaults()`
 
 ## TESTING
 

@@ -157,7 +157,7 @@ func (m *ConfigWizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case "shift+tab":
 		m.prevCategory()
 
-	case "ctrl+s":
+	case "ctrl+s", "f2":
 		return m, m.saveChanges()
 
 	case "f1":
@@ -345,7 +345,7 @@ func (m *ConfigWizardModel) renderFooter() string {
 	shortcuts := []string{
 		"Tab: Next category",
 		"Enter: Edit",
-		"Ctrl+S: Save",
+		"Ctrl+S/F2: Save",
 		"F1: Help",
 		"q: Quit",
 	}
@@ -382,7 +382,7 @@ func (m *ConfigWizardModel) renderHelp() string {
 		{
 			title: "Actions",
 			items: []string{
-				"Ctrl+S           - Save all changes",
+				"Ctrl+S / F2      - Save all changes",
 				"F1               - Toggle this help",
 				"q / Ctrl+Q       - Quit (prompts if unsaved)",
 			},

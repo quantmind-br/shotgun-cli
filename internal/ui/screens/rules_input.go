@@ -174,7 +174,7 @@ func (m *RulesInputModel) View() string {
 		"F7: Back",
 		"F8: Next (Skip)",
 		"F1: Help",
-		"Ctrl+Q: Quit",
+		"Ctrl+Q/Ctrl+C: Quit",
 	}
 	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	content.WriteString("\n\n")

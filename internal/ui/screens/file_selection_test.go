@@ -170,10 +170,10 @@ func TestFileSelectionHandleNormalMode(t *testing.T) {
 		assert.IsType(t, RescanRequestMsg{}, msg)
 	}
 
-	// Test Ctrl+C clears filter
+	// Test x clears filter
 	model.filterMode = false
 	model.tree.SetFilter("test")
-	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyCtrlC})
+	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	assert.Nil(t, cmd)
 	assert.Equal(t, "", model.tree.GetFilter())
 }

@@ -291,12 +291,12 @@ func (m *ReviewModel) renderFixedFooter() string {
 		if m.llmAvailable && !m.llmSending && !m.llmComplete {
 			line1 = append(line1, "F9: LLM")
 		}
-		line2 := []string{"F1: Help", "Ctrl+Q: Exit"}
+		line2 := []string{"F1/?: Help", "q: Exit"}
 		return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	}
 
 	line1 := []string{"↑/↓: Scroll", "F7: Back", "F8: Generate"}
-	line2 := []string{"F1: Help", "Ctrl+Q: Quit"}
+	line2 := []string{"F1/?: Help", "q: Quit"}
 	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 }
 

@@ -280,8 +280,8 @@ func (m *TemplateSelectionModel) renderFooter() string {
 	line2 := []string{
 		"F7: Back",
 		nextAction,
-		"F1: Help",
-		"Ctrl+Q: Quit",
+		"F1/?: Help",
+		"q: Quit",
 	}
 	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 }
