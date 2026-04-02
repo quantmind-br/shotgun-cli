@@ -1,0 +1,170 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1772751987338,
+  "projectRoot": "/Users/diogo/dev/shotgun-cli",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Go",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "go.mod"
+        ]
+      },
+      {
+        "name": "C/C++",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Makefile"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "go",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "make build",
+    "testCommand": "make test",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "test"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "cmd": {
+      "path": "cmd",
+      "purpose": null,
+      "fileCount": 19,
+      "lastAccessed": 1772751987325,
+      "keyFiles": [
+        "AGENTS.md",
+        "completion.go",
+        "completion_test.go",
+        "config.go",
+        "config_llm.go"
+      ]
+    },
+    "custom_templates": {
+      "path": "custom_templates",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1772751987326,
+      "keyFiles": [
+        "chat.md",
+        "ideation_code_improvements.md",
+        "ideation_code_quality.md",
+        "ideation_documentation.md",
+        "ideation_features.md"
+      ]
+    },
+    "internal": {
+      "path": "internal",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1772751987326,
+      "keyFiles": [
+        "AGENTS.md"
+      ]
+    },
+    "opencodetmp": {
+      "path": "opencodetmp",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1772751987326,
+      "keyFiles": [
+        "opencode-linux-x64.tar.gz"
+      ]
+    },
+    "test": {
+      "path": "test",
+      "purpose": "Test files",
+      "fileCount": 1,
+      "lastAccessed": 1772751987327,
+      "keyFiles": []
+    },
+    "internal/app": {
+      "path": "internal/app",
+      "purpose": "Application code",
+      "fileCount": 10,
+      "lastAccessed": 1772751987328,
+      "keyFiles": [
+        "AGENTS.md",
+        "config.go",
+        "config_test.go"
+      ]
+    },
+    "internal/assets": {
+      "path": "internal/assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1772751987328,
+      "keyFiles": [
+        "embed.go",
+        "embed_test.go"
+      ]
+    },
+    "internal/config": {
+      "path": "internal/config",
+      "purpose": "Configuration files",
+      "fileCount": 6,
+      "lastAccessed": 1772751987328,
+      "keyFiles": [
+        "keys.go",
+        "keys_test.go",
+        "metadata.go"
+      ]
+    },
+    "internal/utils": {
+      "path": "internal/utils",
+      "purpose": "Utility functions",
+      "fileCount": 3,
+      "lastAccessed": 1772751987329,
+      "keyFiles": [
+        "conversion.go",
+        "conversion_test.go"
+      ]
+    },
+    "test/fixtures": {
+      "path": "test/fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 0,
+      "lastAccessed": 1772751987330,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "Makefile",
+      "accessCount": 5,
+      "lastAccessed": 1772752099559,
+      "type": "file"
+    },
+    {
+      "path": ".serena/memories/development_workflow.md",
+      "accessCount": 4,
+      "lastAccessed": 1772752096090,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

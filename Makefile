@@ -7,12 +7,11 @@ COVERAGE_FILE := coverage.out
 GO_FILES := $(shell find . -name '*.go' -not -path './vendor/*')
 
 # Installation paths
-PREFIX ?= /usr/local
-INSTALL_DIR := $(PREFIX)/bin
+INSTALL_DIR := $(HOME)/.local/bin
 
 OS_ARCHES := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install install-local install-system uninstall deps generate coverage release version-bump version-patch version-minor version-major release-tag release-push release-snapshot
+.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install uninstall deps generate coverage release version-bump version-patch version-minor version-major release-tag release-push release-snapshot
 
 help:
 	@echo "Usage: make <target>"
@@ -60,40 +59,20 @@ vet: ## Run go vet static analysis
 clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR) $(COVERAGE_FILE)
 
-install: install-local ## Install the binary (default: local GOPATH/bin)
-
-install-local: ## Install the binary into GOPATH/bin
-	@echo "Installing $(BINARY) to GOPATH/bin..."
-	$(GO) install .
-	@echo "✅ $(BINARY) installed successfully to GOPATH/bin"
-	@echo "Make sure $(shell go env GOPATH)/bin is in your PATH"
-
-install-system: build ## Install the binary to system-wide location (requires sudo)
+install: build ## Install the binary to ~/.local/bin
 	@echo "Installing $(BINARY) to $(INSTALL_DIR)..."
-	@if [ ! -f "$(BUILD_DIR)/$(BINARY)" ]; then \
-		echo "Binary not found. Building first..."; \
-		$(MAKE) build; \
-	fi
-	sudo install -m 755 $(BUILD_DIR)/$(BINARY) $(INSTALL_DIR)/$(BINARY)
+	@mkdir -p $(INSTALL_DIR)
+	install -m 755 $(BUILD_DIR)/$(BINARY) $(INSTALL_DIR)/$(BINARY)
 	@echo "✅ $(BINARY) installed successfully to $(INSTALL_DIR)"
-	@echo "You can now use '$(BINARY)' from anywhere"
+	@echo "Make sure $(INSTALL_DIR) is in your PATH"
 
-uninstall: ## Remove installed binary from system and GOPATH
+uninstall: ## Remove installed binary from ~/.local/bin
 	@echo "Removing $(BINARY)..."
-	@GOPATH_BIN="$$(go env GOPATH)/bin"; \
-	removed=0; \
-	if [ -f "$$GOPATH_BIN/$(BINARY)" ]; then \
-		rm -f "$$GOPATH_BIN/$(BINARY)"; \
-		echo "✅ Removed from $$GOPATH_BIN"; \
-		removed=1; \
-	fi; \
-	if [ -f "$(INSTALL_DIR)/$(BINARY)" ]; then \
-		sudo rm -f "$(INSTALL_DIR)/$(BINARY)"; \
+	@if [ -f "$(INSTALL_DIR)/$(BINARY)" ]; then \
+		rm -f "$(INSTALL_DIR)/$(BINARY)"; \
 		echo "✅ Removed from $(INSTALL_DIR)"; \
-		removed=1; \
-	fi; \
-	if [ $$removed -eq 0 ]; then \
-		echo "$(BINARY) not found in $$GOPATH_BIN or $(INSTALL_DIR)"; \
+	else \
+		echo "$(BINARY) not found in $(INSTALL_DIR)"; \
 	fi
 
 deps: ## Download and verify module dependencies

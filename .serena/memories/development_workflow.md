@@ -9,13 +9,10 @@ make build
 # Cross-compile for all platforms (linux/darwin/windows, amd64/arm64)
 make build-all
 
-# Install to GOPATH/bin
+# Install to ~/.local/bin
 make install
 
-# Install system-wide (requires sudo)
-make install-system
-
-# Uninstall from system and GOPATH
+# Uninstall from ~/.local/bin
 make uninstall
 
 # Clean build artifacts
@@ -195,8 +192,7 @@ export SHOTGUN_LLM_MODEL=gpt-4o
 ## Binary Locations
 
 - `build/shotgun-cli` - Local build output
-- `$GOPATH/bin/shotgun-cli` - User installation
-- `/usr/local/bin/shotgun-cli` - System installation
+- `~/.local/bin/shotgun-cli` - Installation location
 
 ## Application Layer Service Usage
 
