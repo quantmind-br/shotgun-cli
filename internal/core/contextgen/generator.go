@@ -1,0 +1,225 @@
+package contextgen
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+)
+
+const (
+	DefaultMaxSize  = 10 * 1024 * 1024 // 10MB
+	DefaultMaxFiles = 1000
+)
+
+// GenProgress represents structured progress information
+type GenProgress struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
+
+type ContextGenerator interface {
+	Generate(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+	) (string, error)
+	GenerateWithProgress(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string),
+	) (string, error)
+	GenerateWithProgressEx(
+		root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress),
+	) (string, error)
+}
+
+type GenerateConfig struct {
+	MaxFileSize    int64             `json:"maxFileSize"`  // Maximum size for individual files
+	MaxTotalSize   int64             `json:"maxTotalSize"` // Maximum total size of all content
+	MaxFiles       int               `json:"maxFiles"`
+	SkipBinary     bool              `json:"skipBinary"`
+	TemplateVars   map[string]string `json:"templateVars"`
+	Template       string            `json:"template,omitempty"`
+	IncludeTree    bool              `json:"includeTree"`    // Include directory tree in output
+	IncludeSummary bool              `json:"includeSummary"` // Include file summaries in output
+}
+
+type ContextData struct {
+	Task          string         `json:"task"`
+	Rules         string         `json:"rules"`
+	FileStructure string         `json:"fileStructure"`
+	Files         []FileContent  `json:"files"`
+	CurrentDate   string         `json:"currentDate"`
+	Config        GenerateConfig `json:"config"`
+}
+
+type DefaultContextGenerator struct {
+	treeRenderer     *TreeRenderer
+	templateRenderer *TemplateRenderer
+}
+
+func NewDefaultContextGenerator() *DefaultContextGenerator {
+	return &DefaultContextGenerator{
+		treeRenderer:     NewTreeRenderer(),
+		templateRenderer: NewTemplateRenderer(),
+	}
+}
+
+func (g *DefaultContextGenerator) Generate(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+) (string, error) {
+	return g.GenerateWithProgress(root, selections, config, nil)
+}
+
+func (g *DefaultContextGenerator) GenerateWithProgress(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(string),
+) (string, error) {
+	// Use the new structured progress internally, adapting to the old interface
+	var adaptedProgress func(GenProgress)
+	if progress != nil {
+		adaptedProgress = func(p GenProgress) {
+			progress(p.Message)
+		}
+	}
+
+	return g.GenerateWithProgressEx(root, selections, config, adaptedProgress)
+}
+
+func (g *DefaultContextGenerator) GenerateWithProgressEx(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig, progress func(GenProgress),
+) (string, error) {
+	if err := g.validateConfig(&config); err != nil {
+		return "", fmt.Errorf("invalid config: %w", err)
+	}
+
+	// Generate tree structure only if IncludeTree is enabled
+	var fileStructure string
+	if config.IncludeTree {
+		if progress != nil {
+			progress(GenProgress{Stage: "tree_generation", Message: "Generating file structure..."})
+		}
+
+		var err error
+		fileStructure, err = g.treeRenderer.RenderTree(root)
+		if err != nil {
+			return "", fmt.Errorf("failed to render tree: %w", err)
+		}
+	}
+
+	if progress != nil {
+		progress(GenProgress{Stage: "content_collection", Message: "Collecting file contents..."})
+	}
+
+	files, err := g.collectFileContents(root, selections, config)
+	if err != nil {
+		return "", fmt.Errorf("failed to collect file contents: %w", err)
+	}
+
+	// Combine tree structure with file content blocks (only if tree is included)
+	var fileStructureComplete string
+	if config.IncludeTree {
+		fileStructureComplete = g.buildCompleteFileStructure(fileStructure, files)
+	} else {
+		// Without tree, just include file content blocks
+		fileStructureComplete = renderFileContentBlocks(files)
+	}
+
+	if progress != nil {
+		progress(GenProgress{Stage: "template_rendering", Message: "Rendering template..."})
+	}
+
+	contextData := ContextData{
+		Task:          config.TemplateVars["TASK"],
+		Rules:         config.TemplateVars["RULES"],
+		FileStructure: fileStructureComplete,
+		Files:         files,
+		CurrentDate:   time.Now().Format("2006-01-02 15:04:05"),
+		Config:        config,
+	}
+
+	template := config.Template
+	if template == "" {
+		template = g.templateRenderer.getDefaultTemplate()
+	}
+
+	// Convert {VARIABLE} syntax to {{.Variable}} syntax for Go templates
+	template = convertTemplateVariables(template)
+
+	result, err := g.templateRenderer.RenderTemplate(template, contextData)
+	if err != nil {
+		return "", fmt.Errorf("failed to render template: %w", err)
+	}
+
+	if int64(len(result)) > config.MaxTotalSize {
+		return "", fmt.Errorf(
+			"generated context exceeds total size limit: %d bytes > %d bytes",
+			len(result), config.MaxTotalSize,
+		)
+	}
+
+	if progress != nil {
+		progress(GenProgress{Stage: "complete", Message: "Context generation completed"})
+	}
+
+	return result, nil
+}
+
+//nolint:unparam // error return reserved for future validation logic
+func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
+	// Set defaults if fields are not set
+	if config.MaxFileSize == 0 {
+		config.MaxFileSize = DefaultMaxSize
+	}
+	if config.MaxTotalSize == 0 {
+		config.MaxTotalSize = DefaultMaxSize
+	}
+	if config.MaxFiles <= 0 {
+		config.MaxFiles = DefaultMaxFiles
+	}
+	if config.TemplateVars == nil {
+		config.TemplateVars = make(map[string]string)
+	}
+	// Note: IncludeTree and IncludeSummary default to false (zero value)
+	// They must be explicitly set to true when desired
+	return nil
+}
+
+func (g *DefaultContextGenerator) collectFileContents(
+	root *scanner.FileNode, selections map[string]bool, config GenerateConfig,
+) ([]FileContent, error) {
+	return collectFileContents(root, selections, config)
+}
+
+// buildCompleteFileStructure combines ASCII tree with file content blocks
+func (g *DefaultContextGenerator) buildCompleteFileStructure(tree string, files []FileContent) string {
+	var builder strings.Builder
+
+	// First part: ASCII tree structure
+	builder.WriteString(tree)
+
+	// Add separator if there are files
+	if len(files) > 0 {
+		builder.WriteString("\n")
+
+		// Second part: File content blocks in XML-like format
+		builder.WriteString(renderFileContentBlocks(files))
+	}
+
+	return builder.String()
+}
+
+// convertTemplateVariables converts {VARIABLE} syntax to {{.Variable}} syntax for Go templates
+func convertTemplateVariables(template string) string {
+	// Map of variable conversions from {UPPERCASE} to {{.TitleCase}}
+	conversions := map[string]string{
+		"{TASK}":           "{{.Task}}",
+		"{RULES}":          "{{.Rules}}",
+		"{FILE_STRUCTURE}": "{{.FileStructure}}",
+		"{CURRENT_DATE}":   "{{.CurrentDate}}",
+	}
+
+	result := template
+	for old, new := range conversions {
+		result = strings.ReplaceAll(result, old, new)
+	}
+
+	return result
+}
