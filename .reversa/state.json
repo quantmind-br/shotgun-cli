@@ -1,0 +1,219 @@
+{
+  "phases": {
+    "scout": {
+      "status": "completed",
+      "output": "_reversa_sdd/surface.json",
+      "completed_at": "2026-04-30T20:33:00Z"
+    },
+    "archaeologist": {
+      "status": "completed",
+      "output": "_reversa_sdd/modules",
+      "completed_at": "2026-04-30T21:15:00Z",
+      "modules": [
+        {
+          "name": "cmd",
+          "path": "_reversa_sdd/modules/cmd.md",
+          "summary": "CLI commands, presentation layer - GenerateConfig, ProgressOutput"
+        },
+        {
+          "name": "internal/app",
+          "path": "_reversa_sdd/modules/internal-app.md",
+          "summary": "Application services - ContextService, GenerateConfig, GenerateResult"
+        },
+        {
+          "name": "internal/core",
+          "path": "_reversa_sdd/modules/internal-core.md",
+          "summary": "Domain logic (zero deps) - FileNode, ScanConfig, Template, Provider"
+        },
+        {
+          "name": "internal/config",
+          "path": "_reversa_sdd/modules/internal-config.md",
+          "summary": "Configuration management - ConfigMetadata, validation by type"
+        },
+        {
+          "name": "internal/ui",
+          "path": "_reversa_sdd/modules/internal-ui.md",
+          "summary": "TUI wizard (Bubble Tea MVU) - WizardModel, ReviewModel"
+        },
+        {
+          "name": "internal/platform",
+          "path": "_reversa_sdd/modules/internal-platform.md",
+          "summary": "Infrastructure adapters - OpenAI, Anthropic, Gemini providers"
+        }
+      ]
+    },
+    "detective": {
+      "status": "completed",
+      "output": "_reversa_sdd/business",
+      "completed_at": "2026-04-30T21:30:00Z",
+      "artifacts": [
+        {
+          "name": "business-rules.md",
+          "path": "_reversa_sdd/business/business-rules.md",
+          "summary": "17 regras de negócio identificadas"
+        },
+        {
+          "name": "state-machines.md",
+          "path": "_reversa_sdd/business/state-machines.md",
+          "summary": "5 máquinas de estado documentadas"
+        },
+        {
+          "name": "permissions.md",
+          "path": "_reversa_sdd/business/permissions.md",
+          "summary": "Matriz RBAC/ACL (single-user)"
+        },
+        {
+          "name": "git-adrs.md",
+          "path": "_reversa_sdd/business/git-adrs.md",
+          "summary": "10 ADRs retroativos inferidos do Git"
+        },
+        {
+          "name": "index.md",
+          "path": "_reversa_sdd/business/index.md",
+          "summary": "Índice dos artefatos de negócio"
+        }
+      ],
+      "metrics": {
+        "rules_identified": 17,
+        "state_machines": 5,
+        "adrs_generated": 10,
+        "gaps_identified": 7
+      }
+    },
+    "architect": {
+      "status": "completed",
+      "completed_at": "2026-04-30T22:00:00Z",
+      "artifacts": [
+        {
+          "name": "architecture.md",
+          "path": "_reversa_sdd/architecture.md",
+          "summary": "Visão geral arquitetural com C4 contexto e ERD resumido"
+        },
+        {
+          "name": "c4-context.md",
+          "path": "_reversa_sdd/c4-context.md",
+          "summary": "Diagrama C4 Contexto em Mermaid"
+        },
+        {
+          "name": "c4-containers.md",
+          "path": "_reversa_sdd/c4-containers.md",
+          "summary": "Diagrama C4 Containers em Mermaid"
+        },
+        {
+          "name": "c4-components.md",
+          "path": "_reversa_sdd/c4-components.md",
+          "summary": "Diagrama C4 Componentes em Mermaid"
+        },
+        {
+          "name": "erd-complete.md",
+          "path": "_reversa_sdd/erd-complete.md",
+          "summary": "ERD completo em Mermaid"
+        },
+        {
+          "name": "traceability/spec-impact-matrix.md",
+          "path": "_reversa_sdd/traceability/spec-impact-matrix.md",
+          "summary": "Matriz de impacto especificação-componente"
+        },
+        {
+          "name": "deployment.md",
+          "path": "_reversa_sdd/deployment.md",
+          "summary": "Diagrama de infraestrutura e deployment"
+        }
+      ],
+      "integrations": {
+        "external_apis": [
+          {
+            "name": "OpenAI Chat Completions API",
+            "provider": "openai",
+            "auth": "Bearer token",
+            "endpoint": "https://api.openai.com/v1"
+          },
+          {
+            "name": "Anthropic Messages API",
+            "provider": "anthropic",
+            "auth": "x-api-key header",
+            "endpoint": "https://api.anthropic.com/v1"
+          },
+          {
+            "name": "Google Gemini Generative Language API",
+            "provider": "geminiapi",
+            "auth": "API key (query param)",
+            "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+          }
+        ]
+      },
+      "technical_debt": [
+        {
+          "id": "L1",
+          "description": "MaxMemory not implemented in scanner",
+          "severity": "critical"
+        },
+        {
+          "id": "L3",
+          "description": "No retry policy for LLM calls",
+          "severity": "critical"
+        },
+        {
+          "id": "L4",
+          "description": "No rate limiting",
+          "severity": "critical"
+        },
+        {
+          "id": "L5",
+          "description": "No context cache",
+          "severity": "high"
+        },
+        {
+          "id": "S1",
+          "description": "API keys in plaintext (env)",
+          "severity": "security"
+        },
+        {
+          "id": "S2",
+          "description": "No key scope/expiration",
+          "severity": "security"
+        }
+      ]
+    },
+    "writer": {
+      "status": "completed",
+      "mode": "auto",
+      "plan": [
+        "sdd/cmd.md",
+        "sdd/internal-app.md",
+        "sdd/internal-core.md",
+        "sdd/internal-config.md",
+        "sdd/internal-ui.md",
+        "sdd/internal-platform.md",
+        "sdd/ignore-engine.md",
+        "sdd/providers.md",
+        "openapi/llm-providers.yaml",
+        "user-stories/context-generation.md",
+        "traceability/code-spec-matrix.md"
+      ],
+      "items_total": 11,
+      "items_done": 11,
+      "started_at": "2026-04-30T22:30:00Z",
+      "completed_at": "2026-04-30T22:35:00Z",
+      "output": "_reversa_sdd/sdd/index.md"
+    },
+    "reviewer": {
+      "status": "completed",
+      "answer_mode": "file",
+      "questions_pending": 0,
+      "questions_resolved": 0,
+      "gaps": {
+        "human_required": 0,
+        "code_contradiction": 0,
+        "missing_analysis": 1,
+        "external_dependency": 0
+      },
+      "output": "_reversa_sdd/confidence-report.md",
+      "started_at": "2026-04-30T22:40:00Z",
+      "completed_at": "2026-04-30T22:45:00Z",
+      "error": null
+    }
+  },
+  "output_folder": "_reversa_sdd",
+  "doc_level": "completo"
+}

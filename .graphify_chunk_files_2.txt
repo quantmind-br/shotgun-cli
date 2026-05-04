@@ -1,0 +1,1 @@
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/assets/logo.svg

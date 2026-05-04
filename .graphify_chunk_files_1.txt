@@ -1,0 +1,14 @@
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/docs/guide/getting-started.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/docs/specs/decision-records/dr-001.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/docs/specs/decision-records/dr-002.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/docs/specs/decision-records/dr-003.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/configs/README.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/configs/config.yaml
+/home/diogo/dev/shotgun-cli/cmd/AGENTS.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/docs/changelog.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/public/index.txt
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/tests/e2e/test_scenario.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/tests/integration/test_plan.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/tests/unit/config_test.yaml
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/third_party/NOTICE.md
+/home/diogo/dev/shotgun-cli/test/fixtures/sample-project/web/static/index.html
