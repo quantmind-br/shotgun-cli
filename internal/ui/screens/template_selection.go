@@ -109,6 +109,10 @@ func (m *TemplateSelectionModel) GetSelected() *template.Template {
 	return m.selectedTemplate
 }
 
+func (m *TemplateSelectionModel) IsShowingFullPreview() bool {
+	return m.showingFullPreview
+}
+
 func (m *TemplateSelectionModel) SetSelectedForTest(tmpl *template.Template) {
 	m.selectedTemplate = tmpl
 }

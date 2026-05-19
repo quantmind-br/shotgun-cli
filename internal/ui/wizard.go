@@ -489,6 +489,11 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case "q":
+		if m.isModalOpen() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
 		if !m.isTextInputActive() {
 			return m, tea.Quit
 		}
@@ -513,6 +518,13 @@ func (m *WizardModel) isTextInputActive() bool {
 		return true
 	}
 	if m.step == StepFileSelection && m.fileSelection != nil && m.fileSelection.IsFilterMode() {
+		return true
+	}
+	return false
+}
+
+func (m *WizardModel) isModalOpen() bool {
+	if m.step == StepTemplateSelection && m.templateSelection != nil && m.templateSelection.IsShowingFullPreview() {
 		return true
 	}
 	return false

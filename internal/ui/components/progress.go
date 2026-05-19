@@ -75,7 +75,7 @@ func (b UsageBar) View() string {
 		emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
 
 		bar := filledStyle.Render(strings.Repeat("█", filledWidth)) +
-			emptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
+			emptyStyle.Render(strings.Repeat(" ", barWidth-filledWidth))
 
 		sizeInfo := fmt.Sprintf(" %s %s / %s (%.1f%%) ~%s tokens",
 			statusIcon, currentSize, b.MaxBytesStr, percentage, currentTokens)
@@ -286,7 +286,7 @@ func (m *ProgressModel) View() string {
 
 func (m *ProgressModel) renderProgressBar(width int) string {
 	if m.total <= 0 {
-		return lipgloss.NewStyle().Foreground(styles.MutedColor).Render(strings.Repeat("░", width))
+		return lipgloss.NewStyle().Foreground(styles.MutedColor).Render(strings.Repeat(" ", width))
 	}
 
 	filled := int(float64(width) * float64(m.current) / float64(m.total))
@@ -299,7 +299,7 @@ func (m *ProgressModel) renderProgressBar(width int) string {
 	emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
 
 	bar := filledStyle.Render(strings.Repeat("█", filled)) +
-		emptyStyle.Render(strings.Repeat("░", width-filled))
+		emptyStyle.Render(strings.Repeat(" ", width-filled))
 
 	return bar
 }

@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,7 +107,7 @@ func (m *RulesInputModel) View() string {
 	header := styles.RenderHeader(4, "Add Rules & Constraints")
 
 	// Character count with styling
-	currentLength := len(m.textarea.Value())
+	currentLength := utf8.RuneCountInString(m.textarea.Value())
 	var charCountStyle lipgloss.Style
 	if currentLength == 0 {
 		charCountStyle = lipgloss.NewStyle().Foreground(styles.MutedColor)

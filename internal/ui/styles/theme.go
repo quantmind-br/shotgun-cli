@@ -184,12 +184,17 @@ var (
 // Helper functions for common styling operations
 
 func RenderHeader(step int, title string) string {
+	titleStyled := TitleStyle.Render(title)
+
+	if step == 0 {
+		return titleStyled
+	}
+
 	stepIndicator := lipgloss.NewStyle().
 		Foreground(Nord15).
 		Bold(true).
 		Render(fmt.Sprintf("Step %d/5", step))
 
-	titleStyled := TitleStyle.Render(title)
 	separator := lipgloss.NewStyle().
 		Foreground(MutedColor).
 		Render(" • ")

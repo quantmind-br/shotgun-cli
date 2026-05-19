@@ -108,8 +108,16 @@ func (m *FileSelectionModel) handleFilterMode(msg tea.KeyMsg) tea.Cmd {
 		if len(m.filterBuffer) > 0 {
 			m.filterBuffer = m.filterBuffer[:len(m.filterBuffer)-1]
 		}
+	case "x":
+		m.filterBuffer = ""
 	default:
-		if len(msg.String()) == 1 && msg.String() != " " {
+		if len(msg.Runes) > 0 {
+			for _, r := range msg.Runes {
+				if r != ' ' {
+					m.filterBuffer += string(r)
+				}
+			}
+		} else if len(msg.String()) == 1 && msg.String() != " " {
 			m.filterBuffer += msg.String()
 		}
 	}
@@ -213,6 +221,8 @@ func (m *FileSelectionModel) View() string {
 		}
 		footer = styles.RenderFooter(shortcuts)
 	} else {
+		// Build footer with width-aware truncation — drop lowest-priority
+		// labels first rather than truncating mid-word.
 		line1 := []string{
 			"↑/↓: Navigate",
 			"←/→: Expand/Collapse",
@@ -229,6 +239,22 @@ func (m *FileSelectionModel) View() string {
 			"F1/?: Help",
 			"q: Quit",
 		}
+
+		if m.width < 100 {
+			line1 = line1[:len(line1)-1]
+		}
+		if m.width < 85 {
+			line1 = line1[:len(line1)-1]
+		}
+		if m.width < 70 {
+			line1 = line1[:len(line1)-1]
+			line2 = line2[:len(line2)-1]
+		}
+		if m.width < 55 {
+			line1 = line1[:len(line1)-1]
+			line2 = line2[:len(line2)-1]
+		}
+
 		footer = styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
 	}
 

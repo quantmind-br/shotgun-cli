@@ -138,7 +138,7 @@ func TestProgressRenderProgressBar(t *testing.T) {
 	bar := p.renderProgressBar(10)
 	assert.NotEmpty(t, bar)
 	assert.Contains(t, bar, "█")
-	assert.Contains(t, bar, "░")
+	assert.Contains(t, bar, " ")
 }
 
 func TestProgressRenderProgressBarZeroTotal(t *testing.T) {
@@ -148,7 +148,7 @@ func TestProgressRenderProgressBarZeroTotal(t *testing.T) {
 	bar := p.renderProgressBar(10)
 
 	// Should render all empty bars when total is 0
-	assert.Equal(t, "░░░░░░░░░░", bar)
+	assert.Equal(t, "          ", bar)
 }
 
 func TestProgressRenderProgressBarOverflow(t *testing.T) {
@@ -161,9 +161,8 @@ func TestProgressRenderProgressBarOverflow(t *testing.T) {
 	// The function fills based on percentage, which could exceed the bar width
 	// Just verify it's not empty
 	assert.NotEmpty(t, bar)
-	// All characters should be either █ or ░
 	for _, c := range bar {
-		assert.Contains(t, "█░", string(c))
+		assert.Contains(t, "█ ", string(c))
 	}
 }
 
