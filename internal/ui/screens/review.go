@@ -26,6 +26,7 @@ type ReviewModel struct {
 	generated       bool
 	generatedPath   string
 	clipboardCopied bool
+	copyToast       bool
 
 	totalBytes  int64
 	totalTokens int
@@ -315,8 +316,19 @@ func (m *ReviewModel) renderFixedFooter() string {
 	return styles.RenderStatusBar(m.width, preGenLines)
 }
 
+// SetCopyToast toggles the transient "copied to clipboard" confirmation that
+// appears right after the user presses `c` and clears itself shortly after.
+func (m *ReviewModel) SetCopyToast(show bool) {
+	m.copyToast = show
+}
+
 func (m *ReviewModel) renderGenerationStatusContent() string {
 	var view strings.Builder
+
+	if m.copyToast {
+		view.WriteString(styles.RenderSuccess("Copied to clipboard!"))
+		view.WriteString("\n\n")
+	}
 
 	view.WriteString(styles.RenderSuccess("Context generated successfully!"))
 	view.WriteString("\n\n")
@@ -381,10 +393,14 @@ func (m *ReviewModel) renderSizeLimitSection() string {
 	section.WriteString(limitIcon + " " + limitLabel)
 	section.WriteString("\n")
 
-	// Create and render usage bar
+	// Create and render usage bar. Cap the width so it doesn't stretch the full
+	// terminal on wide/tiled-WM layouts (a mostly-empty 160-col bar looks broken).
 	barWidth := m.width - 4
 	if barWidth < 30 {
 		barWidth = 30
+	}
+	if barWidth > 72 {
+		barWidth = 72
 	}
 	bar := components.NewUsageBar(m.totalBytes, m.maxSizeBytes, m.maxSizeStr, m.totalTokens, barWidth)
 	section.WriteString(bar.View())

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	rulesInputHeaderFooterHeight = 12
+	rulesInputHeaderFooterHeight = 15
 	rulesInputHorizontalPadding  = 6
 	rulesInputMinHeight          = 5
 	rulesInputMinWidth           = 20
@@ -169,10 +169,9 @@ func (m *RulesInputModel) View() string {
 	headerHeight := strings.Count(headerLine, "\n") + 1
 	bodyHeight := strings.Count(bodyStr, "\n") + 1
 	footerHeight := strings.Count(footer, "\n") + 1
-	paddingLines := m.height - headerHeight - bodyHeight - footerHeight - 2
-	if paddingLines < 0 {
-		paddingLines = 0
-	}
+	// Always keep at least one blank line so the char-count line never glues
+	// onto the footer hints.
+	paddingLines := max(m.height-headerHeight-bodyHeight-footerHeight-2, 1)
 
 	var content strings.Builder
 	content.WriteString(headerLine)

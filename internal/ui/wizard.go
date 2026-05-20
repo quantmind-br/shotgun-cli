@@ -231,7 +231,12 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// -- Clipboard Operations --
 	case screens.ClipboardCompleteMsg:
-		m.handleClipboardComplete(msg)
+		cmds = append(cmds, m.handleClipboardComplete(msg))
+
+	case copyToastClearMsg:
+		if m.review != nil {
+			m.review.SetCopyToast(false)
+		}
 
 	case screens.ClipboardCopyRequestMsg:
 		if m.generatedContent != "" {
@@ -451,7 +456,11 @@ func (m *WizardModel) renderHelpContent() string {
 func (m *WizardModel) renderConfirmQuit() string {
 	var confirm strings.Builder
 
-	confirm.WriteString(styles.WarningStyle.Render("Operation in Progress"))
+	title := "Unsaved Changes"
+	if m.llmSending || m.progress.Visible {
+		title = "Operation in Progress"
+	}
+	confirm.WriteString(styles.WarningStyle.Render(title))
 	confirm.WriteString("\n\n")
 
 	if m.llmSending {
@@ -622,7 +631,7 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			break
 		}
-		if m.progress.Visible || m.llmSending {
+		if m.progress.Visible || m.llmSending || m.hasEnteredData() {
 			m.confirmQuit = true
 			return m, nil
 		}
@@ -646,6 +655,22 @@ func (m *WizardModel) isTextInputActive() bool {
 		return true
 	}
 	if m.step == StepFileSelection && m.fileSelection != nil && m.fileSelection.IsFilterMode() {
+		return true
+	}
+	return false
+}
+
+// hasEnteredData reports whether the user has provided input that quitting
+// would silently discard (selected files or typed task/rules text). Used to
+// gate the confirm-quit modal so `q` doesn't throw away work without warning.
+func (m *WizardModel) hasEnteredData() bool {
+	if m.fileSelection != nil && m.fileSelection.GetSelectedCount() > 0 {
+		return true
+	}
+	if m.taskInput != nil && strings.TrimSpace(m.taskInput.GetValue()) != "" {
+		return true
+	}
+	if m.rulesInput != nil && strings.TrimSpace(m.rulesInput.GetValue()) != "" {
 		return true
 	}
 	return false
@@ -765,10 +790,22 @@ func (m *WizardModel) handleGenerationError(msg screens.GenerationErrorMsg) {
 	m.progress.Visible = false
 }
 
-func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) {
-	if m.review != nil && m.generatedFilePath != "" {
-		m.review.SetGenerated(m.generatedFilePath, msg.Success)
+// copyToastClearMsg fires shortly after a successful copy to dismiss the
+// transient "Copied to clipboard!" confirmation on the Review screen.
+type copyToastClearMsg struct{}
+
+func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) tea.Cmd {
+	if m.review == nil || m.generatedFilePath == "" {
+		return nil
 	}
+	m.review.SetGenerated(m.generatedFilePath, msg.Success)
+	if !msg.Success {
+		return nil
+	}
+	m.review.SetCopyToast(true)
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg {
+		return copyToastClearMsg{}
+	})
 }
 
 func (m *WizardModel) handleSendToLLM() tea.Cmd {

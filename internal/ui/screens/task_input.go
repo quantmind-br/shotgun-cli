@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	taskInputHeaderFooterHeight = 10
+	taskInputHeaderFooterHeight = 13
 	taskInputHorizontalPadding  = 6
 	taskInputMinHeight          = 5
 	taskInputMinWidth           = 20
@@ -166,10 +166,9 @@ func (m *TaskInputModel) View() string {
 	headerHeight := strings.Count(header, "\n") + 1
 	bodyHeight := strings.Count(bodyStr, "\n") + 1
 	footerHeight := strings.Count(footer, "\n") + 1
-	paddingLines := m.height - headerHeight - bodyHeight - footerHeight - 2
-	if paddingLines < 0 {
-		paddingLines = 0
-	}
+	// Always keep at least one blank line so the status/char-count line never
+	// glues onto the footer hints (e.g. "Characters: 57Type: Enter text").
+	paddingLines := max(m.height-headerHeight-bodyHeight-footerHeight-2, 1)
 
 	var content strings.Builder
 	content.WriteString(header)

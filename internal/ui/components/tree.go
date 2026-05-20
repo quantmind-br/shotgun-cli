@@ -178,11 +178,18 @@ func (m *FileTreeModel) computeFilterMatches() {
 		return
 	}
 
-	// First pass: find all nodes that directly match the filter
+	filterLower := strings.ToLower(m.filter)
+
+	// First pass: find all nodes that directly match the filter.
+	// The basename is matched fuzzily (subsequence) so "README" surfaces
+	// README.md, but the full path is only matched as a contiguous substring.
+	// A loose fuzzy match against the whole path matched far too much (e.g.
+	// "READ" satisfied r-e-a-d across graphify/cache/<hash>.json), burying the
+	// intended file under unrelated cache entries.
 	var findMatches func(node *scanner.FileNode)
 	findMatches = func(node *scanner.FileNode) {
-		// Check if this node matches (using path for better fuzzy matching)
-		if fuzzyMatch(node.RelPath, m.filter) || fuzzyMatch(node.Name, m.filter) {
+		if fuzzyMatch(node.Name, m.filter) ||
+			strings.Contains(strings.ToLower(node.RelPath), filterLower) {
 			m.filterMatches[node.Path] = true
 			// Mark all ancestors as visible
 			m.markAncestorsVisible(node)
