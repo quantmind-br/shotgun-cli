@@ -28,11 +28,7 @@ type TaskInputModel struct {
 
 func NewTaskInput(initialValue string) *TaskInputModel {
 	ta := textarea.New()
-	ta.Placeholder = "Describe the task you want to accomplish...\n\n" +
-		"Example:\n" +
-		"- Add a new user authentication feature\n" +
-		"- Fix the memory leak in the data processor\n" +
-		"- Refactor the payment handling code to use new API"
+	ta.Placeholder = "Type your task description here..."
 	ta.Focus()
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display

@@ -569,17 +569,32 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
 	case "f9", "s":
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
 		// Send to LLM (only on review screen after generation)
 		cmd = m.handleSendToLLM()
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	case "f5", "r":
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
 		if m.step == StepFileSelection && m.fileSelection != nil {
 			cmd = m.handleStepInput(msg)
 			cmds = append(cmds, cmd)
 		}
 	case "g":
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
 		if m.step == StepReview {
 			cmd = m.handleNextStep()
 			cmds = append(cmds, cmd)

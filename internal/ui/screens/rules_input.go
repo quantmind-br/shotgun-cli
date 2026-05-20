@@ -27,13 +27,7 @@ type RulesInputModel struct {
 
 func NewRulesInput(initialValue string) *RulesInputModel {
 	ta := textarea.New()
-	ta.Placeholder = "Add any rules, constraints, or guidelines (optional)...\n\n" +
-		"Examples:\n" +
-		"- Use TypeScript instead of JavaScript\n" +
-		"- Follow the existing error handling patterns\n" +
-		"- Ensure all functions have unit tests\n" +
-		"- Use the company's coding standards\n" +
-		"- Maintain backward compatibility"
+	ta.Placeholder = "Add rules or constraints (optional)..."
 	ta.Focus()
 	ta.SetValue(initialValue)
 	ta.ShowLineNumbers = false // Disable line numbers for cleaner display

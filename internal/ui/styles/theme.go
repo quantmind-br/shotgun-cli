@@ -200,7 +200,7 @@ func RenderHeader(step int, title string) string {
 	}
 
 	stepIndicator := lipgloss.NewStyle().
-		Foreground(Nord15).
+		Foreground(PrimaryColor).
 		Bold(true).
 		Render(fmt.Sprintf("Step %d/5", step))
 
