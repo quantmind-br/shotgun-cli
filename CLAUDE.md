@@ -96,7 +96,7 @@ Work items live in **bd** (beads), not markdown TODOs: `bd ready`, `bd show <id>
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **shotgun-cli** (5115 symbols, 14961 relationships, 259 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **shotgun-cli** (5367 symbols, 15210 relationships, 259 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
