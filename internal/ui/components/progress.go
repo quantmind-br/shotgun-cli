@@ -75,7 +75,7 @@ func (b UsageBar) View() string {
 		emptyStyle := lipgloss.NewStyle().Foreground(styles.MutedColor)
 
 		bar := filledStyle.Render(strings.Repeat("█", filledWidth)) +
-			emptyStyle.Render(strings.Repeat(" ", barWidth-filledWidth))
+			emptyStyle.Render(strings.Repeat("░", barWidth-filledWidth))
 
 		sizeInfo := fmt.Sprintf(" %s %s / %s (%.1f%%) ~%s tokens",
 			statusIcon, currentSize, b.MaxBytesStr, percentage, currentTokens)

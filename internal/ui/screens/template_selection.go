@@ -80,20 +80,33 @@ func (m *TemplateSelectionModel) Update(msg tea.Msg) tea.Cmd {
 
 	switch keyMsg.String() {
 	case "up", "k":
-		if m.cursor > 0 {
+		count := len(keyMsg.Runes)
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count && m.cursor > 0; i++ {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < len(m.templates)-1 {
+		count := len(keyMsg.Runes)
+		if count <= 0 {
+			count = 1
+		}
+		for i := 0; i < count && m.cursor < len(m.templates)-1; i++ {
 			m.cursor++
 		}
-	case "enter", " ":
+	case " ":
 		if m.cursor >= 0 && m.cursor < len(m.templates) {
 			m.selectedTemplate = m.templates[m.cursor]
 		}
-	case "home":
+	case "enter":
+		if m.cursor >= 0 && m.cursor < len(m.templates) {
+			m.showingFullPreview = true
+			m.previewScrollY = 0
+		}
+	case "home", "g":
 		m.cursor = 0
-	case "end":
+	case "end", "G":
 		m.cursor = len(m.templates) - 1
 	case "v":
 		if m.cursor >= 0 && m.cursor < len(m.templates) {
@@ -145,15 +158,23 @@ func (m *TemplateSelectionModel) View() string {
 		return earlyReturn
 	}
 
+	body := m.renderTemplateList()
+	footer := m.renderFooter()
+
+	headerHeight := strings.Count(header, "\n") + 1
+	bodyHeight := strings.Count(body, "\n") + 1
+	footerHeight := strings.Count(footer, "\n") + 1
+
+	paddingLines := m.height - headerHeight - bodyHeight - footerHeight - 2
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
-
-	// Render template list directly
-	content.WriteString(m.renderTemplateList())
-
-	footer := m.renderFooter()
-	content.WriteString("\n\n")
+	content.WriteString(body)
+	content.WriteString(strings.Repeat("\n", paddingLines))
 	content.WriteString(footer)
 
 	return content.String()
@@ -263,10 +284,13 @@ func (m *TemplateSelectionModel) formatTemplateLine(i int) string {
 }
 
 func (m *TemplateSelectionModel) renderFooter() string {
-	line1 := []string{
-		"↑/↓: Navigate",
-		"Enter/Space: Select",
-		"v: View full",
+	lines := [][]string{
+		{
+			"↑/↓: Navigate",
+			"Space: Select",
+			"Enter: Preview",
+			"v: View full",
+		},
 	}
 
 	nextAction := "F8: Next"
@@ -281,13 +305,13 @@ func (m *TemplateSelectionModel) renderFooter() string {
 		}
 	}
 
-	line2 := []string{
+	lines = append(lines, []string{
 		"F7: Back",
 		nextAction,
 		"F1/?: Help",
 		"q: Quit",
-	}
-	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+	})
+	return styles.RenderStatusBar(m.width, lines)
 }
 
 func (m *TemplateSelectionModel) handleModalKeyPress(msg tea.KeyMsg) tea.Cmd {
@@ -296,9 +320,17 @@ func (m *TemplateSelectionModel) handleModalKeyPress(msg tea.KeyMsg) tea.Cmd {
 		m.showingFullPreview = false
 		m.previewScrollY = 0
 	case "j", "down":
-		m.scrollPreviewDown(1)
+		count := len(msg.Runes)
+		if count <= 0 {
+			count = 1
+		}
+		m.scrollPreviewDown(count)
 	case "k", "up":
-		m.scrollPreviewUp(1)
+		count := len(msg.Runes)
+		if count <= 0 {
+			count = 1
+		}
+		m.scrollPreviewUp(count)
 	case "pgdown", "ctrl+d":
 		m.scrollPreviewDown(m.getVisibleHeight())
 	case "pgup", "ctrl+u":

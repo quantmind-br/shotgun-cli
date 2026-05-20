@@ -262,14 +262,6 @@ func (m *FileTreeModel) View() string {
 		}
 	}
 
-	// Pad with empty lines to fill available height so the tree
-	// occupies its full allocated area instead of leaving a large
-	// blank gap below the last item on tall terminals.
-	renderedLines := end - start
-	for i := renderedLines; i < maxVisible; i++ {
-		content.WriteString("\n")
-	}
-
 	// Calculate and render scrollbar if needed
 	if len(m.visibleItems) > maxVisible {
 		total := len(m.visibleItems)
@@ -318,7 +310,8 @@ func (m *FileTreeModel) renderTreeItem(item treeItem, isCursor bool) string {
 	line := prefix + checkbox + dirIndicator + name + ignoreStatus + sizeInfo
 
 	if isCursor {
-		line = styles.SelectedStyle.Render(line)
+		cursor := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("▶")
+		line = cursor + " " + styles.SelectedStyle.Render(line)
 	}
 
 	return line

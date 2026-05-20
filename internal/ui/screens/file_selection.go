@@ -15,7 +15,7 @@ import (
 
 const (
 	keyEsc                          = "esc"
-	fileSelectionHeaderFooterHeight = 6
+	fileSelectionHeaderFooterHeight = 8
 )
 
 type RescanRequestMsg struct{}
@@ -66,7 +66,11 @@ func (m *FileSelectionModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	if m.tree != nil {
-		m.tree.SetSize(width, height-fileSelectionHeaderFooterHeight)
+		reserved := fileSelectionHeaderFooterHeight
+		if m.filterMode {
+			reserved++
+		}
+		m.tree.SetSize(width, height-reserved)
 	}
 }
 
@@ -179,7 +183,29 @@ func (m *FileSelectionModel) syncSelections() {
 
 func (m *FileSelectionModel) View() string {
 	header := styles.RenderHeader(1, "Select Files")
+	body := m.renderBody()
+	footer := m.renderFooter()
 
+	headerHeight := strings.Count(header, "\n") + 1
+	bodyHeight := strings.Count(body, "\n") + 1
+	footerHeight := strings.Count(footer, "\n") + 1
+
+	paddingLines := m.height - headerHeight - bodyHeight - footerHeight
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+
+	var content strings.Builder
+	content.WriteString(header)
+	content.WriteString("\n")
+	content.WriteString(body)
+	content.WriteString(strings.Repeat("\n", paddingLines))
+	content.WriteString(footer)
+
+	return content.String()
+}
+
+func (m *FileSelectionModel) renderBody() string {
 	var stats string
 	if m.selections != nil {
 		selectedCount := len(m.selections)
@@ -211,19 +237,37 @@ func (m *FileSelectionModel) View() string {
 		treeView = "No files to display"
 	}
 
-	var footer string
+	var body strings.Builder
+	body.WriteString(stats)
+	body.WriteString("\n")
+
 	if m.filterMode {
-		shortcuts := []string{
+		body.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
+		body.WriteString("\n")
+	} else if m.tree != nil && m.tree.GetFilter() != "" {
+		filterIndicator := styles.HelpStyle.Render(fmt.Sprintf("Filter: %s [x to clear]", m.tree.GetFilter()))
+		body.WriteString(filterIndicator)
+		body.WriteString("\n")
+	}
+
+	body.WriteString("\n")
+	body.WriteString(treeView)
+
+	return body.String()
+}
+
+func (m *FileSelectionModel) renderFooter() string {
+	if m.filterMode {
+		return styles.RenderFooter([]string{
 			"Type to filter",
 			"Enter: Apply",
 			"Esc: Cancel",
 			"Backspace: Delete",
-		}
-		footer = styles.RenderFooter(shortcuts)
-	} else {
-		// Build footer with width-aware truncation — drop lowest-priority
-		// labels first rather than truncating mid-word.
-		line1 := []string{
+		})
+	}
+
+	lines := [][]string{
+		{
 			"↑/↓: Navigate",
 			"←/→: Expand/Collapse",
 			"Space: Select",
@@ -231,51 +275,16 @@ func (m *FileSelectionModel) View() string {
 			"i: Ignored",
 			"/: Filter",
 			"x: Clear",
-		}
-		line2 := []string{
+		},
+		{
 			"F5: Rescan",
 			"F7: Back",
 			"F8: Next",
 			"F1/?: Help",
 			"q: Quit",
-		}
-
-		if m.width < 100 {
-			line1 = line1[:len(line1)-1]
-		}
-		if m.width < 85 {
-			line1 = line1[:len(line1)-1]
-		}
-		if m.width < 70 {
-			line1 = line1[:len(line1)-1]
-			line2 = line2[:len(line2)-1]
-		}
-		if m.width < 55 {
-			line1 = line1[:len(line1)-1]
-			line2 = line2[:len(line2)-1]
-		}
-
-		footer = styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+		},
 	}
-
-	var content strings.Builder
-	content.WriteString(header)
-	content.WriteString("\n")
-	content.WriteString(stats)
-	content.WriteString("\n")
-
-	// Show filter input if in filter mode
-	if m.filterMode {
-		content.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
-		content.WriteString("\n")
-	}
-
-	content.WriteString("\n")
-	content.WriteString(treeView)
-	content.WriteString("\n")
-	content.WriteString(footer)
-
-	return content.String()
+	return styles.RenderStatusBar(m.width, lines)
 }
 
 func (m *FileSelectionModel) SetFileTree(tree *scanner.FileNode) {

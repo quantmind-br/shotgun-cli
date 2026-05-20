@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/app"
@@ -29,8 +30,8 @@ const (
 	StepRulesInput        = 4
 	StepReview            = 5
 
-	minTerminalWidth  = 40
-	minTerminalHeight = 10
+	minTerminalWidth  = 60
+	minTerminalHeight = 16
 )
 
 // LLMConfig holds configuration for the LLM provider.
@@ -70,7 +71,8 @@ type WizardModel struct {
 	error    error
 	width    int
 	height   int
-	showHelp bool
+	showHelp     bool
+	helpViewport viewport.Model
 
 	rootPath       string
 	scanConfig     *scanner.ScanConfig
@@ -95,6 +97,7 @@ type WizardModel struct {
 	llmResponseFile string
 
 	validationError string
+	confirmQuit     bool
 }
 
 type ScanProgressMsg struct {
@@ -148,7 +151,7 @@ func NewWizard(
 	if svc == nil {
 		svc = app.NewContextService()
 	}
-	return &WizardModel{
+	m := &WizardModel{
 		step:                StepFileSelection,
 		rootPath:            rootPath,
 		scanConfig:          scanConfig,
@@ -157,7 +160,10 @@ func NewWizard(
 		progressComponent:   components.NewProgress(),
 		scanCoordinator:     NewScanCoordinator(scanner.NewFileSystemScanner()),
 		generateCoordinator: NewGenerateCoordinator(contextgen.NewDefaultContextGenerator()),
+		helpViewport:        viewport.New(0, 0),
 	}
+	m.helpViewport.SetContent(m.renderHelpContent())
+	return m
 }
 
 func (m *WizardModel) Init() tea.Cmd {
@@ -304,8 +310,22 @@ func (m *WizardModel) View() string {
 		return m.renderSmallScreenWarning()
 	}
 
+	if m.confirmQuit {
+		return m.renderConfirmQuit()
+	}
+
 	if m.showHelp {
-		return m.renderHelp()
+		vw, vh := m.width, m.height
+		if vw <= 0 {
+			vw = 80
+		}
+		if vh <= 0 {
+			vh = 24
+		}
+		m.helpViewport.Width = vw
+		m.helpViewport.Height = vh
+		m.helpViewport.SetContent(m.renderHelpContent())
+		return m.helpViewport.View()
 	}
 
 	var mainView string
@@ -361,7 +381,7 @@ func (m *WizardModel) View() string {
 	return mainView
 }
 
-func (m *WizardModel) renderHelp() string {
+func (m *WizardModel) renderHelpContent() string {
 	var content strings.Builder
 
 	header := styles.RenderHeader(0, "Help - Keyboard Shortcuts")
@@ -373,6 +393,8 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  F1 / ?          Toggle this help screen\n")
 	content.WriteString("  F7 / Alt+←      Previous step\n")
 	content.WriteString("  F8 / Alt+→      Next step\n")
+	content.WriteString("  Tab             Next step alias\n")
+	content.WriteString("  Shift+Tab       Previous step alias\n")
 	content.WriteString("  q / Ctrl+Q      Quit application\n")
 	content.WriteString("\n")
 
@@ -386,13 +408,14 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString("  i           Toggle showing ignored files\n")
 	content.WriteString("  /           Enter filter mode (fuzzy search)\n")
 	content.WriteString("  x           Clear filter\n")
-	content.WriteString("  F5          Rescan directory\n")
+	content.WriteString("  F5 / r      Rescan directory\n")
 	content.WriteString("\n")
 
 	content.WriteString(styles.TitleStyle.Render("Template Selection (Step 2)"))
 	content.WriteString("\n")
 	content.WriteString("  ↑/↓ or k/j  Navigate templates\n")
-	content.WriteString("  Enter       Select template\n")
+	content.WriteString("  Space       Select template\n")
+	content.WriteString("  Enter       Open preview (modal)\n")
 	content.WriteString("  v           View full template (opens modal)\n")
 	content.WriteString("\n")
 	content.WriteString(styles.TitleStyle.Render("  In Template Preview Modal"))
@@ -406,21 +429,43 @@ func (m *WizardModel) renderHelp() string {
 	content.WriteString(styles.TitleStyle.Render("Text Input (Steps 3-4)"))
 	content.WriteString("\n")
 	content.WriteString("  Type        Enter text\n")
+	content.WriteString("  Tab         Toggle focus (edit/done)\n")
+	content.WriteString("  Esc         Cancel / leave input\n")
 	content.WriteString("  Enter       New line\n")
 	content.WriteString("  Backspace   Delete character\n")
 	content.WriteString("\n")
 
 	content.WriteString(styles.TitleStyle.Render("Review (Step 5)"))
 	content.WriteString("\n")
-	content.WriteString("  F8          Generate context\n")
+	content.WriteString("  F8 / g      Generate context\n")
 	content.WriteString("  c           Copy to clipboard\n")
-	content.WriteString("  F9          Send to LLM (if configured)\n")
+	content.WriteString("  F9 / s      Send to LLM (if configured)\n")
 	content.WriteString("\n")
 
 	footer := styles.RenderFooter([]string{"F1/?: Close Help", "q: Quit"})
 	content.WriteString(footer)
 
 	return content.String()
+}
+
+func (m *WizardModel) renderConfirmQuit() string {
+	var confirm strings.Builder
+
+	confirm.WriteString(styles.WarningStyle.Render("Operation in Progress"))
+	confirm.WriteString("\n\n")
+
+	if m.llmSending {
+		confirm.WriteString("LLM send is in progress. Quitting now will cancel it.\n\n")
+	} else if m.progress.Visible {
+		confirm.WriteString("A background operation is running. Quitting now will cancel it.\n\n")
+	} else {
+		confirm.WriteString("You have unsaved changes. What would you like to do?\n\n")
+	}
+
+	confirm.WriteString("  [Y] Quit without saving\n")
+	confirm.WriteString("  [N] Cancel and continue\n")
+
+	return styles.RenderBox(confirm.String(), "")
 }
 
 //nolint:unparam // tea.Cmd return is part of consistent handler pattern
@@ -444,23 +489,57 @@ func (m *WizardModel) handleWindowResize(msg tea.WindowSizeMsg) tea.Cmd {
 		m.review.SetSize(m.width, m.height)
 	}
 
+	m.helpViewport.Width = m.width
+	m.helpViewport.Height = m.height
+
 	return nil
 }
 
+//nolint:gocyclo // key routing switch required by TUI framework
 func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
-	// Always handle quit commands
 	if msg.String() == "ctrl+c" || msg.String() == "ctrl+q" {
 		return m, tea.Quit
 	}
 
-	// When help is showing, only allow closing it
+	if m.confirmQuit {
+		switch msg.String() {
+		case "y", "Y":
+			return m, tea.Quit
+		case "n", "N", "esc", "q":
+			m.confirmQuit = false
+		}
+		return m, nil
+	}
+
+	// When help is showing, allow scrolling and closing
 	if m.showHelp {
 		switch msg.String() {
 		case "f1", "esc", "?", "q":
 			m.showHelp = false
+			return m, nil
+		case "j", "down":
+			count := len(msg.Runes)
+			if count <= 0 {
+				count = 1
+			}
+			m.helpViewport.ScrollDown(count)
+		case "k", "up":
+			count := len(msg.Runes)
+			if count <= 0 {
+				count = 1
+			}
+			m.helpViewport.ScrollUp(count)
+		case "pgdown", "ctrl+d":
+			m.helpViewport.HalfPageDown()
+		case "pgup", "ctrl+u":
+			m.helpViewport.HalfPageUp()
+		case "g", "home":
+			m.helpViewport.GotoTop()
+		case "G", "end":
+			m.helpViewport.GotoBottom()
 		}
 		return m, nil
 	}
@@ -470,15 +549,44 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "f8", "alt+right":
 		cmd = m.handleNextStep()
 		cmds = append(cmds, cmd)
+	case "tab":
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
+		cmd = m.handleNextStep()
+		cmds = append(cmds, cmd)
 	case "f7", "alt+left":
 		cmd = m.handlePrevStep()
 		cmds = append(cmds, cmd)
-	case "f9":
+	case "shift+tab":
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
+		}
+		cmd = m.handlePrevStep()
+		cmds = append(cmds, cmd)
+	case "f9", "s":
 		// Send to LLM (only on review screen after generation)
 		cmd = m.handleSendToLLM()
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case "f5", "r":
+		if m.step == StepFileSelection && m.fileSelection != nil {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+		}
+	case "g":
+		if m.step == StepReview {
+			cmd = m.handleNextStep()
+			cmds = append(cmds, cmd)
+			break
+		}
+		cmd = m.handleStepInput(msg)
+		cmds = append(cmds, cmd)
 	case "f1":
 		m.showHelp = !m.showHelp
 	case "?":
@@ -494,11 +602,16 @@ func (m *WizardModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			break
 		}
-		if !m.isTextInputActive() {
-			return m, tea.Quit
+		if m.isTextInputActive() {
+			cmd = m.handleStepInput(msg)
+			cmds = append(cmds, cmd)
+			break
 		}
-		cmd = m.handleStepInput(msg)
-		cmds = append(cmds, cmd)
+		if m.progress.Visible || m.llmSending {
+			m.confirmQuit = true
+			return m, nil
+		}
+		return m, tea.Quit
 	default:
 		cmd = m.handleStepInput(msg)
 		cmds = append(cmds, cmd)
@@ -645,6 +758,11 @@ func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) 
 
 func (m *WizardModel) handleSendToLLM() tea.Cmd {
 	if m.step != StepReview || m.generatedContent == "" || m.llmSending {
+		return nil
+	}
+
+	if !m.isLLMAvailable() {
+		m.validationError = "No LLM configured — run 'shotgun-cli config'"
 		return nil
 	}
 
@@ -1087,9 +1205,9 @@ func (m *WizardModel) isTerminalTooSmall() bool {
 
 func (m *WizardModel) renderSmallScreenWarning() string {
 	msg := fmt.Sprintf(
-		"Terminal too small (%dx%d)\n\nPlease resize to at least %dx%d",
-		m.width, m.height,
+		"Terminal too small (need ≥%dx%d)\n\nCurrent: %dx%d",
 		minTerminalWidth, minTerminalHeight,
+		m.width, m.height,
 	)
 
 	return lipgloss.Place(

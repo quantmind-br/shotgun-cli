@@ -87,13 +87,18 @@ func (m *TaskInputModel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 
 	switch keyMsg.String() {
-	case keyEsc:
+	case "tab":
 		if m.textarea.Focused() {
 			m.textarea.Blur()
 			m.focused = false
 		} else {
 			m.textarea.Focus()
 			m.focused = true
+		}
+	case keyEsc:
+		if m.textarea.Focused() {
+			m.textarea.Blur()
+			m.focused = false
 		}
 	default:
 		m.textarea, cmd = m.textarea.Update(keyMsg)
@@ -142,47 +147,54 @@ func (m *TaskInputModel) View() string {
 	if m.textarea.Focused() {
 		focusIndicator = styles.StatusActiveStyle.Render("● Editing")
 	} else {
-		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Esc to edit")
+		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Tab to edit")
+	}
+
+	var body strings.Builder
+	body.WriteString(instructions)
+	body.WriteString("\n\n")
+	body.WriteString(focusIndicator)
+	body.WriteString("\n\n")
+	body.WriteString(textareaView)
+	body.WriteString("\n\n")
+	body.WriteString(charCount)
+
+	if currentLength == 0 {
+		body.WriteString("\n")
+		body.WriteString(styles.RenderWarning("Task description is required to continue"))
+	}
+
+	bodyStr := body.String()
+	footer := m.renderFooter()
+
+	headerHeight := strings.Count(header, "\n") + 1
+	bodyHeight := strings.Count(bodyStr, "\n") + 1
+	footerHeight := strings.Count(footer, "\n") + 1
+	paddingLines := m.height - headerHeight - bodyHeight - footerHeight - 2
+	if paddingLines < 0 {
+		paddingLines = 0
 	}
 
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
-	content.WriteString(instructions)
-	content.WriteString("\n\n")
-	content.WriteString(focusIndicator)
-	content.WriteString("\n\n")
-	content.WriteString(textareaView)
-	content.WriteString("\n\n")
-	content.WriteString(charCount)
+	content.WriteString(bodyStr)
+	content.WriteString(strings.Repeat("\n", paddingLines))
+	content.WriteString(footer)
 
-	// Validation message
-	if currentLength == 0 {
-		content.WriteString("\n")
-		content.WriteString(styles.RenderWarning("Task description is required to continue"))
-	}
+	return content.String()
+}
 
-	line1 := []string{
-		"Type: Enter text",
-		"Esc: Edit/Done",
-	}
-
+func (m *TaskInputModel) renderFooter() string {
 	nextAction := "F8: Next"
 	if m.willSkipToNext {
 		nextAction = "F8: Skip to Review"
 	}
 
-	line2 := []string{
-		"F7: Back",
-		nextAction,
-		"F1: Help",
-		"Ctrl+Q/Ctrl+C: Quit",
-	}
-	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
-	content.WriteString("\n\n")
-	content.WriteString(footer)
-
-	return content.String()
+	return styles.RenderStatusBar(m.width, [][]string{
+		{"Type: Enter text", "Tab: Edit/Done"},
+		{"F7: Back", nextAction, "F1: Help", "Ctrl+Q/Ctrl+C: Quit"},
+	})
 }
 
 func (m *TaskInputModel) GetValue() string {

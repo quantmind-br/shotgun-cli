@@ -146,9 +146,8 @@ func TestTemplateSelectionUpdateEnter(t *testing.T) {
 
 	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-	assert.Equal(t, tmpl, model.GetSelected())
+	assert.True(t, model.IsShowingFullPreview())
 	assert.Nil(t, cmd)
-	assert.Equal(t, tmpl, model.selectedTemplate)
 }
 
 func TestTemplateSelectionUpdateSpace(t *testing.T) {
@@ -357,14 +356,14 @@ func TestTemplateSelectionFormatTemplateLine(t *testing.T) {
 }
 
 func TestTemplateSelectionRenderFooter(t *testing.T) {
-	model := &TemplateSelectionModel{}
+	model := &TemplateSelectionModel{width: 100}
 
 	footer := model.renderFooter()
 
 	assert.Contains(t, footer, "Navigate")
 	assert.Contains(t, footer, "Select")
 	assert.Contains(t, footer, "Help")
-	assert.Contains(t, footer, "v: View full")
+	assert.Contains(t, footer, "Preview")
 }
 
 func TestTemplateModalState(t *testing.T) {

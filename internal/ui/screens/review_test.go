@@ -875,7 +875,7 @@ func TestReviewModel_ViewportInitialization(t *testing.T) {
 		t.Fatalf("expected viewport width 80, got %d", m.viewport.Width)
 	}
 
-	expectedHeight := 24 - footerHeight
+	expectedHeight := 24 - m.footerHeight()
 	if m.viewport.Height != expectedHeight {
 		t.Fatalf("expected viewport height %d, got %d", expectedHeight, m.viewport.Height)
 	}

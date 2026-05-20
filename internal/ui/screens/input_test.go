@@ -57,13 +57,13 @@ func TestTaskInputUpdateEscToBlur(t *testing.T) {
 	assert.Equal(t, "test", model.GetValue())
 }
 
-func TestTaskInputUpdateEscToFocus(t *testing.T) {
+func TestTaskInputUpdateTabToFocus(t *testing.T) {
 	model := NewTaskInput("test")
 	model.textarea.Blur() // Manually blur
 
 	assert.False(t, model.IsFocused())
 
-	cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	cmd := model.Update(tea.KeyMsg{Type: tea.KeyTab})
 
 	assert.True(t, model.IsFocused())
 	assert.Nil(t, cmd)
@@ -106,7 +106,7 @@ func TestTaskInputView(t *testing.T) {
 	assert.Contains(t, view, "test task")
 	assert.Contains(t, view, "Characters:")
 	// Just check that shortcuts are present (they may be formatted differently)
-	assert.Contains(t, view, "Esc:")
+	assert.Contains(t, view, "Tab:")
 	assert.Contains(t, view, "Help")
 }
 

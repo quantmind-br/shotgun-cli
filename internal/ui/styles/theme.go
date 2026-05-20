@@ -3,37 +3,47 @@ package styles
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
+var noColor = os.Getenv("NO_COLOR") != ""
+
+func TierColor(hex string) lipgloss.Color {
+	if noColor {
+		return lipgloss.Color("")
+	}
+	return lipgloss.Color(hex)
+}
+
 // Nord Color Palette - Professional dark theme for TUI
 // https://www.nordtheme.com/docs/colors-and-palettes
 var (
 	// Polar Night - Dark shades for backgrounds
-	Nord0 = lipgloss.Color("#2E3440") // Darkest background
-	Nord1 = lipgloss.Color("#3B4252") // Darker elements
-	Nord2 = lipgloss.Color("#434C5E") // UI elements
-	Nord3 = lipgloss.Color("#4C566A") // Inactive elements
+	Nord0 = TierColor("#2E3440") // Darkest background
+	Nord1 = TierColor("#3B4252") // Darker elements
+	Nord2 = TierColor("#434C5E") // UI elements
+	Nord3 = TierColor("#4C566A") // Inactive elements
 
 	// Snow Storm - Light shades for text
-	Nord4 = lipgloss.Color("#D8DEE9") // Main text
-	Nord5 = lipgloss.Color("#E5E9F0") // Brighter text
-	Nord6 = lipgloss.Color("#ECEFF4") // Brightest text
+	Nord4 = TierColor("#D8DEE9") // Main text
+	Nord5 = TierColor("#E5E9F0") // Brighter text
+	Nord6 = TierColor("#ECEFF4") // Brightest text
 
 	// Frost - Accent colors
-	Nord7  = lipgloss.Color("#8FBCBB") // Teal (secondary)
-	Nord8  = lipgloss.Color("#88C0D0") // Light blue (primary)
-	Nord9  = lipgloss.Color("#81A1C1") // Blue (links, navigation)
-	Nord10 = lipgloss.Color("#5E81AC") // Dark blue (selections)
+	Nord7  = TierColor("#8FBCBB") // Teal (secondary)
+	Nord8  = TierColor("#88C0D0") // Light blue (primary)
+	Nord9  = TierColor("#81A1C1") // Blue (links, navigation)
+	Nord10 = TierColor("#5E81AC") // Dark blue (selections)
 
 	// Aurora - Semantic colors
-	Nord11 = lipgloss.Color("#BF616A") // Red (errors, warnings)
-	Nord12 = lipgloss.Color("#D08770") // Orange (attention)
-	Nord13 = lipgloss.Color("#EBCB8B") // Yellow (warnings, partial)
-	Nord14 = lipgloss.Color("#A3BE8C") // Green (success, selected)
-	Nord15 = lipgloss.Color("#B48EAD") // Purple (special)
+	Nord11 = TierColor("#BF616A") // Red (errors, warnings)
+	Nord12 = TierColor("#D08770") // Orange (attention)
+	Nord13 = TierColor("#EBCB8B") // Yellow (warnings, partial)
+	Nord14 = TierColor("#A3BE8C") // Green (success, selected)
+	Nord15 = TierColor("#B48EAD") // Purple (special)
 
 	// Semantic color aliases
 	PrimaryColor   = Nord8                     // Light blue - main interactive elements
@@ -42,11 +52,11 @@ var (
 	ErrorColor     = Nord11                    // Red - errors
 	WarningColor   = Nord13                    // Yellow - warnings
 	SuccessColor   = Nord14                    // Green - success
-	MutedColor     = lipgloss.Color("#7B88A1") // High-contrast gray (~3.5:1 ratio)
+	MutedColor     = TierColor("#7B88A1") // High-contrast gray (~3.5:1 ratio)
 	BorderColor    = Nord2                     // Dark gray - borders
 	TextColor      = Nord4                     // Light gray - main text
 	BrightText     = Nord6                     // White - bright text
-	DimText        = lipgloss.Color("#7B88A1") // High-contrast dim text
+	DimText        = TierColor("#7B88A1") // High-contrast dim text
 
 	// Base styles with improved Nord colors
 	TitleStyle = lipgloss.NewStyle().
@@ -59,12 +69,11 @@ var (
 
 	SelectedStyle = lipgloss.NewStyle().
 			Background(Nord10).
-			Foreground(Nord6).
 			Bold(true)
 
 	CursorStyle = lipgloss.NewStyle().
 			Background(Nord10).
-			Foreground(Nord6)
+			Bold(true)
 
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(ErrorColor).
@@ -217,6 +226,55 @@ func RenderFooter(shortcuts []string) string {
 	separator := lipgloss.NewStyle().Foreground(MutedColor).Render(" │ ")
 
 	return strings.Join(parts, separator)
+}
+
+func RenderStatusBarLine(width int, hints []string) string {
+	if width <= 0 {
+		return ""
+	}
+
+	sep := lipgloss.NewStyle().Foreground(MutedColor).Render(" │ ")
+	more := lipgloss.NewStyle().Foreground(MutedColor).Render("? more")
+	moreWidth := lipgloss.Width(more)
+	sepWidth := lipgloss.Width(sep)
+
+	parts := make([]string, len(hints))
+	for i, h := range hints {
+		var style lipgloss.Style
+		if i%2 == 0 {
+			style = lipgloss.NewStyle().Foreground(Nord9)
+		} else {
+			style = lipgloss.NewStyle().Foreground(Nord7)
+		}
+		parts[i] = style.Render(h)
+	}
+
+	for keep := len(parts); keep >= 0; keep-- {
+		kept := parts[:keep]
+		line := strings.Join(kept, sep)
+		lineWidth := lipgloss.Width(line)
+
+		if keep == len(parts) && lineWidth <= width {
+			return line
+		}
+		if keep < len(parts) && lineWidth+sepWidth+moreWidth <= width {
+			return line + sep + more
+		}
+	}
+
+	return ""
+}
+
+func RenderStatusBar(width int, lines [][]string) string {
+	var result strings.Builder
+	for i, line := range lines {
+		rendered := RenderStatusBarLine(width, line)
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(rendered)
+	}
+	return result.String()
 }
 
 func RenderModal(content string) string {

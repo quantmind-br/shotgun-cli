@@ -346,6 +346,7 @@ func TestConfigWizard_RenderFooter(t *testing.T) {
 	t.Parallel()
 
 	wizard := NewConfigWizard()
+	wizard.width = 100
 
 	footer := wizard.renderFooter()
 	assert.NotEmpty(t, footer)

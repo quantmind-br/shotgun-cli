@@ -88,13 +88,18 @@ func (m *RulesInputModel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 
 	switch keyMsg.String() {
-	case keyEsc:
+	case "tab":
 		if m.textarea.Focused() {
 			m.textarea.Blur()
 			m.focused = false
 		} else {
 			m.textarea.Focus()
 			m.focused = true
+		}
+	case keyEsc:
+		if m.textarea.Focused() {
+			m.textarea.Blur()
+			m.focused = false
 		}
 	default:
 		m.textarea, cmd = m.textarea.Update(keyMsg)
@@ -149,39 +154,47 @@ func (m *RulesInputModel) View() string {
 	if m.textarea.Focused() {
 		focusIndicator = styles.StatusActiveStyle.Render("● Editing")
 	} else {
-		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Esc to edit")
+		focusIndicator = styles.StatusInactiveStyle.Render("○ Press Tab to edit")
+	}
+
+	var body strings.Builder
+	body.WriteString(instructions)
+	body.WriteString("\n")
+	body.WriteString(optionalNote)
+	body.WriteString("\n\n")
+	body.WriteString(focusIndicator)
+	body.WriteString("\n\n")
+	body.WriteString(textareaView)
+	body.WriteString("\n\n")
+	body.WriteString(charCount)
+
+	bodyStr := body.String()
+	footer := m.renderFooter()
+
+	headerLine := header + "  " + optionalBadge
+	headerHeight := strings.Count(headerLine, "\n") + 1
+	bodyHeight := strings.Count(bodyStr, "\n") + 1
+	footerHeight := strings.Count(footer, "\n") + 1
+	paddingLines := m.height - headerHeight - bodyHeight - footerHeight - 2
+	if paddingLines < 0 {
+		paddingLines = 0
 	}
 
 	var content strings.Builder
-	content.WriteString(header)
-	content.WriteString("  ")
-	content.WriteString(optionalBadge)
+	content.WriteString(headerLine)
 	content.WriteString("\n\n")
-	content.WriteString(instructions)
-	content.WriteString("\n")
-	content.WriteString(optionalNote)
-	content.WriteString("\n\n")
-	content.WriteString(focusIndicator)
-	content.WriteString("\n\n")
-	content.WriteString(textareaView)
-	content.WriteString("\n\n")
-	content.WriteString(charCount)
-
-	line1 := []string{
-		"Type: Enter text",
-		"Esc: Edit/Done",
-	}
-	line2 := []string{
-		"F7: Back",
-		"F8: Next (Skip)",
-		"F1: Help",
-		"Ctrl+Q/Ctrl+C: Quit",
-	}
-	footer := styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
-	content.WriteString("\n\n")
+	content.WriteString(bodyStr)
+	content.WriteString(strings.Repeat("\n", paddingLines))
 	content.WriteString(footer)
 
 	return content.String()
+}
+
+func (m *RulesInputModel) renderFooter() string {
+	return styles.RenderStatusBar(m.width, [][]string{
+		{"Type: Enter text", "Tab: Edit/Done"},
+		{"F7: Back", "F8: Next (Skip)", "F1: Help", "Ctrl+Q/Ctrl+C: Quit"},
+	})
 }
 
 func (m *RulesInputModel) GetValue() string {

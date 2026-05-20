@@ -19,6 +19,8 @@ const (
 	configHeaderHeight    = 3
 	configFooterHeight    = 3
 	configMessageDuration = 3 * time.Second
+	configMinWidth        = 60
+	configMinHeight       = 16
 )
 
 type ConfigSavedMsg struct{}
@@ -246,6 +248,10 @@ func (m *ConfigWizardModel) scheduleClearMessage() tea.Cmd {
 }
 
 func (m *ConfigWizardModel) View() string {
+	if m.isTerminalTooSmall() {
+		return m.renderSmallScreenWarning()
+	}
+
 	if m.showHelp {
 		return m.renderHelp()
 	}
@@ -297,10 +303,23 @@ func (m *ConfigWizardModel) renderMain() string {
 		content.WriteString("\n")
 	}
 
+	bodyStr := content.String()
 	footer := m.renderFooter()
-	content.WriteString(footer)
 
-	return content.String()
+	headerHeight := strings.Count(header, "\n") + 1
+	bodyHeight := strings.Count(bodyStr, "\n") + 1
+	footerHeight := strings.Count(footer, "\n") + 1
+	paddingLines := m.height - headerHeight - bodyHeight - footerHeight
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+
+	var result strings.Builder
+	result.WriteString(bodyStr)
+	result.WriteString(strings.Repeat("\n", paddingLines))
+	result.WriteString(footer)
+
+	return result.String()
 }
 
 func (m *ConfigWizardModel) renderHeader() string {
@@ -342,14 +361,9 @@ func (m *ConfigWizardModel) renderSidebar() string {
 }
 
 func (m *ConfigWizardModel) renderFooter() string {
-	shortcuts := []string{
-		"Tab: Next category",
-		"Enter: Edit",
-		"Ctrl+S/F2: Save",
-		"F1: Help",
-		"q: Quit",
-	}
-	return styles.RenderFooter(shortcuts)
+	return styles.RenderStatusBar(m.width, [][]string{
+		{"Tab: Next category", "Enter: Edit", "Ctrl+S/F2: Save", "F1: Help", "q: Quit"},
+	})
 }
 
 func (m *ConfigWizardModel) renderHelp() string {
@@ -434,4 +448,23 @@ func (m *ConfigWizardModel) SavedMessage() string {
 
 func (m *ConfigWizardModel) ErrorMessage() string {
 	return m.errorMessage
+}
+
+func (m *ConfigWizardModel) isTerminalTooSmall() bool {
+	return m.width > 0 && m.height > 0 &&
+		(m.width < configMinWidth || m.height < configMinHeight)
+}
+
+func (m *ConfigWizardModel) renderSmallScreenWarning() string {
+	msg := fmt.Sprintf(
+		"Terminal too small (need ≥%dx%d)\n\nCurrent: %dx%d",
+		configMinWidth, configMinHeight,
+		m.width, m.height,
+	)
+
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		styles.WarningStyle.Render(msg),
+	)
 }

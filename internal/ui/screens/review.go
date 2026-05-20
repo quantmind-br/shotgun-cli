@@ -71,11 +71,13 @@ func NewReview(
 	return m
 }
 
-const footerHeight = 4
-
 // SetLLMAvailable sets whether LLM provider is available for sending.
 func (m *ReviewModel) SetLLMAvailable(available bool) {
 	m.llmAvailable = available
+}
+
+func (m *ReviewModel) footerHeight() int {
+	return strings.Count(m.renderFixedFooter(), "\n") + 1
 }
 
 func (m *ReviewModel) SetSize(width, height int) {
@@ -83,7 +85,7 @@ func (m *ReviewModel) SetSize(width, height int) {
 	m.height = height
 
 	m.viewport.Width = width
-	m.viewport.Height = height - footerHeight
+	m.viewport.Height = height - m.footerHeight()
 	m.viewportReady = true
 }
 
@@ -196,6 +198,11 @@ func (m *ReviewModel) View() string {
 func (m *ReviewModel) buildScrollableContent() string {
 	header := styles.RenderHeader(5, "Review & Generate")
 
+	availableWidth := m.width - 4
+	if availableWidth < 20 {
+		availableWidth = 20
+	}
+
 	var content strings.Builder
 	content.WriteString(header)
 	content.WriteString("\n\n")
@@ -236,7 +243,7 @@ func (m *ReviewModel) buildScrollableContent() string {
 		content.WriteString(" " + tmplName)
 		content.WriteString("\n")
 		if m.template.Description != "" {
-			descStyled := styles.HelpStyle.Render("  " + m.template.Description)
+			descStyled := styles.HelpStyle.Width(availableWidth).Render("  " + m.template.Description)
 			content.WriteString(descStyled)
 			content.WriteString("\n")
 		}
@@ -255,7 +262,7 @@ func (m *ReviewModel) buildScrollableContent() string {
 	if len(taskPreview) > 150 {
 		taskPreview = taskPreview[:147] + "..."
 	}
-	taskStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render("  " + taskPreview)
+	taskStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Width(availableWidth).Render("  " + taskPreview)
 	content.WriteString(taskStyled)
 	content.WriteString("\n\n")
 
@@ -268,7 +275,10 @@ func (m *ReviewModel) buildScrollableContent() string {
 		if len(rulesPreview) > 100 {
 			rulesPreview = rulesPreview[:97] + "..."
 		}
-		rulesStyled := lipgloss.NewStyle().Foreground(styles.TextColor).Render("  " + rulesPreview)
+		rulesStyled := lipgloss.NewStyle().
+			Foreground(styles.TextColor).
+			Width(availableWidth).
+			Render("  " + rulesPreview)
 		content.WriteString(rulesStyled)
 		content.WriteString("\n\n")
 	}
@@ -287,17 +297,22 @@ func (m *ReviewModel) buildScrollableContent() string {
 
 func (m *ReviewModel) renderFixedFooter() string {
 	if m.generated {
-		line1 := []string{"↑/↓: Scroll", "c: Copy"}
+		lines := [][]string{{"↑/↓: Scroll", "c: Copy"}}
 		if m.llmAvailable && !m.llmSending && !m.llmComplete {
-			line1 = append(line1, "F9: LLM")
+			lines[0] = append(lines[0], "s: LLM", "F9: LLM")
 		}
-		line2 := []string{"F1/?: Help", "q: Exit"}
-		return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+		lines = append(lines, []string{"F1/?: Help", "q: Exit"})
+		return styles.RenderStatusBar(m.width, lines)
 	}
 
-	line1 := []string{"↑/↓: Scroll", "F7: Back", "F8: Generate"}
-	line2 := []string{"F1/?: Help", "q: Quit"}
-	return styles.RenderFooter(line1) + "\n" + styles.RenderFooter(line2)
+	preGenLines := [][]string{{"↑/↓: Scroll", "g: Generate", "F8: Generate", "F7: Back", "c: Copy"}}
+	if m.llmAvailable {
+		preGenLines[0] = append(preGenLines[0], "s: LLM", "F9: LLM")
+	} else {
+		preGenLines[0] = append(preGenLines[0], styles.HelpStyle.Render("s/F9: LLM [not configured]"))
+	}
+	preGenLines = append(preGenLines, []string{"F1/?: Help", "q: Quit"})
+	return styles.RenderStatusBar(m.width, preGenLines)
 }
 
 func (m *ReviewModel) renderGenerationStatusContent() string {
@@ -350,7 +365,8 @@ func (m *ReviewModel) renderPreGenerationContent() string {
 	}
 
 	for _, item := range items {
-		view.WriteString(bulletStyle.Render("  • ") + itemStyle.Render(item))
+		wrappedItem := itemStyle.Width(m.width - 8).Render(item)
+		view.WriteString(bulletStyle.Render("  • ") + wrappedItem)
 		view.WriteString("\n")
 	}
 
@@ -366,7 +382,11 @@ func (m *ReviewModel) renderSizeLimitSection() string {
 	section.WriteString("\n")
 
 	// Create and render usage bar
-	bar := components.NewUsageBar(m.totalBytes, m.maxSizeBytes, m.maxSizeStr, m.totalTokens, 30)
+	barWidth := m.width - 4
+	if barWidth < 30 {
+		barWidth = 30
+	}
+	bar := components.NewUsageBar(m.totalBytes, m.maxSizeBytes, m.maxSizeStr, m.totalTokens, barWidth)
 	section.WriteString(bar.View())
 
 	return section.String()

@@ -2018,7 +2018,8 @@ func TestWizardSendToLLMCmd_ReturnsCommand(t *testing.T) {
 	wizard.generatedFilePath = "/tmp/test.md"
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
-			SaveResponse: false,
+			Provider: "openai",
+			APIKey:   "test-key",
 		},
 	}
 
@@ -2084,6 +2085,7 @@ func TestWizardHandleSendToGemini_ReturnsCommandForValidInput(t *testing.T) {
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "openai",
+			APIKey:   "test-key",
 		},
 	}
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
@@ -2358,6 +2360,7 @@ func TestWizardHandleSendToLLM_ServiceError(t *testing.T) {
 	wizard.wizardConfig = &WizardConfig{
 		LLM: LLMConfig{
 			Provider: "openai",
+			APIKey:   "test-key",
 		},
 	}
 	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
@@ -2431,7 +2434,7 @@ func TestWizardView_SmallScreen_WidthTooSmall(t *testing.T) {
 	if !strings.Contains(view, "30x24") {
 		t.Error("expected current dimensions in warning")
 	}
-	if !strings.Contains(view, "40x10") {
+	if !strings.Contains(view, "60x16") {
 		t.Error("expected minimum dimensions in warning")
 	}
 }
@@ -2493,12 +2496,12 @@ func TestWizardView_SmallScreen_BoundaryConditions(t *testing.T) {
 		height        int
 		expectWarning bool
 	}{
-		{"exactly minimum - no warning", 40, 10, false},
-		{"one less than min width", 39, 10, true},
-		{"one less than min height", 40, 9, true},
+		{"exactly minimum - no warning", 60, 16, false},
+		{"one less than min width", 59, 16, true},
+		{"one less than min height", 60, 15, true},
 		{"well above minimum", 120, 40, false},
-		{"exactly one above min width", 41, 10, false},
-		{"exactly one above min height", 40, 11, false},
+		{"exactly one above min width", 61, 16, false},
+		{"exactly one above min height", 60, 17, false},
 	}
 
 	for _, tt := range tests {
@@ -2552,7 +2555,7 @@ func TestWizard_renderSmallScreenWarning(t *testing.T) {
 	if !strings.Contains(view, "30x8") {
 		t.Error("expected current dimensions")
 	}
-	if !strings.Contains(view, "40x10") {
+	if !strings.Contains(view, "60x16") {
 		t.Error("expected minimum dimensions")
 	}
 	if view == "" {
@@ -2593,7 +2596,7 @@ func TestWizard_isTerminalTooSmall(t *testing.T) {
 		{"both below minimum", 20, 5, true},
 		{"width below minimum", 30, 24, true},
 		{"height below minimum", 80, 5, true},
-		{"exactly at minimum", 40, 10, false},
+		{"exactly at minimum", 60, 16, false},
 		{"above minimum", 80, 24, false},
 	}
 
