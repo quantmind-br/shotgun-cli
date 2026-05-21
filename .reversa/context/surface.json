@@ -1,0 +1,532 @@
+{
+  "project": {
+    "name": "shotgun-cli",
+    "module": "github.com/quantmind-br/shotgun-cli",
+    "language": "Go",
+    "go_version": "1.24.0",
+    "description": "CLI tool that generates LLM-optimized codebase contexts with both TUI wizard and headless CLI modes.",
+    "binary": "shotgun-cli"
+  },
+  "entry_point": {
+    "file": "main.go",
+    "package": "main",
+    "imports": [
+      "github.com/quantmind-br/shotgun-cli/cmd",
+      "github.com/rs/zerolog",
+      "github.com/rs/zerolog/log"
+    ],
+    "main_function": "main()",
+    "description": "Entry point: initializes zerolog console logger and executes cmd.Execute()"
+  },
+  "packages": [
+    {
+      "path": "github.com/quantmind-br/shotgun-cli",
+      "type": "entry_point",
+      "description": "Main package and CLI entry point",
+      "key_types": ["main()"],
+      "key_exports": []
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/cmd",
+      "type": "presentation",
+      "description": "Cobra-based CLI commands: root, config, context, llm, template, send",
+      "key_types": [
+        "rootCmd (*cobra.Command)",
+        "configCmd (*cobra.Command)",
+        "contextCmd (*cobra.Command)",
+        "llmCmd (*cobra.Command)",
+        "templateCmd (*cobra.Command)",
+        "GenerateConfig (struct)",
+        "ProgressMode (type)",
+        "ProgressOutput (struct)",
+        "WizardConfig (struct)",
+        "LLMConfig (struct)"
+      ],
+      "key_exports": ["Execute()", "CreateLLMProvider()", "GetProviderRegistry()", "BuildLLMConfig()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/cmd",
+      "type": "presentation",
+      "description": "LLM provider registration for CLI commands",
+      "key_types": ["providerRegistry (*llm.Registry)"],
+      "key_exports": ["CreateLLMProvider()", "GetProviderRegistry()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/app",
+      "type": "service",
+      "description": "Service layer: ContextService interface, orchestration of scanner + generator + LLM",
+      "key_types": [
+        "ContextService (interface)",
+        "DefaultContextService (struct)",
+        "GenerateConfig (struct)",
+        "GenerateResult (struct)",
+        "LLMSendConfig (struct)",
+        "ProgressCallback (func)",
+        "LLMProgressCallback (func)",
+        "CLIConfig (struct)",
+        "ProgressMode (type)",
+        "ProgressOutput (struct)",
+        "DefaultProviderRegistry (*llm.Registry)"
+      ],
+      "key_exports": ["NewContextService()", "WithRegistry()", "WithScanner()", "WithGenerator()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/config",
+      "type": "configuration",
+      "description": "Centralized configuration keys, metadata, and value validation",
+      "key_types": [
+        "ConfigCategory (enum)",
+        "ConfigMetadata (struct)"
+      ],
+      "key_exports": ["AllCategories()", "IsValidKey()", "ValidateValue()", "ConvertValue()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/scanner",
+      "type": "domain",
+      "description": "Filesystem scanning: recursive scan with ignore patterns, parallel workers, progress",
+      "key_types": [
+        "Scanner (interface)",
+        "FileNode (struct)",
+        "ScanConfig (struct)",
+        "Progress (struct)"
+      ],
+      "key_exports": ["DefaultScanConfig()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/contextgen",
+      "type": "domain",
+      "description": "Context generation: tree rendering, file content collection, template rendering",
+      "key_types": [
+        "ContextGenerator (interface)",
+        "DefaultContextGenerator (struct)",
+        "GenerateConfig (struct)",
+        "ContextData (struct)",
+        "FileContent (struct)",
+        "GenProgress (struct)"
+      ],
+      "key_exports": ["NewDefaultContextGenerator()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/diff",
+      "type": "domain",
+      "description": "Diff splitting utilities: split git diffs into chunks respecting file boundaries",
+      "key_types": [
+        "Chunk (struct)",
+        "SplitConfig (struct)"
+      ],
+      "key_exports": ["DefaultSplitConfig()", "IntelligentSplit()", "IsDiffHeader()", "IsGitDiffHeader()", "CanSplitAt()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/ignore",
+      "type": "domain",
+      "description": "Layered ignore engine: built-in + .gitignore + custom patterns + explicit includes/excludes",
+      "key_types": [
+        "IgnoreReason (enum)",
+        "IgnoreEngine (interface)",
+        "LayeredIgnoreEngine (struct)"
+      ],
+      "key_exports": ["NewIgnoreEngine()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/llm",
+      "type": "domain",
+      "description": "Unified LLM provider interface, registry, and configuration",
+      "key_types": [
+        "Provider (interface)",
+        "ProviderType (enum)",
+        "Config (struct)",
+        "Result (struct)",
+        "Usage (struct)",
+        "Registry (struct)",
+        "ProviderCreator (func)"
+      ],
+      "key_exports": [
+        "AllProviders()",
+        "IsValidProvider()",
+        "NewRegistry()",
+        "DefaultConfigs()",
+        "Config.Validate()",
+        "Config.MaskAPIKey()"
+      ]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/template",
+      "type": "domain",
+      "description": "Template management: loading from embedded/filesystem sources, rendering, validation",
+      "key_types": [
+        "Template (struct)",
+        "TemplateManager (interface)",
+        "TemplateSource (interface)",
+        "Manager (struct)",
+        "Renderer (struct)",
+        "ManagerConfig (struct)"
+      ],
+      "key_exports": ["NewManager()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/core/tokens",
+      "type": "domain",
+      "description": "Heuristic token estimation: 1 token ≈ 4 bytes approximation",
+      "key_types": [
+        "Stats (struct)",
+        "ContextFit (struct)"
+      ],
+      "key_exports": ["Estimate()", "EstimateFromBytes()", "BytesFromTokens()", "FormatTokens()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/llmbase",
+      "type": "infrastructure",
+      "description": "Base HTTP client for LLM providers: common send logic, headers, response parsing",
+      "key_types": [
+        "BaseClient (struct)",
+        "Config (struct)",
+        "DefaultConfig (struct)",
+        "Sender (interface)"
+      ],
+      "key_exports": ["NewBaseClient()", "NewBaseClientWithDefaults()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/http",
+      "type": "infrastructure",
+      "description": "Shared JSON HTTP client with timeout and error handling",
+      "key_types": [
+        "JSONClient (struct)",
+        "ClientConfig (struct)",
+        "HTTPError (struct)",
+        "ProgressCallback (func)"
+      ],
+      "key_exports": ["NewJSONClient()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/openai",
+      "type": "infrastructure",
+      "description": "OpenAI Chat Completions API provider implementation",
+      "key_types": [
+        "Client (struct)",
+        "ChatCompletionRequest (struct)",
+        "Message (struct)",
+        "ChatCompletionResponse (struct)",
+        "ErrorResponse (struct)"
+      ],
+      "key_exports": ["NewClient()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/anthropic",
+      "type": "infrastructure",
+      "description": "Anthropic Messages API provider implementation",
+      "key_types": [
+        "Client (struct)",
+        "MessagesRequest (struct)",
+        "Message (struct)",
+        "MessagesResponse (struct)",
+        "ErrorResponse (struct)"
+      ],
+      "key_exports": ["NewClient()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/geminiapi",
+      "type": "infrastructure",
+      "description": "Google Gemini API provider implementation",
+      "key_types": [
+        "Client (struct)",
+        "GenerateRequest (struct)",
+        "Content (struct)",
+        "Part (struct)",
+        "GenerateResponse (struct)"
+      ],
+      "key_exports": ["NewClient()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/platform/clipboard",
+      "type": "infrastructure",
+      "description": "Cross-platform clipboard copy utility",
+      "key_types": [],
+      "key_exports": ["Copy()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/ui",
+      "type": "presentation",
+      "description": "Bubble Tea MVU TUI: main wizard (5 steps) and config wizard",
+      "key_types": [
+        "WizardModel (struct)",
+        "ConfigWizardModel (struct)",
+        "ScanCoordinator (struct)",
+        "GenerateCoordinator (struct)",
+        "LLMConfig (struct)",
+        "ContextConfig (struct)",
+        "WizardConfig (struct)"
+      ],
+      "key_exports": ["NewWizard()", "NewConfigWizard()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/ui/components",
+      "type": "presentation",
+      "description": "Reusable Bubble Tea components: file tree, progress bar, config field editors",
+      "key_types": [
+        "ProgressModel (struct)",
+        "TreeModel (struct)"
+      ],
+      "key_exports": ["NewProgress()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/ui/screens",
+      "type": "presentation",
+      "description": "Wizard screens: file selection, template selection, task input, rules input, review",
+      "key_types": [
+        "FileSelectionModel (struct)",
+        "TemplateSelectionModel (struct)",
+        "TaskInputModel (struct)",
+        "RulesInputModel (struct)",
+        "ReviewModel (struct)",
+        "ConfigCategoryModel (struct)"
+      ],
+      "key_exports": [
+        "NewFileSelection()",
+        "NewTemplateSelection()",
+        "NewTaskInput()",
+        "NewRulesInput()",
+        "NewReview()",
+        "NewConfigCategory()"
+      ]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/ui/styles",
+      "type": "presentation",
+      "description": "Lipgloss UI styles: colors, themes, render helpers",
+      "key_types": [],
+      "key_exports": ["RenderError()", "RenderWarning()", "RenderSuccess()", "RenderHeader()", "RenderFooter()", "RenderStatusBar()", "RenderSeparator()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/utils",
+      "type": "utility",
+      "description": "Utility functions: size parsing, byte formatting, conversion helpers",
+      "key_types": [],
+      "key_exports": ["ParseSize()", "ParseSizeWithDefault()", "FormatBytes()", "FormatSize()"]
+    },
+    {
+      "path": "github.com/quantmind-br/shotgun-cli/internal/assets",
+      "type": "infrastructure",
+      "description": "Embedded assets: prompt templates compiled into binary",
+      "key_types": [],
+      "key_exports": ["Templates (embed.FS)"]
+    }
+  ],
+  "cli_commands": [
+    {
+      "name": "shotgun-cli",
+      "use": "shotgun-cli",
+      "short": "Generate LLM-optimized codebase contexts",
+      "description": "Base command. Without args launches TUI wizard. With args runs headless CLI mode.",
+      "subcommands": [
+        {
+          "name": "config",
+          "use": "shotgun-cli config",
+          "short": "Configuration management",
+          "subcommands": [
+            {"name": "show", "use": "shotgun-cli config show", "short": "Show current configuration"},
+            {"name": "set", "use": "shotgun-cli config set [key] [value]", "short": "Set a configuration value"}
+          ],
+          "description": "Launches interactive TUI config wizard. Subcommands show/set values."
+        },
+        {
+          "name": "context",
+          "use": "shotgun-cli context",
+          "short": "Context generation tools",
+          "subcommands": [
+            {
+              "name": "generate",
+              "use": "shotgun-cli context generate",
+              "short": "Generate context from codebase",
+              "flags": ["--root", "-r", "--include", "-i", "--exclude", "-e", "--output", "-o", "--max-size", "--enforce-limit", "--template", "-t", "--task", "--rules", "--var", "-V", "--workers", "--include-hidden", "--include-ignored", "--progress"]
+            },
+            {
+              "name": "send",
+              "use": "shotgun-cli context send [file]",
+              "short": "Send a context file to LLM",
+              "flags": ["--output", "-o", "--model", "-m", "--timeout", "--raw"]
+            }
+          ],
+          "description": "Generate optimized codebase context files or send them to LLMs."
+        },
+        {
+          "name": "llm",
+          "use": "shotgun-cli llm",
+          "short": "LLM provider management",
+          "subcommands": [
+            {"name": "status", "use": "shotgun-cli llm status", "short": "Show LLM provider status"},
+            {"name": "doctor", "use": "shotgun-cli llm doctor", "short": "Diagnose LLM configuration"},
+            {"name": "list", "use": "shotgun-cli llm list", "short": "List supported providers"}
+          ],
+          "description": "Manage and diagnose LLM provider configuration."
+        },
+        {
+          "name": "template",
+          "use": "shotgun-cli template",
+          "short": "Template management",
+          "subcommands": [
+            {"name": "list", "use": "shotgun-cli template list", "short": "List available templates"},
+            {"name": "render", "use": "shotgun-cli template render [name]", "short": "Render a template with variables", "flags": ["--var", "-V", "--output", "-o"]},
+            {"name": "import", "use": "shotgun-cli template import <file> [name]", "short": "Import a template file to user directory"},
+            {"name": "export", "use": "shotgun-cli template export <name> <file>", "short": "Export a template to a file"}
+          ],
+          "description": "List, render, import, and export prompt templates."
+        }
+      ]
+    }
+  ],
+  "llm_providers": [
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "default_model": "gpt-4o",
+      "default_base_url": "https://api.openai.com/v1",
+      "endpoint": "/chat/completions",
+      "auth": "Bearer token",
+      "implementation": "internal/platform/openai"
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "default_model": "claude-sonnet-4-20250514",
+      "default_base_url": "https://api.anthropic.com",
+      "endpoint": "/v1/messages",
+      "auth": "x-api-key header + anthropic-version",
+      "implementation": "internal/platform/anthropic"
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "default_model": "gemini-2.5-flash",
+      "default_base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "endpoint": "/models/{model}:generateContent?key={api_key}",
+      "auth": "API key (query param)",
+      "implementation": "internal/platform/geminiapi"
+    }
+  ],
+  "config_keys": {
+    "scanner": [
+      "scanner.max-files (default: 10000)",
+      "scanner.max-file-size (default: 1MB)",
+      "scanner.max-memory (default: 500MB)",
+      "scanner.skip-binary (default: true)",
+      "scanner.include-hidden (default: false)",
+      "scanner.include-ignored (default: false)",
+      "scanner.workers (default: 1)",
+      "scanner.respect-gitignore (default: true)",
+      "scanner.respect-shotgunignore (default: true)"
+    ],
+    "context": [
+      "context.max-size (default: 10MB)",
+      "context.include-tree (default: true)",
+      "context.include-summary (default: true)"
+    ],
+    "template": [
+      "template.custom-path (default: \"\")"
+    ],
+    "output": [
+      "output.format (default: \"markdown\")",
+      "output.clipboard (default: true)"
+    ],
+    "llm": [
+      "llm.provider (default: \"openai\")",
+      "llm.api-key (required, no default)",
+      "llm.base-url (optional, defaults per provider)",
+      "llm.model (optional, defaults per provider)",
+      "llm.timeout (default: 300)",
+      "llm.save-response (default: true)"
+    ],
+    "global": [
+      "verbose",
+      "quiet"
+    ]
+  },
+  "tui_wizard": {
+    "steps": [
+      {"step": 1, "name": "File Selection", "component": "FileSelectionModel", "description": "Browse and select files to include in context"},
+      {"step": 2, "name": "Template Selection", "component": "TemplateSelectionModel", "description": "Choose a prompt template (e.g., makePlan, analyzeBug)"},
+      {"step": 3, "name": "Task Input", "component": "TaskInputModel", "description": "Enter task description for the LLM (if template requires it)"},
+      {"step": 4, "name": "Rules Input", "component": "RulesInputModel", "description": "Enter rules/constraints for the LLM (if template requires it)"},
+      {"step": 5, "name": "Review", "component": "ReviewModel", "description": "Review generated context, copy to clipboard, send to LLM"}
+    ],
+    "min_terminal_size": "60x16",
+    "framework": "Bubble Tea (charmbracelet/bubbletea v1.3.5)",
+    "styling": "Lipgloss (charmbracelet/lipgloss v1.1.0)"
+  },
+  "external_dependencies": {
+    "direct": [
+      "github.com/spf13/cobra v1.10.2",
+      "github.com/spf13/viper v1.21.0",
+      "github.com/charmbracelet/bubbletea v1.3.5",
+      "github.com/charmbracelet/bubbles v0.21.0",
+      "github.com/charmbracelet/lipgloss v1.1.0",
+      "github.com/rs/zerolog v1.33.0",
+      "github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06",
+      "github.com/adrg/xdg v0.5.3",
+      "github.com/atotto/clipboard v0.1.4",
+      "github.com/stretchr/testify v1.11.1",
+      "golang.org/x/text v0.32.0"
+    ],
+    "total_indirect": "~35"
+  },
+  "embedded_assets": {
+    "templates": [
+      "prompt_analyzeBug.md",
+      "prompt_makeDiffGitFormat.md",
+      "prompt_makePlan.md",
+      "prompt_projectManager.md"
+    ],
+    "embed_source": "internal/assets/embed.go"
+  },
+  "ignore_patterns": {
+    "built_in": [
+      "shotgun-prompt*.md",
+      ".git/, .svn/, .hg/, .bzr/",
+      ".vscode/, .idea/, *.swp, *.swo, *~, .DS_Store, Thumbs.db",
+      "node_modules/, bower_components/, vendor/, target/, build/, dist/, out/, bin/, obj/",
+      "__pycache__/, *.pyc, *.pyo, .cache/, .tmp/, tmp/, .pytest_cache/, .mypy_cache/",
+      "*.png, *.jpg, *.jpeg, *.gif, *.ico, *.svg, *.webp",
+      "*.mp3, *.mp4, *.wav, *.avi, *.mov, *.mkv",
+      "*.ttf, *.otf, *.woff, *.woff2, *.eot",
+      "*.pdf, *.doc, *.docx, *.xls, *.xlsx, *.ppt, *.pptx",
+      "*.exe, *.dll, *.so, *.dylib",
+      "*.sqlite, *.sqlite3, *.db",
+      "*.log, logs/",
+      "*.jar, *.war, *.nar, *.ear",
+      "*.zip, *.tar.gz, *.rar, *.7z"
+    ],
+    "custom_files": [".gitignore", ".shotgunignore"],
+    "implementation": "internal/core/ignore/engine.go"
+  },
+  "key_architectural_decisions": [
+    {
+      "decision": "Provider abstraction via interface + registry",
+      "rationale": "Allows adding new LLM providers without changing service layer code. Each provider implements llm.Provider interface.",
+      "location": "internal/core/llm/provider.go, internal/core/llm/registry.go"
+    },
+    {
+      "decision": "Bubble Tea MVU for TUI",
+      "rationale": "Provides structured async message-passing model ideal for terminal UIs with concurrent operations (scanning, generation, LLM calls).",
+      "location": "internal/ui/wizard.go, internal/ui/config_wizard.go"
+    },
+    {
+      "decision": "Layered ignore engine",
+      "rationale": "Separation of built-in, gitignore, custom, and explicit rules with priority ordering allows flexible file filtering.",
+      "location": "internal/core/ignore/engine.go"
+    },
+    {
+      "decision": "Heuristic token estimation",
+      "rationale": "1 token ≈ 4 bytes approximation avoids dependency on heavy tokenizer libraries while being sufficiently accurate for LLM context sizing.",
+      "location": "internal/core/tokens/estimator.go"
+    },
+    {
+      "decision": "//go:embed for templates",
+      "rationale": "Compiles default templates into the binary, eliminating runtime dependency on external template files.",
+      "location": "internal/assets/embed.go"
+    },
+    {
+      "decision": "Functional options for service construction",
+      "rationale": "NewContextService(opts...) pattern enables testing with mocked dependencies and flexible configuration.",
+      "location": "internal/app/service.go"
+    }
+  ]
+}

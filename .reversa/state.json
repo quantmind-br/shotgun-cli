@@ -39,6 +39,16 @@
           "name": "internal/platform",
           "path": "_reversa_sdd/modules/internal-platform.md",
           "summary": "Infrastructure adapters - OpenAI, Anthropic, Gemini providers"
+        },
+        {
+          "name": "internal/platform/geminiapi",
+          "path": ".specs/internal-platform-geminiapi/code-analysis.md",
+          "summary": "Gemini API provider adapter - Client, types, Send/SendWithProgress flows"
+        },
+        {
+          "name": "internal/platform/llmbase",
+          "path": "_reversa_sdd/modules/internal-platform.md",
+          "summary": "Base LLM client + Sender interface (shared infrastructure)"
         }
       ]
     },
@@ -50,12 +60,12 @@
         {
           "name": "business-rules.md",
           "path": "_reversa_sdd/business/business-rules.md",
-          "summary": "17 regras de negócio identificadas"
+          "summary": "17 regras de neg\u00f3cio identificadas"
         },
         {
           "name": "state-machines.md",
           "path": "_reversa_sdd/business/state-machines.md",
-          "summary": "5 máquinas de estado documentadas"
+          "summary": "5 m\u00e1quinas de estado documentadas"
         },
         {
           "name": "permissions.md",
@@ -70,7 +80,7 @@
         {
           "name": "index.md",
           "path": "_reversa_sdd/business/index.md",
-          "summary": "Índice dos artefatos de negócio"
+          "summary": "\u00cdndice dos artefatos de neg\u00f3cio"
         }
       ],
       "metrics": {
@@ -87,7 +97,7 @@
         {
           "name": "architecture.md",
           "path": "_reversa_sdd/architecture.md",
-          "summary": "Visão geral arquitetural com C4 contexto e ERD resumido"
+          "summary": "Vis\u00e3o geral arquitetural com C4 contexto e ERD resumido"
         },
         {
           "name": "c4-context.md",
@@ -112,7 +122,7 @@
         {
           "name": "traceability/spec-impact-matrix.md",
           "path": "_reversa_sdd/traceability/spec-impact-matrix.md",
-          "summary": "Matriz de impacto especificação-componente"
+          "summary": "Matriz de impacto especifica\u00e7\u00e3o-componente"
         },
         {
           "name": "deployment.md",
@@ -214,6 +224,11 @@
       "error": null
     }
   },
-  "output_folder": "_reversa_sdd",
-  "doc_level": "completo"
+  "output_folder": ".specs",
+  "doc_level": "detalhado",
+  "user_name": "pi-reversa-full",
+  "project": "shotgun-cli",
+  "chat_language": "pt-br",
+  "doc_language": "pt-br",
+  "answer_mode": "chat"
 }
