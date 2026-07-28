@@ -192,3 +192,35 @@ func TestClient_SendWithProgress(t *testing.T) {
 	assert.Contains(t, stages, "Connecting to Gemini...")
 	assert.Contains(t, stages, "Response received")
 }
+
+// TestClient_Send_HTTPErrorParsesBody covers the non-200 path, which used to
+// print the raw JSON body instead of the message.
+//
+// TestClient_Send_APIError above covers an error delivered inside a 200 response,
+// which ParseResponse already handled. This is the other half, and it is what
+// OpenAI and Anthropic have always done for the same class of failure.
+func TestClient_Send_HTTPErrorParsesBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"code":    429,
+				"message": "Quota exceeded for quota metric",
+				"status":  "RESOURCE_EXHAUSTED",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, _ := NewClient(llm.Config{
+		APIKey:  "key",
+		BaseURL: server.URL,
+		Model:   "gemini-2.5-flash",
+		Timeout: 30,
+	})
+
+	_, err := client.Send(context.Background(), "test")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Quota exceeded for quota metric")
+	assert.NotContains(t, err.Error(), `"status"`, "the raw JSON body must not leak into the message")
+}

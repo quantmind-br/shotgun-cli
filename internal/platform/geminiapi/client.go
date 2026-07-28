@@ -2,6 +2,7 @@ package geminiapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -126,8 +127,21 @@ func (c *Client) GetProviderName() string {
 	return c.ProviderName
 }
 
+// handleError parses the error body Gemini returns on a non-200 status.
+//
+// It used to return "" unconditionally, so HandleHTTPError fell back to printing
+// the raw body: the user saw the code and message wrapped in JSON noise, while
+// OpenAI and Anthropic showed a clean message for the same class of failure.
+// ParseResponse already parsed this shape for errors delivered inside a 200.
 func (c *Client) handleError(err error) error {
 	return c.HandleHTTPError(err, func(body []byte) string {
+		var errResp struct {
+			Error *APIError `json:"error"`
+		}
+		if json.Unmarshal(body, &errResp) == nil && errResp.Error != nil && errResp.Error.Message != "" {
+			return errResp.Error.Message
+		}
+
 		return ""
 	})
 }
