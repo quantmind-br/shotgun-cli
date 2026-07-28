@@ -13,7 +13,12 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
+
+// defaultMaxContextSize is the fallback used when context.max-size cannot be
+// parsed. It mirrors the documented default of that key (config/metadata.go).
+const defaultMaxContextSize int64 = 10 * 1024 * 1024
 
 type ReviewModel struct {
 	selectedFiles   map[string]bool
@@ -66,7 +71,7 @@ func NewReview(
 	m.totalBytes, m.totalTokens = m.calculateStats()
 
 	if m.maxSizeStr != "" {
-		m.maxSizeBytes, _ = parseSize(m.maxSizeStr)
+		m.maxSizeBytes = utils.ParseSizeWithDefault(m.maxSizeStr, defaultMaxContextSize)
 	}
 
 	return m
@@ -544,31 +549,4 @@ func formatSizeHelper(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// parseSize converts size strings like "10MB" to bytes
-func parseSize(sizeStr string) (int64, error) {
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-
-	var multiplier int64 = 1
-	if strings.HasSuffix(sizeStr, "KB") {
-		multiplier = 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	} else if strings.HasSuffix(sizeStr, "MB") {
-		multiplier = 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	} else if strings.HasSuffix(sizeStr, "GB") {
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	} else if strings.HasSuffix(sizeStr, "B") {
-		sizeStr = strings.TrimSuffix(sizeStr, "B")
-	}
-
-	var size int64
-	_, err := fmt.Sscanf(sizeStr, "%d", &size)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse size value: %w", err)
-	}
-
-	return size * multiplier, nil
 }

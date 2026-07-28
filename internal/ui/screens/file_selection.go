@@ -11,6 +11,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 const (
@@ -60,7 +61,7 @@ func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool, ma
 	}
 
 	if maxSizeStr != "" {
-		m.maxSizeBytes, _ = parseSize(maxSizeStr)
+		m.maxSizeBytes = utils.ParseSizeWithDefault(maxSizeStr, defaultMaxContextSize)
 	}
 
 	return m

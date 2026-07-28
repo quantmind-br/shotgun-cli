@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1211,34 +1211,6 @@ func (m *WizardModel) clipboardCopyCmd(content string) tea.Cmd {
 	}
 }
 
-// parseSize converts size strings like "10MB" to bytes
-func parseSize(sizeStr string) (int64, error) {
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-
-	var multiplier int64 = 1
-
-	switch {
-	case strings.HasSuffix(sizeStr, "KB"):
-		multiplier = 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	case strings.HasSuffix(sizeStr, "MB"):
-		multiplier = 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	case strings.HasSuffix(sizeStr, "GB"):
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	case strings.HasSuffix(sizeStr, "B"):
-		sizeStr = strings.TrimSuffix(sizeStr, "B")
-	}
-
-	size, err := strconv.ParseInt(sizeStr, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse size integer: %w", err)
-	}
-
-	return size * multiplier, nil
-}
-
 func (m *WizardModel) pollGenerate() tea.Cmd {
 	if m.generateCoordinator == nil {
 		return nil
@@ -1252,7 +1224,7 @@ func (m *WizardModel) validateContentSize(content string) error {
 		return nil
 	}
 
-	maxSize, err := parseSize(maxSizeStr)
+	maxSize, err := utils.ParseSize(maxSizeStr)
 	if err != nil {
 		return fmt.Errorf("invalid max-size configuration: %w", err)
 	}
