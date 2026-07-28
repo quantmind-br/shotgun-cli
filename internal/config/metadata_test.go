@@ -255,7 +255,14 @@ func TestAllCategories_CoversAllMetadata(t *testing.T) {
 	}
 }
 
-func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
+// TestMetadataDefaults_AreStable pins the registry's declared defaults against
+// an independent table, so a sweeping edit cannot pass by being self-consistent.
+//
+// It was named ..._MatchRootDefaults but never compared anything to
+// cmd.setConfigDefaults -- it could not, since internal/config must not import
+// cmd. That comparison now lives in cmd/root_test.go, where it belongs, and
+// where it caught the drift this table had been silently blessing.
+func TestMetadataDefaults_AreStable(t *testing.T) {
 	t.Parallel()
 
 	expectedDefaults := map[string]interface{}{
@@ -272,12 +279,12 @@ func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
 		KeyTemplateCustomPath:          "",
 		KeyOutputFormat:                "markdown",
 		KeyOutputClipboard:             true,
-		KeyLLMProvider:                 "gemini",
+		KeyLLMProvider:                 "openai",
 		KeyLLMAPIKey:                   "",
 		KeyLLMBaseURL:                  "",
 		KeyLLMModel:                    "",
 		KeyLLMTimeout:                  300,
-		KeyLLMSaveResponse:             false,
+		KeyLLMSaveResponse:             true,
 		KeyVerbose:                     false,
 		KeyQuiet:                       false,
 	}

@@ -232,30 +232,20 @@ func selectionStorePath() string {
 	return filepath.Join(getConfigDir(), "selections.json")
 }
 
+// setConfigDefaults seeds viper from the metadata registry.
+//
+// This list used to be maintained by hand alongside the registry, and the two
+// had drifted: llm.provider defaulted to openai here and gemini there, and
+// llm.save-response to true here and false there. Nothing was broken at runtime
+// -- viper reads this list -- but the config TUI's "reset to default" action
+// reads the registry, so resetting a key wrote a value a fresh install never
+// had. verbose and quiet had no default here at all.
+//
+// Registering a key in buildAllMetadata() is now the only edit needed.
 func setConfigDefaults() {
-	viper.SetDefault(config.KeyScannerMaxFiles, 10000)
-	viper.SetDefault(config.KeyScannerMaxFileSize, "1MB")
-	viper.SetDefault(config.KeyScannerRespectGitignore, true)
-	viper.SetDefault(config.KeyScannerSkipBinary, true)
-	viper.SetDefault(config.KeyScannerIncludeHidden, false)
-	viper.SetDefault(config.KeyScannerIncludeIgnored, false)
-	viper.SetDefault(config.KeyScannerRespectShotgunignore, true)
-
-	viper.SetDefault(config.KeyContextMaxSize, "10MB")
-	viper.SetDefault(config.KeyContextIncludeTree, true)
-	viper.SetDefault(config.KeyContextIncludeSummary, true)
-
-	viper.SetDefault(config.KeyTemplateCustomPath, "")
-
-	viper.SetDefault(config.KeyOutputFormat, "markdown")
-	viper.SetDefault(config.KeyOutputClipboard, true)
-
-	viper.SetDefault(config.KeyLLMProvider, "openai")
-	viper.SetDefault(config.KeyLLMAPIKey, "")
-	viper.SetDefault(config.KeyLLMBaseURL, "")
-	viper.SetDefault(config.KeyLLMModel, "")
-	viper.SetDefault(config.KeyLLMTimeout, 300)
-	viper.SetDefault(config.KeyLLMSaveResponse, true)
+	for _, m := range config.AllConfigMetadata() {
+		viper.SetDefault(m.Key, m.DefaultValue)
+	}
 }
 
 func updateLoggingLevel() {

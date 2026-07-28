@@ -259,7 +259,7 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeEnum,
 			Description:  "LLM provider to use",
-			DefaultValue: ProviderGemini,
+			DefaultValue: ProviderOpenAI,
 			EnumOptions:  []string{ProviderOpenAI, ProviderAnthropic, ProviderGemini},
 		},
 		{
@@ -297,7 +297,7 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeBool,
 			Description:  "Save LLM response to file",
-			DefaultValue: false,
+			DefaultValue: true,
 		},
 
 		// Global (2 keys). Both are also bound to persistent flags in

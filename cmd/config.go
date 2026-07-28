@@ -190,59 +190,45 @@ func showCurrentConfig() error {
 	allKeys := viper.AllKeys()
 	sort.Strings(allKeys)
 
-	// Group keys by category. Retired keys are skipped: viper still surfaces
-	// them when they linger in an existing config file, and listing them would
-	// suggest they still do something.
-	categories := make(map[string][]string)
+	// Group keys by their registry category, not by the text before the first
+	// dot. The old split put `verbose` and `quiet` under headings named after
+	// themselves, and needed a hardcoded category order beside the registry's own.
+	//
+	// Retired keys are skipped: viper still surfaces them when they linger in an
+	// existing config file, and listing them would suggest they still do
+	// something.
+	const uncategorised = config.ConfigCategory("Other")
+
+	categories := make(map[config.ConfigCategory][]string)
 	for _, key := range allKeys {
 		if _, deprecated := config.DeprecationMessage(key); deprecated {
 			continue
 		}
-		parts := strings.Split(key, ".")
-		category := parts[0]
+
+		category := uncategorised
+		if m, found := config.GetMetadata(key); found {
+			category = m.Category
+		}
 		categories[category] = append(categories[category], key)
 	}
 
-	// Display by category
-	categoryOrder := []string{"scanner", "context", "template", "output", "llm"}
-
-	for _, category := range categoryOrder {
-		if keys, exists := categories[category]; exists {
-			fmt.Printf("%s\n", styles.TitleStyle.Render("["+strings.ToUpper(category)+"]"))
-			for _, key := range keys {
-				value := viper.Get(key)
-				source := getConfigSource(key)
-				keyStyled := styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", key))
-				valStyled := styles.StatsValueStyle.Render(fmt.Sprintf("%-15v", formatValue(value)))
-				srcStyled := lipgloss.NewStyle().Foreground(styles.MutedColor).Render(fmt.Sprintf("(%s)", source))
-				fmt.Printf("  %s = %s %s\n", keyStyled, valStyled, srcStyled)
-			}
-			fmt.Println()
+	order := append(config.AllCategories(), uncategorised)
+	for _, category := range order {
+		keys, exists := categories[category]
+		if !exists {
+			continue
 		}
-	}
 
-	// Show any remaining categories not in the predefined order
-	for category, keys := range categories {
-		found := false
-		for _, predefined := range categoryOrder {
-			if category == predefined {
-				found = true
-
-				break
-			}
+		fmt.Printf("%s\n", styles.TitleStyle.Render("["+strings.ToUpper(string(category))+"]"))
+		for _, key := range keys {
+			value := viper.Get(key)
+			source := getConfigSource(key)
+			keyStyled := styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", key))
+			valStyled := styles.StatsValueStyle.Render(fmt.Sprintf("%-15v", formatValue(value)))
+			srcStyled := lipgloss.NewStyle().Foreground(styles.MutedColor).Render(fmt.Sprintf("(%s)", source))
+			fmt.Printf("  %s = %s %s\n", keyStyled, valStyled, srcStyled)
 		}
-		if !found {
-			fmt.Printf("%s\n", styles.TitleStyle.Render("["+strings.ToUpper(category)+"]"))
-			for _, key := range keys {
-				value := viper.Get(key)
-				source := getConfigSource(key)
-				keyStyled := styles.StatsLabelStyle.Render(fmt.Sprintf("%-25s", key))
-				valStyled := styles.StatsValueStyle.Render(fmt.Sprintf("%-15v", formatValue(value)))
-				srcStyled := lipgloss.NewStyle().Foreground(styles.MutedColor).Render(fmt.Sprintf("(%s)", source))
-				fmt.Printf("  %s = %s %s\n", keyStyled, valStyled, srcStyled)
-			}
-			fmt.Println()
-		}
+		fmt.Println()
 	}
 
 	// Show Gemini integration status

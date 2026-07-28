@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 )
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -135,8 +138,56 @@ func TestRunRootCommandNoArgsShowsHelp(t *testing.T) {
 	_ = output
 }
 
-func TestSetConfigDefaults(t *testing.T) {
+// TestSetConfigDefaults_MatchesRegistry is the guard the old hardcoded table
+// could not be: it compares what viper actually holds against the registry, so
+// the two cannot drift again. They had -- llm.provider and llm.save-response
+// disagreed, and verbose/quiet had no runtime default at all.
+func TestSetConfigDefaults_MatchesRegistry(t *testing.T) {
 	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	setConfigDefaults()
+
+	metadata := config.AllConfigMetadata()
+	if len(metadata) == 0 {
+		t.Fatal("the metadata registry is empty")
+	}
+
+	for _, m := range metadata {
+		t.Run(m.Key, func(t *testing.T) {
+			got := viper.Get(m.Key)
+			if got == nil {
+				t.Fatalf("%s has no runtime default; the registry declares %v", m.Key, m.DefaultValue)
+			}
+			// Compared as strings: viper normalises some types on the way in,
+			// and the contract here is the effective value, not its Go type.
+			if fmt.Sprintf("%v", got) != fmt.Sprintf("%v", m.DefaultValue) {
+				t.Errorf("%s = %v at runtime, but the registry declares %v", m.Key, got, m.DefaultValue)
+			}
+		})
+	}
+}
+
+// TestSetConfigDefaults_CoversEveryViperKey is the other direction: no key may
+// appear at runtime without a registry entry describing it.
+func TestSetConfigDefaults_CoversEveryViperKey(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	setConfigDefaults()
+
+	for _, key := range viper.AllKeys() {
+		if _, found := config.GetMetadata(key); !found {
+			t.Errorf("viper key %q has no metadata entry", key)
+		}
+	}
+}
+
+// TestSetConfigDefaults_KnownValues spot-checks a few effective defaults, so a
+// registry-wide mistake cannot pass merely by being self-consistent.
+func TestSetConfigDefaults_KnownValues(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
 
 	setConfigDefaults()
 
@@ -158,6 +209,9 @@ func TestSetConfigDefaults(t *testing.T) {
 		{"output.clipboard", true},
 		{"llm.provider", "openai"},
 		{"llm.timeout", 300},
+		{"llm.save-response", true},
+		{"verbose", false},
+		{"quiet", false},
 	}
 
 	for _, tt := range tests {
