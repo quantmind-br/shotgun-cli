@@ -22,7 +22,7 @@ go test -race ./...        # full test suite (preferred — race detector on)
 go test -v -run TestName_Scenario ./internal/core/scanner/...   # single test / package
 make test-e2e              # end-to-end CLI tests in ./test/e2e
 
-golangci-lint run ./...    # or `make lint` (auto-picks .golangci-local.yml if present)
+golangci-lint run ./...    # or `make lint` (uses .golangci.yml)
 make coverage              # coverage.out + per-func report (target: 85%+ overall, 90%+ new code)
 ```
 
@@ -123,6 +123,17 @@ This project is indexed by GitNexus as **shotgun-cli** (5142 symbols, 15021 rela
 | `gitnexus://repo/shotgun-cli/clusters` | All functional areas |
 | `gitnexus://repo/shotgun-cli/processes` | All execution flows |
 | `gitnexus://repo/shotgun-cli/process/{name}` | Step-by-step execution trace |
+
+## OpenWiki
+
+This repository has documentation located in the /openwiki directory.
+
+Start here:
+- [OpenWiki quickstart](openwiki/quickstart.md)
+
+OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
 
 ## CLI
 

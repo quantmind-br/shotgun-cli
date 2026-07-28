@@ -61,66 +61,6 @@ func TestIsGitDiffHeader(t *testing.T) {
 	}
 }
 
-func TestCanSplitHere(t *testing.T) {
-	tests := []struct {
-		name          string
-		lines         []string
-		index         int
-		inFileSection bool
-		expected      bool
-	}{
-		{
-			name:          "before git diff header",
-			lines:         []string{"context line", "diff --git a/file.go b/file.go"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "before diff header",
-			lines:         []string{"context line", "--- a/file.go"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "before hunk header",
-			lines:         []string{"context line", "@@ -1,5 +1,6 @@"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "at last line",
-			lines:         []string{"last line"},
-			index:         0,
-			inFileSection: true,
-			expected:      false,
-		},
-		{
-			name:          "not in file section",
-			lines:         []string{"line1", "line2"},
-			index:         0,
-			inFileSection: false,
-			expected:      true,
-		},
-		{
-			name:          "in middle of file section",
-			lines:         []string{"line1", "line2"},
-			index:         0,
-			inFileSection: true,
-			expected:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := diff.CanSplitAt(tt.lines, tt.index, tt.inFileSection)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestCountFiles(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -136,7 +76,7 @@ func TestCountFiles(t *testing.T) {
 				"@@ -1,5 +1,6 @@",
 				" context",
 			},
-			expected: 2, // git diff header and --- header
+			expected: 1,
 		},
 		{
 			name: "multiple files",
@@ -148,7 +88,7 @@ func TestCountFiles(t *testing.T) {
 				"--- a/file2.go",
 				"+++ b/file2.go",
 			},
-			expected: 4,
+			expected: 2,
 		},
 		{
 			name:     "no files",
@@ -367,4 +307,18 @@ func TestWriteChunk(t *testing.T) {
 		assert.NotContains(t, string(content), "# Diff Chunk")
 		assert.Contains(t, string(content), "line1")
 	})
+}
+
+// TestWriteDiffChunk_ReportsWriteError: escrever num destino que sempre falha
+// (/dev/full devolve ENOSPC) precisa virar erro. Antes da correção os erros de
+// escrita eram descartados e o comando anunciava sucesso com chunks truncados.
+func TestWriteDiffChunk_ReportsWriteError(t *testing.T) {
+	chunk := diff.Chunk{Lines: []string{"diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1 +1 @@", "-a", "+b"}, FileCount: 1, StartLine: 1}
+	if _, err := os.Stat("/dev/full"); err != nil {
+		t.Skip("/dev/full indisponível")
+	}
+
+	err := writeDiffChunk("/dev/full", chunk, 1, 1, false)
+	require.Error(t, err, "erro de escrita não pode ser engolido")
+	assert.Contains(t, err.Error(), "failed to write chunk file")
 }

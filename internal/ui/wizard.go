@@ -16,11 +16,13 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -66,11 +68,11 @@ type Progress struct {
 }
 
 type WizardModel struct {
-	step     int
-	progress Progress
-	error    error
-	width    int
-	height   int
+	step         int
+	progress     Progress
+	error        error
+	width        int
+	height       int
 	showHelp     bool
 	helpViewport viewport.Model
 
@@ -98,6 +100,10 @@ type WizardModel struct {
 
 	validationError string
 	confirmQuit     bool
+
+	selectionStore   *selection.Store
+	deselected       []string
+	selectionsSeeded bool
 }
 
 type ScanProgressMsg struct {
@@ -286,6 +292,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.handleRescanRequest()
 		cmds = append(cmds, cmd)
 
+	case screens.ToggleIgnoredScanMsg:
+		cmd = m.handleToggleIgnoredScan()
+		cmds = append(cmds, cmd)
+
 	// -- Polling & Spinners --
 	default:
 		if m.progress.Visible {
@@ -410,7 +420,7 @@ func (m *WizardModel) renderHelpContent() string {
 	content.WriteString("  Space       Toggle selection (file or directory)\n")
 	content.WriteString("  a           Select all visible files\n")
 	content.WriteString("  A           Deselect all visible files\n")
-	content.WriteString("  i           Toggle showing ignored files\n")
+	content.WriteString("  i           Toggle scanning ignored files (rescan)\n")
 	content.WriteString("  /           Enter filter mode (fuzzy search)\n")
 	content.WriteString("  x           Clear filter\n")
 	content.WriteString("  F5 / r      Rescan directory\n")
@@ -687,6 +697,9 @@ func (m *WizardModel) handleNextStep() tea.Cmd {
 	if m.step < StepReview {
 		if m.canAdvanceStep() {
 			m.validationError = ""
+			if m.step == StepFileSelection {
+				m.persistSelections()
+			}
 			m.step = m.getNextStep()
 
 			return m.initStep()
@@ -741,6 +754,14 @@ func (m *WizardModel) handleScanComplete(msg ScanCompleteMsg) {
 	} else {
 		m.fileSelection = screens.NewFileSelection(msg.Tree, nil, m.wizardConfig.Context.MaxSize)
 		m.fileSelection.SetSize(m.width, m.height)
+	}
+	if m.scanConfig != nil {
+		m.fileSelection.SetShowIgnored(m.scanConfig.IncludeIgnored)
+	}
+	if !m.selectionsSeeded {
+		includeIgnored := m.scanConfig != nil && m.scanConfig.IncludeIgnored
+		m.fileSelection.SetSelections(scanner.SelectAllExcept(msg.Tree, m.deselected, includeIgnored))
+		m.selectionsSeeded = true
 	}
 }
 
@@ -929,7 +950,11 @@ func (m *WizardModel) handleStartScan(msg startScanMsg) tea.Cmd {
 		m.scanCoordinator = NewScanCoordinator(scanner.NewFileSystemScanner())
 	}
 
-	m.fileSelection = screens.NewFileSelection(nil, nil, m.wizardConfig.Context.MaxSize)
+	var selections map[string]bool
+	if m.fileSelection != nil {
+		selections = m.fileSelection.GetSelections()
+	}
+	m.fileSelection = screens.NewFileSelection(nil, selections, m.wizardConfig.Context.MaxSize)
 	m.fileSelection.SetSize(m.width, m.height)
 
 	return tea.Batch(m.fileSelection.Init(), m.scanCoordinator.Start(msg.rootPath, msg.config))
@@ -956,6 +981,43 @@ func (m *WizardModel) handleRescanRequest() tea.Cmd {
 	}
 
 	return nil
+}
+
+func (m *WizardModel) handleToggleIgnoredScan() tea.Cmd {
+	if m.step != StepFileSelection || m.scanConfig == nil {
+		return nil
+	}
+	m.scanConfig.IncludeIgnored = !m.scanConfig.IncludeIgnored
+	return scanDirectoryCmd(m.rootPath, m.scanConfig)
+}
+
+// SetSelectionStore attaches the persistence store and loads this project's saved deselections.
+func (m *WizardModel) SetSelectionStore(store *selection.Store) {
+	m.selectionStore = store
+	if store == nil {
+		return
+	}
+	if ds, err := store.Load(m.rootPath); err != nil {
+		log.Debug().Err(err).Msg("Failed to load saved file selections")
+	} else {
+		m.deselected = ds
+	}
+}
+
+func (m *WizardModel) persistSelections() {
+	if m.selectionStore == nil {
+		return
+	}
+	tree := m.getFileTree()
+	if tree == nil {
+		return
+	}
+	deselected := scanner.CollectDeselected(tree, m.getSelectedFiles())
+	if err := m.selectionStore.Save(m.rootPath, deselected); err != nil {
+		log.Debug().Err(err).Msg("Failed to persist file selections")
+		return
+	}
+	m.deselected = deselected
 }
 
 func (m *WizardModel) canAdvanceStep() bool {

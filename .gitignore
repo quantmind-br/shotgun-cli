@@ -59,3 +59,19 @@ tmp/
 
 # Auto Claude data directory
 .auto-claude/
+
+# Tool artifacts / local agent dumps
+.graphify_*
+graphify-out/
+.ai/
+.omc/
+.reversa/
+.sisyphus/
+.specs/
+.serena/
+.gitnexus/
+.rpiv/
+.pi/
+opencodetmp/
+.understand-anything/
+shotgun-cli

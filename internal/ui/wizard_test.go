@@ -3,6 +3,7 @@ package ui
 import (
 	gocontext "context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
@@ -2658,4 +2660,240 @@ func TestWizard_F9KeyPress_NoContentDoesNothing(t *testing.T) {
 	_, _ = wizard.Update(f9Msg)
 
 	require.False(t, wizard.llmSending, "llmSending should remain false when no content")
+}
+
+func TestWizardModel_handleToggleIgnoredScan(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		step         int
+		initialFlag  bool
+		expectCmd    bool
+		expectedFlag bool
+	}{
+		{
+			name:         "on file selection step flips false to true and returns command",
+			step:         StepFileSelection,
+			initialFlag:  false,
+			expectCmd:    true,
+			expectedFlag: true,
+		},
+		{
+			name:         "on file selection step flips true to false and returns command",
+			step:         StepFileSelection,
+			initialFlag:  true,
+			expectCmd:    true,
+			expectedFlag: false,
+		},
+		{
+			name:         "off file selection step is a no-op",
+			step:         StepTemplateSelection,
+			initialFlag:  false,
+			expectCmd:    false,
+			expectedFlag: false,
+		},
+		{
+			name:         "off file selection step leaves an enabled flag untouched",
+			step:         StepReview,
+			initialFlag:  true,
+			expectCmd:    false,
+			expectedFlag: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			wizard := NewWizard("/tmp/test", &scanner.ScanConfig{IncludeIgnored: tt.initialFlag}, nil, nil)
+			wizard.step = tt.step
+
+			cmd := wizard.handleToggleIgnoredScan()
+
+			if tt.expectCmd {
+				require.NotNil(t, cmd, "expected a rescan command")
+			} else {
+				require.Nil(t, cmd, "expected no command")
+			}
+			require.Equal(t, tt.expectedFlag, wizard.scanConfig.IncludeIgnored)
+		})
+	}
+}
+
+func TestWizardModel_handleToggleIgnoredScan_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{IncludeIgnored: false}, nil, nil)
+	wizard.step = StepFileSelection
+
+	require.False(t, wizard.scanConfig.IncludeIgnored)
+
+	cmd1 := wizard.handleToggleIgnoredScan()
+	require.NotNil(t, cmd1)
+	require.True(t, wizard.scanConfig.IncludeIgnored, "first toggle should enable the flag")
+
+	cmd2 := wizard.handleToggleIgnoredScan()
+	require.NotNil(t, cmd2)
+	require.False(t, wizard.scanConfig.IncludeIgnored, "second toggle should restore the original flag")
+}
+
+func TestWizardModel_handleToggleIgnoredScan_NilConfig(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", nil, nil, nil)
+	wizard.step = StepFileSelection
+
+	require.NotPanics(t, func() {
+		cmd := wizard.handleToggleIgnoredScan()
+		require.Nil(t, cmd, "expected nil command when scanConfig is nil")
+	})
+}
+
+func TestWizardModel_handleStartScan_PreservesSelections(t *testing.T) {
+	t.Parallel()
+
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/tmp/test",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{Name: "a.go", Path: "a.go", RelPath: "a.go"},
+			{Name: "b.go", Path: "b.go", RelPath: "b.go"},
+		},
+	}
+	selections := map[string]bool{"a.go": true, "b.go": true}
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, nil)
+	wizard.step = StepFileSelection
+	wizard.fileSelection = screens.NewFileSelection(fileTree, selections, "")
+
+	require.Equal(t, selections, wizard.fileSelection.GetSelections())
+
+	cmd := wizard.handleStartScan(startScanMsg{rootPath: "/tmp/test", config: wizard.scanConfig})
+	require.NotNil(t, cmd)
+
+	got := wizard.fileSelection.GetSelections()
+	require.True(t, got["a.go"], "selection for a.go should survive the rescan")
+	require.True(t, got["b.go"], "selection for b.go should survive the rescan")
+	require.Equal(t, selections, got)
+}
+
+// selTestTree builds a small tree rooted at root with two non-ignored files
+// (a.go, b.go) and one gitignored file (ignored.txt). Absolute Paths are
+// derived from root; RelPaths are slash-form relative names.
+func selTestTree(root string) *scanner.FileNode {
+	return &scanner.FileNode{
+		Name:    "root",
+		Path:    root,
+		RelPath: ".",
+		IsDir:   true,
+		Children: []*scanner.FileNode{
+			{Name: "a.go", Path: filepath.Join(root, "a.go"), RelPath: "a.go"},
+			{Name: "b.go", Path: filepath.Join(root, "b.go"), RelPath: "b.go"},
+			{Name: "ignored.txt", Path: filepath.Join(root, "ignored.txt"), RelPath: "ignored.txt", IsGitignored: true},
+		},
+	}
+}
+
+// TestWizardModel_SetSelectionStore_LoadsSavedDeselections verifies that
+// attaching a store hydrates m.deselected from the project's persisted entry,
+// and that a nil store is a safe no-op.
+func TestWizardModel_SetSelectionStore_LoadsSavedDeselections(t *testing.T) {
+	t.Parallel()
+
+	rootPath := "/tmp/test-selstore"
+	storePath := filepath.Join(t.TempDir(), "selections.json")
+	store := selection.NewStore(storePath)
+	require.NoError(t, store.Save(rootPath, []string{"b.go"}))
+
+	wizard := NewWizard(rootPath, &scanner.ScanConfig{}, &WizardConfig{}, nil)
+	wizard.SetSelectionStore(store)
+	require.Equal(t, []string{"b.go"}, wizard.deselected)
+
+	// A nil store must not panic and must not seed any deselections.
+	fresh := NewWizard(rootPath, &scanner.ScanConfig{}, &WizardConfig{}, nil)
+	require.NotPanics(t, func() { fresh.SetSelectionStore(nil) })
+	require.Empty(t, fresh.deselected)
+}
+
+// TestWizardModel_handleScanComplete_SeedsSelectAllExceptSaved verifies the
+// first scan seeds all non-ignored files as selected, minus the persisted
+// deselection, and never selects ignored nodes.
+func TestWizardModel_handleScanComplete_SeedsSelectAllExceptSaved(t *testing.T) {
+	t.Parallel()
+
+	rootPath := "/tmp/test-seed"
+	storePath := filepath.Join(t.TempDir(), "selections.json")
+	store := selection.NewStore(storePath)
+	require.NoError(t, store.Save(rootPath, []string{"b.go"}))
+
+	wizard := NewWizard(rootPath, &scanner.ScanConfig{}, &WizardConfig{}, nil)
+	wizard.SetSelectionStore(store)
+
+	tree := selTestTree(rootPath)
+	wizard.handleScanComplete(ScanCompleteMsg{Tree: tree})
+
+	sel := wizard.fileSelection.GetSelections()
+	require.True(t, sel[filepath.Join(rootPath, "a.go")], "a.go should be selected by default")
+	require.False(t, sel[filepath.Join(rootPath, "b.go")], "b.go is a saved deselection")
+	require.False(t, sel[filepath.Join(rootPath, "ignored.txt")], "ignored files are never seeded")
+	require.True(t, wizard.selectionsSeeded, "first scan marks selections as seeded")
+}
+
+// TestWizardModel_handleScanComplete_DoesNotReseedOnRescan verifies that a
+// second scan (rescan) leaves the user's current selection untouched because
+// selectionsSeeded is already true.
+func TestWizardModel_handleScanComplete_DoesNotReseedOnRescan(t *testing.T) {
+	t.Parallel()
+
+	rootPath := "/tmp/test-reseed"
+	storePath := filepath.Join(t.TempDir(), "selections.json")
+	store := selection.NewStore(storePath)
+	require.NoError(t, store.Save(rootPath, []string{"b.go"}))
+
+	wizard := NewWizard(rootPath, &scanner.ScanConfig{}, &WizardConfig{}, nil)
+	wizard.SetSelectionStore(store)
+
+	// First scan seeds selections and flips selectionsSeeded.
+	wizard.handleScanComplete(ScanCompleteMsg{Tree: selTestTree(rootPath)})
+	require.True(t, wizard.selectionsSeeded)
+
+	// User mutates the selection to a set distinct from what seeding produces.
+	mutated := map[string]bool{"a.go": true, "b.go": true}
+	wizard.fileSelection.SetSelectionsForTest(mutated)
+
+	// Rescan must NOT re-seed; the mutated selection survives verbatim.
+	wizard.handleScanComplete(ScanCompleteMsg{Tree: selTestTree(rootPath)})
+	require.Equal(t, mutated, wizard.fileSelection.GetSelections(),
+		"rescan must not reset selections back to the seeded set")
+}
+
+// TestWizardModel_persistSelections_WritesDeselectedDelta verifies that
+// persisting computes the deselected delta (non-ignored, unselected files) as
+// slash-form relative paths, writes it under the project's rootPath, and
+// updates m.deselected.
+func TestWizardModel_persistSelections_WritesDeselectedDelta(t *testing.T) {
+	t.Parallel()
+
+	rootPath := "/tmp/test-persist"
+	storePath := filepath.Join(t.TempDir(), "selections.json")
+	store := selection.NewStore(storePath)
+
+	wizard := NewWizard(rootPath, &scanner.ScanConfig{}, &WizardConfig{}, nil)
+	wizard.SetSelectionStore(store)
+	require.Empty(t, wizard.deselected)
+
+	// a.go is selected, b.go is not -> b.go is the deselected delta.
+	tree := selTestTree(rootPath)
+	selections := map[string]bool{filepath.Join(rootPath, "a.go"): true}
+	wizard.fileSelection = screens.NewFileSelection(tree, selections, "")
+
+	wizard.persistSelections()
+
+	got, err := store.Load(rootPath)
+	require.NoError(t, err)
+	require.Equal(t, []string{"b.go"}, got, "only the unselected non-ignored file is persisted")
+	require.Equal(t, []string{"b.go"}, wizard.deselected, "m.deselected reflects the persisted delta")
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/app"
 	cfgkeys "github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
@@ -227,7 +228,7 @@ func generateContextHeadless(cfg GenerateConfig) error {
 		return err
 	}
 
-	svc := app.NewContextService()
+	svc := app.NewContextService(app.WithSelectionStore(selection.NewStore(selectionStorePath())))
 	svcCfg := app.GenerateConfig{
 		RootPath:        cfg.RootPath,
 		ScanConfig:      &scannerConfig,

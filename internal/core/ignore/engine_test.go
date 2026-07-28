@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIgnoreReason_String(t *testing.T) {
@@ -641,4 +644,90 @@ func BenchmarkLayeredIgnoreEngine_NewIgnoreEngine(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		NewIgnoreEngine()
 	}
+}
+
+// TestLoadGitignore_NestedPatternSemantics fixa a semântica do git para
+// arquivos .gitignore aninhados: padrão sem barra vale em qualquer
+// profundidade abaixo do diretório dele, padrão com barra fica ancorado, e a
+// barra final continua restringindo a diretórios.
+func TestLoadGitignore_NestedPatternSemantics(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.MkdirAll(filepath.Join(sub, "deep"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sub, ".gitignore"),
+		[]byte("*.secretx\nbuild/\n/rootonly.txt\nnested/keep.txt\n!deep/a.secretx\n"),
+		0o600,
+	))
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.LoadGitignore(root))
+
+	tests := []struct {
+		path string
+		want bool
+		why  string
+	}{
+		{"sub/a.secretx", true, "casa no próprio diretório do .gitignore"},
+		{"sub/deep/a.secretx", false, "negado explicitamente por !deep/a.secretx"},
+		{"sub/deep/b.secretx", true, "padrão sem barra é recursivo abaixo de sub/"},
+		{"sub/deep/deeper/c.secretx", true, "recursivo em qualquer profundidade"},
+		{"other/a.secretx", false, "fora do escopo do .gitignore de sub/"},
+		{"sub/build/artifact.o", true, "build/ ignora o conteúdo do diretório"},
+		{"sub/build", false, "build/ não casa um arquivo homônimo"},
+		{"sub/rootonly.txt", true, "padrão ancorado vale na raiz de sub/"},
+		{"sub/deep/rootonly.txt", false, "padrão ancorado não vale mais fundo"},
+		{"sub/nested/keep.txt", true, "padrão com barra fica ancorado em sub/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got, _ := engine.ShouldIgnore(tt.path)
+			assert.Equal(t, tt.want, got, tt.why)
+		})
+	}
+}
+
+// TestLoadShotgunignore_NestedPatternSemantics cobre o mesmo rebase para
+// .shotgunignore, que compartilha o helper.
+func TestLoadShotgunignore_NestedPatternSemantics(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.MkdirAll(filepath.Join(sub, "deep"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(sub, ".shotgunignore"), []byte("*.secretx\n"), 0o600))
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.LoadShotgunignore(root))
+
+	got, _ := engine.ShouldIgnore("sub/deep/a.secretx")
+	assert.True(t, got, "padrão de .shotgunignore aninhado vale recursivamente")
+
+	got, _ = engine.ShouldIgnore("other/a.secretx")
+	assert.False(t, got, "não vaza para fora de sub/")
+}
+
+// TestLoadIgnoreFiles_UnreadableDirectory garante que um subdiretório sem
+// permissão não descarta as regras do projeto inteiro.
+func TestLoadIgnoreFiles_UnreadableDirectory(t *testing.T) {
+	t.Parallel()
+
+	if os.Geteuid() == 0 {
+		t.Skip("root ignora permissões de diretório")
+	}
+
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".gitignore"), []byte("*.secretx\n"), 0o600))
+	locked := filepath.Join(root, "locked")
+	require.NoError(t, os.Mkdir(locked, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.LoadGitignore(root), "diretório ilegível não pode abortar a carga")
+
+	got, _ := engine.ShouldIgnore("a.secretx")
+	assert.True(t, got, "as regras legíveis continuam valendo")
 }

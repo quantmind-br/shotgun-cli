@@ -8,6 +8,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/platform/clipboard"
 )
@@ -16,9 +17,10 @@ import (
 // It orchestrates the context generation workflow by coordinating the scanner,
 // generator, and LLM provider components.
 type DefaultContextService struct {
-	scanner   scanner.Scanner
-	generator contextgen.ContextGenerator
-	registry  *llm.Registry
+	scanner        scanner.Scanner
+	generator      contextgen.ContextGenerator
+	registry       *llm.Registry
+	selectionStore *selection.Store
 }
 
 // ServiceOption defines a functional option for configuring the DefaultContextService.
@@ -56,6 +58,14 @@ func WithScanner(s scanner.Scanner) ServiceOption {
 func WithGenerator(g contextgen.ContextGenerator) ServiceOption {
 	return func(svc *DefaultContextService) {
 		svc.generator = g
+	}
+}
+
+// WithSelectionStore configures the service to apply saved per-project deselections
+// when a generate config supplies no explicit selections.
+func WithSelectionStore(store *selection.Store) ServiceOption {
+	return func(svc *DefaultContextService) {
+		svc.selectionStore = store
 	}
 }
 
@@ -123,7 +133,11 @@ func (s *DefaultContextService) GenerateWithProgress(
 
 	selections := cfg.Selections
 	if selections == nil {
-		selections = scanner.NewSelectAll(tree)
+		var deselected []string
+		if s.selectionStore != nil {
+			deselected, _ = s.selectionStore.Load(cfg.RootPath)
+		}
+		selections = scanner.SelectAllExcept(tree, deselected, scanConfig.IncludeIgnored)
 	}
 
 	report("generating", "Generating context...", 0, 0)
@@ -134,6 +148,7 @@ func (s *DefaultContextService) GenerateWithProgress(
 		Template:       cfg.Template,
 		SkipBinary:     cfg.SkipBinary,
 		IncludeTree:    cfg.IncludeTree,
+		IncludeIgnored: scanConfig.IncludeIgnored,
 		IncludeSummary: cfg.IncludeSummary,
 	}
 

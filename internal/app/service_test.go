@@ -9,6 +9,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -248,4 +249,125 @@ func TestDefaultContextService_SendToLLM_Error(t *testing.T) {
 
 	_, err := svc.SendToLLM(context.Background(), "content", provider)
 	assert.Error(t, err)
+}
+
+// capturingGenerator records the selections map it is handed so tests can assert
+// which files the service resolved before generation.
+type capturingGenerator struct {
+	content    string
+	selections map[string]bool
+}
+
+func (m *capturingGenerator) Generate(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig) (string, error) {
+	m.selections = selections
+	return m.content, nil
+}
+
+func (m *capturingGenerator) GenerateWithProgress(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(string)) (string, error) {
+	m.selections = selections
+	return m.content, nil
+}
+
+func (m *capturingGenerator) GenerateWithProgressEx(tree *scanner.FileNode, selections map[string]bool, config contextgen.GenerateConfig, progress func(contextgen.GenProgress)) (string, error) {
+	m.selections = selections
+	return m.content, nil
+}
+
+// twoFileTree builds a root directory holding two non-ignored files with distinct
+// absolute Path and slash-form RelPath values, rooted at tmpDir.
+func twoFileTree(tmpDir string) *scanner.FileNode {
+	return &scanner.FileNode{
+		Name:    "root",
+		Path:    tmpDir,
+		RelPath: ".",
+		IsDir:   true,
+		Children: []*scanner.FileNode{
+			{Name: "file1.go", Path: filepath.Join(tmpDir, "file1.go"), RelPath: "file1.go"},
+			{Name: "file2.go", Path: filepath.Join(tmpDir, "file2.go"), RelPath: "file2.go"},
+		},
+	}
+}
+
+// A configured store with a saved deselection must drop exactly that file from
+// the selection map the service hands the generator, leaving siblings selected.
+func TestDefaultContextService_Generate_HonorsSavedDeselection(t *testing.T) {
+	tmpDir := t.TempDir()
+	tree := twoFileTree(tmpDir)
+	file1Path := filepath.Join(tmpDir, "file1.go")
+	file2Path := filepath.Join(tmpDir, "file2.go")
+
+	store := selection.NewStore(filepath.Join(t.TempDir(), "selections.json"))
+	cfg := GenerateConfig{
+		RootPath:   tmpDir,
+		OutputPath: filepath.Join(tmpDir, "output.md"),
+	}
+	require.NoError(t, store.Save(cfg.RootPath, []string{"file2.go"}))
+
+	gen := &capturingGenerator{content: "content"}
+	svc := NewContextService(
+		WithScanner(&mockScanner{tree: tree}),
+		WithGenerator(gen),
+		WithSelectionStore(store),
+	)
+
+	_, err := svc.Generate(context.Background(), cfg)
+	require.NoError(t, err)
+
+	require.NotNil(t, gen.selections)
+	assert.True(t, gen.selections[file1Path], "file1 must stay selected")
+	assert.NotContains(t, gen.selections, file2Path, "saved deselection must exclude file2")
+}
+
+// With no store wired, nil cfg.Selections must resolve to the full select-all set,
+// identical to scanner.NewSelectAll.
+func TestDefaultContextService_Generate_NoStoreSelectsAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	tree := twoFileTree(tmpDir)
+
+	gen := &capturingGenerator{content: "content"}
+	svc := NewContextService(
+		WithScanner(&mockScanner{tree: tree}),
+		WithGenerator(gen),
+	)
+
+	cfg := GenerateConfig{
+		RootPath:   tmpDir,
+		OutputPath: filepath.Join(tmpDir, "output.md"),
+	}
+	_, err := svc.Generate(context.Background(), cfg)
+	require.NoError(t, err)
+
+	require.NotNil(t, gen.selections)
+	assert.Equal(t, scanner.NewSelectAll(tree), gen.selections)
+	assert.True(t, gen.selections[filepath.Join(tmpDir, "file1.go")])
+	assert.True(t, gen.selections[filepath.Join(tmpDir, "file2.go")])
+}
+
+// A malformed store on disk makes Load fail; the service must swallow that error
+// and fall back to the full select-all set rather than propagating or emptying it.
+func TestDefaultContextService_Generate_MalformedStoreFallsBack(t *testing.T) {
+	tmpDir := t.TempDir()
+	tree := twoFileTree(tmpDir)
+
+	storePath := filepath.Join(t.TempDir(), "selections.json")
+	require.NoError(t, os.WriteFile(storePath, []byte("{not valid json"), 0o600))
+
+	gen := &capturingGenerator{content: "content"}
+	svc := NewContextService(
+		WithScanner(&mockScanner{tree: tree}),
+		WithGenerator(gen),
+		WithSelectionStore(selection.NewStore(storePath)),
+	)
+
+	cfg := GenerateConfig{
+		RootPath:   tmpDir,
+		OutputPath: filepath.Join(tmpDir, "output.md"),
+	}
+	_, err := svc.Generate(context.Background(), cfg)
+	require.NoError(t, err)
+
+	require.NotNil(t, gen.selections)
+	assert.Equal(t, scanner.NewSelectAll(tree), gen.selections, "malformed store must fall back to full select-all")
+	assert.True(t, gen.selections[filepath.Join(tmpDir, "file1.go")])
+	assert.True(t, gen.selections[filepath.Join(tmpDir, "file2.go")])
 }

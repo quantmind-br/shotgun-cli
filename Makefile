@@ -44,11 +44,7 @@ test-e2e: ## Execute end-to-end CLI tests
 	$(GO) test ./test/e2e -v
 
 lint: ## Run golangci-lint
-	if [ -f .golangci-local.yml ]; then \
-		golangci-lint run --config .golangci-local.yml ./...; \
-	else \
-		golangci-lint run ./...; \
-	fi
+	golangci-lint run --config .golangci.yml ./...
 
 fmt: ## Format Go source files
 	$(GO) fmt ./...

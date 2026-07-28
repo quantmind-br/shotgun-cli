@@ -151,9 +151,12 @@ func TestFileSelectionHandleNormalMode(t *testing.T) {
 	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	assert.Nil(t, cmd)
 
-	// Test 'i' toggles show ignored
+	// Test 'i' requests a rescan with ignored files toggled
 	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
-	assert.Nil(t, cmd)
+	assert.NotNil(t, cmd)
+	if msg := cmd(); msg != nil {
+		assert.IsType(t, ToggleIgnoredScanMsg{}, msg)
+	}
 
 	// Test '/' enters filter mode
 	cmd = model.handleNormalMode(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})

@@ -434,8 +434,22 @@ func TestRenderFileName_InvalidState(t *testing.T) {
 	}
 }
 
+// requireColorPalette pula o teste quando NO_COLOR está definido: nesse modo
+// TierColor devolve lipgloss.Color("") para toda cor, então comparar duas cores
+// da paleta é vacuamente verdadeiro e a asserção de contraste não significa
+// nada. Sem isso a suíte fica verde ou vermelha conforme o ambiente de quem
+// roda os testes.
+func requireColorPalette(t *testing.T) {
+	t.Helper()
+
+	if noColor {
+		t.Skip("NO_COLOR definido: a paleta é desativada e a comparação de contraste não se aplica")
+	}
+}
+
 func TestMutedColorAccessibility(t *testing.T) {
 	t.Parallel()
+	requireColorPalette(t)
 
 	if MutedColor == Nord3 {
 		t.Fatal("MutedColor should not use Nord3 - insufficient contrast ratio for accessibility")
@@ -444,6 +458,7 @@ func TestMutedColorAccessibility(t *testing.T) {
 
 func TestDimTextAccessibility(t *testing.T) {
 	t.Parallel()
+	requireColorPalette(t)
 
 	if DimText == Nord3 {
 		t.Fatal("DimText should not use Nord3 - insufficient contrast ratio for accessibility")

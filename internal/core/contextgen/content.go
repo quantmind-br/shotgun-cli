@@ -34,13 +34,18 @@ func collectFileContents(
 	fileCount := 0
 
 	err := walkSelectedNodes(root, func(node *scanner.FileNode) error {
-		if node.IsDir || node.IsIgnored() {
+		if node.IsDir {
 			return nil
 		}
 
-		// Check selection against the map
-		// If selections map is nil, we assume all non-ignored files are selected
-		if selections != nil && !selections[node.Path] {
+		// The selection map is the authority: a node the caller selected is
+		// included even when marked as ignored, which is what --include-ignored
+		// asks for. A nil map means "every non-ignored file".
+		if selections != nil {
+			if !selections[node.Path] {
+				return nil
+			}
+		} else if node.IsIgnored() {
 			return nil
 		}
 

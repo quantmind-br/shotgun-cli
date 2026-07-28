@@ -137,9 +137,13 @@ func (m *FileTreeModel) DeselectAllVisible() {
 	m.recomputeSelectionStates()
 }
 
-func (m *FileTreeModel) ToggleShowIgnored() {
-	m.showIgnored = !m.showIgnored
-	m.filterCacheValid = false // Invalidate cache since visibility rules changed
+// SetShowIgnored sets whether ignored nodes present in the tree are displayed.
+func (m *FileTreeModel) SetShowIgnored(show bool) {
+	if m.showIgnored == show {
+		return
+	}
+	m.showIgnored = show
+	m.filterCacheValid = false // visibility rules changed
 	m.rebuildVisibleItems()
 }
 

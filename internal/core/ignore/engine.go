@@ -223,75 +223,97 @@ func (e *LayeredIgnoreEngine) ShouldIgnore(relPath string) (bool, IgnoreReason) 
 
 // LoadGitignore loads .gitignore rules from the specified directory
 func (e *LayeredIgnoreEngine) LoadGitignore(rootDir string) error {
-	// Collect all .gitignore files in the directory tree
-	var gitignoreFiles []string
-
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && info.Name() == ".gitignore" {
-			gitignoreFiles = append(gitignoreFiles, path)
-		}
-
-		return nil
-	})
-
+	patterns, err := collectIgnorePatterns(rootDir, ".gitignore")
 	if err != nil {
 		return fmt.Errorf("failed to walk directory for gitignore files: %w", err)
 	}
 
-	// If no .gitignore files found, use empty matcher
-	if len(gitignoreFiles) == 0 {
-		e.gitignoreMatcher = gitignore.CompileIgnoreLines()
+	e.gitignoreMatcher = gitignore.CompileIgnoreLines(patterns...)
+
+	return nil
+}
+
+// collectIgnorePatterns walks rootDir gathering the patterns of every ignore
+// file called name, rebased so that nested files keep gitignore semantics
+// relative to rootDir. Unreadable directories and files are skipped: one
+// permission-denied subtree must not discard the rules of the whole project.
+func collectIgnorePatterns(rootDir, name string) ([]string, error) {
+	var files []string
+
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Unreadable entry: skip it and keep walking the rest of the tree.
+			return nil //nolint:nilerr // tolerating unreadable subtrees is the point
+		}
+		if !info.IsDir() && info.Name() == name {
+			files = append(files, path)
+		}
 
 		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	// Collect all patterns from all .gitignore files
-	var allPatterns []string
+	var patterns []string
 
-	for _, gitignoreFile := range gitignoreFiles {
-		// Read the file content
-		content, err := os.ReadFile(gitignoreFile) //nolint:gosec // path comes from controlled directory walk
+	for _, file := range files {
+		content, err := os.ReadFile(file) //nolint:gosec // path comes from controlled directory walk
 		if err != nil {
 			continue // Skip files we can't read
 		}
 
-		// Get relative path from root to adjust patterns
-		relDir, err := filepath.Rel(rootDir, filepath.Dir(gitignoreFile))
+		relDir, err := filepath.Rel(rootDir, filepath.Dir(file))
 		if err != nil {
 			continue
 		}
+		relDir = filepath.ToSlash(relDir)
 
-		// Split content into lines and process each pattern
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
+		for _, line := range strings.Split(string(content), "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" || strings.HasPrefix(line, "#") {
 				continue // Skip empty lines and comments
 			}
-
-			// If this is a nested .gitignore (not root), prefix patterns with relative path
-			if relDir != "." && relDir != "" {
-				// Adjust pattern for nested location
-				if strings.HasPrefix(line, "!") {
-					// Negation pattern - prefix after the !
-					line = "!" + filepath.Join(relDir, line[1:])
-				} else {
-					line = filepath.Join(relDir, line)
-				}
-			}
-
-			allPatterns = append(allPatterns, line)
+			patterns = append(patterns, rebasePattern(relDir, line))
 		}
 	}
 
-	// Compile all patterns into a single matcher
-	e.gitignoreMatcher = gitignore.CompileIgnoreLines(allPatterns...)
+	return patterns, nil
+}
 
-	return nil
+// rebasePattern rewrites a pattern taken from an ignore file in relDir so that
+// it means the same thing when matched against paths relative to the scan root.
+//
+// Git semantics: a pattern without a slash (other than a trailing one) matches
+// at any depth below its own directory, so it becomes "relDir/**/pattern"; a
+// pattern that is anchored by a slash keeps its position under relDir. The
+// trailing slash that restricts a pattern to directories is preserved, which
+// filepath.Join would silently strip.
+func rebasePattern(relDir, pattern string) string {
+	if relDir == "." || relDir == "" {
+		return pattern
+	}
+
+	negated := strings.HasPrefix(pattern, "!")
+	if negated {
+		pattern = pattern[1:]
+	}
+
+	var rebased string
+	switch {
+	case strings.HasPrefix(pattern, "/"):
+		rebased = relDir + pattern
+	case strings.Contains(strings.TrimSuffix(pattern, "/"), "/"):
+		rebased = relDir + "/" + pattern
+	default:
+		rebased = relDir + "/**/" + pattern
+	}
+
+	if negated {
+		return "!" + rebased
+	}
+
+	return rebased
 }
 
 // AddCustomRule adds a custom ignore pattern
@@ -389,73 +411,14 @@ func (e *LayeredIgnoreEngine) IsCustomIgnored(relPath string) bool {
 
 // LoadShotgunignore loads .shotgunignore rules from the specified directory
 func (e *LayeredIgnoreEngine) LoadShotgunignore(rootDir string) error {
-	// Collect all .shotgunignore files in the directory tree
-	var shotgunignoreFiles []string
-
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && info.Name() == ".shotgunignore" {
-			shotgunignoreFiles = append(shotgunignoreFiles, path)
-		}
-
-		return nil
-	})
-
+	patterns, err := collectIgnorePatterns(rootDir, ".shotgunignore")
 	if err != nil {
 		return fmt.Errorf("failed to walk directory for shotgunignore files: %w", err)
 	}
 
-	// If no .shotgunignore files found, return early
-	if len(shotgunignoreFiles) == 0 {
+	if len(patterns) == 0 {
 		return nil
 	}
 
-	// Collect all patterns from all .shotgunignore files
-	var allPatterns []string
-
-	for _, shotgunignoreFile := range shotgunignoreFiles {
-		// Read the file content
-		content, err := os.ReadFile(shotgunignoreFile) //nolint:gosec // path comes from controlled directory walk
-		if err != nil {
-			continue // Skip files we can't read
-		}
-
-		// Get relative path from root to adjust patterns
-		relDir, err := filepath.Rel(rootDir, filepath.Dir(shotgunignoreFile))
-		if err != nil {
-			continue
-		}
-
-		// Split content into lines and process each pattern
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue // Skip empty lines and comments
-			}
-
-			// If this is a nested .shotgunignore (not root), prefix patterns with relative path
-			if relDir != "." && relDir != "" {
-				// Adjust pattern for nested location
-				if strings.HasPrefix(line, "!") {
-					// Negation pattern - prefix after the !
-					line = "!" + filepath.Join(relDir, line[1:])
-				} else {
-					line = filepath.Join(relDir, line)
-				}
-			}
-
-			allPatterns = append(allPatterns, line)
-		}
-	}
-
-	// Add all patterns as custom rules
-	if len(allPatterns) > 0 {
-		return e.AddCustomRules(allPatterns)
-	}
-
-	return nil
+	return e.AddCustomRules(patterns)
 }

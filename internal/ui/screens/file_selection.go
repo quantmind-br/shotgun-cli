@@ -20,6 +20,9 @@ const (
 
 type RescanRequestMsg struct{}
 
+// ToggleIgnoredScanMsg asks the wizard to rescan with IncludeIgnored flipped.
+type ToggleIgnoredScanMsg struct{}
+
 type FileSelectionModel struct {
 	tree       *components.FileTreeModel
 	width      int
@@ -35,6 +38,7 @@ type FileSelectionModel struct {
 
 	maxSizeBytes int64
 	maxSizeStr   string
+	showIgnored  bool
 }
 
 func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool, maxSizeStr string) *FileSelectionModel {
@@ -149,7 +153,9 @@ func (m *FileSelectionModel) handleNormalMode(msg tea.KeyMsg) tea.Cmd {
 		m.tree.DeselectAllVisible()
 		m.syncSelections()
 	case "i":
-		m.tree.ToggleShowIgnored()
+		return func() tea.Msg {
+			return ToggleIgnoredScanMsg{}
+		}
 	case "/":
 		m.filterMode = true
 		m.filterBuffer = m.tree.GetFilter()
@@ -293,6 +299,15 @@ func (m *FileSelectionModel) SetFileTree(tree *scanner.FileNode) {
 	m.loading = false
 	if m.tree != nil {
 		m.tree.SetSize(m.width, m.height-fileSelectionHeaderFooterHeight)
+		m.tree.SetShowIgnored(m.showIgnored)
+	}
+}
+
+// SetShowIgnored records the display state and applies it to the current tree.
+func (m *FileSelectionModel) SetShowIgnored(v bool) {
+	m.showIgnored = v
+	if m.tree != nil {
+		m.tree.SetShowIgnored(v)
 	}
 }
 
@@ -318,12 +333,22 @@ func (m *FileSelectionModel) GetSelectedCount() int {
 	return len(m.selections)
 }
 
+// SetSelections replaces the selection map and rebuilds the tree with it.
+func (m *FileSelectionModel) SetSelections(selections map[string]bool) {
+	if selections == nil {
+		selections = make(map[string]bool)
+	}
+	m.selections = selections
+	if m.fileTree != nil {
+		m.tree = components.NewFileTree(m.fileTree, m.selections)
+		m.tree.SetSize(m.width, m.height-fileSelectionHeaderFooterHeight)
+		m.tree.SetShowIgnored(m.showIgnored)
+	}
+}
+
 // SetSelectionsForTest sets the selections map directly (for testing only)
 func (m *FileSelectionModel) SetSelectionsForTest(selections map[string]bool) {
-	m.selections = selections
-	if m.tree != nil {
-		m.tree = components.NewFileTree(m.fileTree, m.selections)
-	}
+	m.SetSelections(selections)
 }
 
 func (m *FileSelectionModel) calculateSelectedSize() int64 {

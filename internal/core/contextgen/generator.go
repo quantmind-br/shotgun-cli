@@ -40,6 +40,7 @@ type GenerateConfig struct {
 	Template       string            `json:"template,omitempty"`
 	IncludeTree    bool              `json:"includeTree"`    // Include directory tree in output
 	IncludeSummary bool              `json:"includeSummary"` // Include file summaries in output
+	IncludeIgnored bool              `json:"includeIgnored"` // Render ignored nodes in the tree
 }
 
 type ContextData struct {
@@ -98,7 +99,7 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 		}
 
 		var err error
-		fileStructure, err = g.treeRenderer.RenderTree(root)
+		fileStructure, err = g.treeRenderer.WithShowIgnored(config.IncludeIgnored).RenderTree(root)
 		if err != nil {
 			return "", fmt.Errorf("failed to render tree: %w", err)
 		}

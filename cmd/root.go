@@ -16,6 +16,7 @@ import (
 
 	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
+	"github.com/quantmind-br/shotgun-cli/internal/core/selection"
 	"github.com/quantmind-br/shotgun-cli/internal/ui"
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
@@ -73,7 +74,7 @@ func launchTUIWizard() {
 		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxMemory), 500*1024*1024),
 		SkipBinary:           viper.GetBool(config.KeyScannerSkipBinary),
 		IncludeHidden:        viper.GetBool(config.KeyScannerIncludeHidden),
-		IncludeIgnored:       true,
+		IncludeIgnored:       viper.GetBool(config.KeyScannerIncludeIgnored),
 		Workers:              viper.GetInt(config.KeyScannerWorkers),
 		RespectGitignore:     viper.GetBool(config.KeyScannerRespectGitignore),
 		RespectShotgunignore: viper.GetBool(config.KeyScannerRespectShotgunignore),
@@ -96,6 +97,7 @@ func launchTUIWizard() {
 	}
 
 	wizard := ui.NewWizard(rootPath, scanConfig, wizardConfig, nil)
+	wizard.SetSelectionStore(selection.NewStore(selectionStorePath()))
 
 	// Configure Bubble Tea program
 	program := tea.NewProgram(
@@ -216,6 +218,10 @@ func getConfigDir() string {
 		return filepath.Join(home, ".config", "shotgun-cli")
 	}
 	return "."
+}
+
+func selectionStorePath() string {
+	return filepath.Join(getConfigDir(), "selections.json")
 }
 
 func setConfigDefaults() {

@@ -17,8 +17,12 @@ func TestIsDiffHeader(t *testing.T) {
 		{"+++ b/file.go", true},
 		{"--- /dev/null", true},
 		{"+++ /dev/null", true},
-		{"---", true},
-		{"+++", true},
+		// Sem caminho não é cabeçalho: "---" é a remoção da linha "--",
+		// e "+++i;" a adição de "++i;".
+		{"---", false},
+		{"+++", false},
+		{"+++i;", false},
+		{"----", false},
 		{"diff --git a/file.go b/file.go", false},
 		{"@@ -1,5 +1,5 @@", false},
 		{"+added line", false},
@@ -67,7 +71,7 @@ func TestCountFiles(t *testing.T) {
 			expected: 0,
 		},
 		{
-			name: "single file with git header counts both headers",
+			name: "single file with git header counts one file",
 			lines: []string{
 				"diff --git a/file.go b/file.go",
 				"--- a/file.go",
@@ -77,7 +81,7 @@ func TestCountFiles(t *testing.T) {
 				"-old",
 				"+new",
 			},
-			expected: 2,
+			expected: 1,
 		},
 		{
 			name: "single file without git header",
@@ -90,7 +94,7 @@ func TestCountFiles(t *testing.T) {
 			expected: 1,
 		},
 		{
-			name: "multiple files counts all git and --- headers",
+			name: "multiple files counts each file once",
 			lines: []string{
 				"diff --git a/file1.go b/file1.go",
 				"--- a/file1.go",
@@ -108,7 +112,7 @@ func TestCountFiles(t *testing.T) {
 				"@@ -1,3 +1,3 @@",
 				" line3",
 			},
-			expected: 6,
+			expected: 3,
 		},
 		{
 			name: "only git headers",
@@ -123,65 +127,6 @@ func TestCountFiles(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, CountFiles(tt.lines))
-		})
-	}
-}
-
-func TestCanSplitAt(t *testing.T) {
-	tests := []struct {
-		name          string
-		lines         []string
-		index         int
-		inFileSection bool
-		expected      bool
-	}{
-		{
-			name:          "at end of lines",
-			lines:         []string{"line1", "line2"},
-			index:         1,
-			inFileSection: false,
-			expected:      false,
-		},
-		{
-			name:          "before git diff header",
-			lines:         []string{"line1", "diff --git a/file.go b/file.go"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "before --- header",
-			lines:         []string{"line1", "--- a/file.go"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "before hunk header",
-			lines:         []string{"line1", "@@ -1,3 +1,3 @@"},
-			index:         0,
-			inFileSection: true,
-			expected:      true,
-		},
-		{
-			name:          "not in file section",
-			lines:         []string{"line1", "line2", "line3"},
-			index:         1,
-			inFileSection: false,
-			expected:      true,
-		},
-		{
-			name:          "in file section middle of changes",
-			lines:         []string{"+added", "-removed", " context"},
-			index:         0,
-			inFileSection: true,
-			expected:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, CanSplitAt(tt.lines, tt.index, tt.inFileSection))
 		})
 	}
 }

@@ -242,16 +242,54 @@ func TestFileTreeToggleSelectionOnDirectory(t *testing.T) {
 	})
 }
 
-func TestFileTreeToggleShowIgnored(t *testing.T) {
+func TestFileTreeSetShowIgnored(t *testing.T) {
 	model := NewFileTree(nil, nil)
 
 	assert.False(t, model.showIgnored)
 
-	model.ToggleShowIgnored()
+	model.SetShowIgnored(true)
 	assert.True(t, model.showIgnored)
 
-	model.ToggleShowIgnored()
+	model.SetShowIgnored(true) // idempotent no-op
+	assert.True(t, model.showIgnored)
+
+	model.SetShowIgnored(false)
 	assert.False(t, model.showIgnored)
+}
+
+func TestFileTreeSetShowIgnoredChangesVisibility(t *testing.T) {
+	normalFile := createTestNode("main.go", "/project/main.go", false)
+	ignoredFile := createTestNode("secret.txt", "/project/secret.txt", false)
+	ignoredFile.IsGitignored = true
+	root := createTestNode("project", "/project", true, normalFile, ignoredFile)
+
+	model := NewFileTree(root, nil)
+
+	visiblePaths := func() map[string]bool {
+		paths := make(map[string]bool, len(model.visibleItems))
+		for _, item := range model.visibleItems {
+			paths[item.path] = true
+		}
+
+		return paths
+	}
+
+	// Default: showIgnored is false, so the gitignored node is hidden.
+	paths := visiblePaths()
+	assert.True(t, paths[normalFile.Path], "normal file should be visible")
+	assert.False(t, paths[ignoredFile.Path], "gitignored file should be hidden by default")
+
+	// Reveal ignored nodes.
+	model.SetShowIgnored(true)
+	paths = visiblePaths()
+	assert.True(t, paths[normalFile.Path], "normal file should remain visible")
+	assert.True(t, paths[ignoredFile.Path], "gitignored file should be visible after SetShowIgnored(true)")
+
+	// Hide ignored nodes again.
+	model.SetShowIgnored(false)
+	paths = visiblePaths()
+	assert.True(t, paths[normalFile.Path], "normal file should remain visible")
+	assert.False(t, paths[ignoredFile.Path], "gitignored file should be hidden after SetShowIgnored(false)")
 }
 
 func TestFileTreeFilter(t *testing.T) {
