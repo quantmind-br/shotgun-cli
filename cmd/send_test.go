@@ -1,10 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -75,23 +76,6 @@ func newSendCmd(t *testing.T) *cobra.Command {
 	return cmd
 }
 
-func isExpectedProviderError(err error) bool {
-	if err == nil {
-		return true
-	}
-	errStr := err.Error()
-	expectedPatterns := []string{
-		"gemini", "Gemini", "LLM", "not available",
-		"API error", "request failed", "401", "Incorrect API key",
-	}
-	for _, pattern := range expectedPatterns {
-		if strings.Contains(errStr, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
 func TestContextSendCmd_PreRunE(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -150,176 +134,247 @@ func TestContextSendCmd_PreRunE(t *testing.T) {
 }
 
 func TestRunContextSend_FromFile(t *testing.T) {
-	// Create a temporary file with test content
 	tempDir := t.TempDir()
-	testFile := tempDir + "/test-prompt.txt"
-	testContent := "This is a test prompt for Gemini"
-	err := os.WriteFile(testFile, []byte(testContent), 0o600)
-	require.NoError(t, err)
+	testFile := filepath.Join(tempDir, "test-prompt.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("This is a test prompt"), 0o600))
 
-	// Test successful file reading and validation
-	t.Run("successful file read", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
-
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
-
-		// Test with a file that exists - this may succeed or fail depending on gemini availability
-		err := runContextSend(cmd, []string{testFile})
-
-		// If gemini is available and working, the test should succeed
-		// If gemini is not available or not working, it should fail with expected error
-		if err != nil {
-			// We expect either LLM/gemini not available/configured error or send error
-			errorMsg := err.Error()
-			// Check that we got one of the expected error types
-			assert.True(t,
-				strings.Contains(errorMsg, "gemini request failed") ||
-					strings.Contains(errorMsg, "failed to read file") ||
-					strings.Contains(errorMsg, "gemini integration is disabled") ||
-					strings.Contains(errorMsg, "LLM integration is disabled") ||
-					strings.Contains(errorMsg, "not available") ||
-					strings.Contains(errorMsg, "request failed") ||
-					strings.Contains(errorMsg, "401") ||
-					strings.Contains(errorMsg, "Incorrect API key"),
-				"Expected LLM-related error, got: %s", errorMsg)
+	newMock := func() *mockLLMProvider {
+		return &mockLLMProvider{
+			available: true,
+			result:    &llm.Result{Response: "processed", RawResponse: `{"raw":"payload"}`},
 		}
-		// If err is nil, it means gemini is working and the test succeeded
+	}
+	arrange := func(t *testing.T, mock *mockLLMProvider) {
+		t.Helper()
+		installSendService(t, newMockRegistry(mock))
+		setViper(t, config.KeyLLMProvider, "openai")
+		setViper(t, config.KeyLLMAPIKey, "test-key")
+		setViper(t, config.KeyLLMSaveResponse, false)
+	}
+
+	t.Run("writes the response to --output", func(t *testing.T) {
+		arrange(t, newMock())
+		outputFile := filepath.Join(t.TempDir(), "out.md")
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("output", outputFile))
+
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		written, err := os.ReadFile(outputFile)
+		require.NoError(t, err)
+		assert.Equal(t, "processed", string(written))
+
+		info, err := os.Stat(outputFile)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 	})
 
-	// Test with empty file
-	t.Run("empty file content", func(t *testing.T) {
-		emptyFile := tempDir + "/empty.txt"
-		err := os.WriteFile(emptyFile, []byte(""), 0o600)
+	t.Run("--raw writes RawResponse instead of Response", func(t *testing.T) {
+		arrange(t, newMock())
+		outputFile := filepath.Join(t.TempDir(), "raw.md")
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("output", outputFile))
+		require.NoError(t, cmd.Flags().Set("raw", "true"))
+
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		written, err := os.ReadFile(outputFile)
 		require.NoError(t, err)
+		assert.Equal(t, `{"raw":"payload"}`, string(written))
+		assert.NotContains(t, string(written), "processed")
 
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
+		info, err := os.Stat(outputFile)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	})
 
-		err = runContextSend(cmd, []string{emptyFile})
-		assert.Error(t, err)
+	t.Run("generates a timestamped filename when save-response is on", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		arrange(t, newMock())
+		setViper(t, config.KeyLLMSaveResponse, true)
+
+		require.NoError(t, runContextSend(newSendCmd(t), []string{testFile}))
+
+		matches, err := filepath.Glob("llm-response-*.md")
+		require.NoError(t, err)
+		require.Len(t, matches, 1)
+		assert.Regexp(t, `^llm-response-\d{8}-\d{6}\.md$`, matches[0])
+
+		written, readErr := os.ReadFile(matches[0])
+		require.NoError(t, readErr)
+		assert.Equal(t, "processed", string(written))
+	})
+
+	t.Run("prints to stdout when there is nothing to save", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		arrange(t, newMock())
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := runContextSend(newSendCmd(t), []string{testFile})
+
+		_ = w.Close()
+		os.Stdout = oldStdout
+
+		var buf bytes.Buffer
+		_, _ = buf.ReadFrom(r)
+
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "processed")
+
+		matches, globErr := filepath.Glob("llm-response-*.md")
+		require.NoError(t, globErr)
+		assert.Empty(t, matches)
+	})
+
+	t.Run("fails when the provider is unavailable", func(t *testing.T) {
+		mock := newMock()
+		mock.available = false
+		arrange(t, mock)
+
+		err := runContextSend(newSendCmd(t), []string{testFile})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not available")
+	})
+
+	t.Run("fails when the send fails", func(t *testing.T) {
+		mock := newMock()
+		mock.result = nil
+		mock.sendErr = errors.New("connection reset")
+		arrange(t, mock)
+
+		err := runContextSend(newSendCmd(t), []string{testFile})
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "LLM request failed")
+		assert.Contains(t, err.Error(), "connection reset")
+	})
+
+	t.Run("rejects an empty file", func(t *testing.T) {
+		emptyFile := filepath.Join(tempDir, "empty.txt")
+		require.NoError(t, os.WriteFile(emptyFile, []byte(""), 0o600))
+
+		err := runContextSend(newSendCmd(t), []string{emptyFile})
+
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no content to send")
 	})
 
-	// Test with whitespace-only file
-	t.Run("whitespace-only file content", func(t *testing.T) {
-		whitespaceFile := tempDir + "/whitespace.txt"
-		err := os.WriteFile(whitespaceFile, []byte("   \n\t  \n   "), 0o600)
-		require.NoError(t, err)
+	t.Run("rejects a whitespace-only file", func(t *testing.T) {
+		whitespaceFile := filepath.Join(tempDir, "whitespace.txt")
+		require.NoError(t, os.WriteFile(whitespaceFile, []byte("   \n\t  \n   "), 0o600))
 
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
+		err := runContextSend(newSendCmd(t), []string{whitespaceFile})
 
-		err = runContextSend(cmd, []string{whitespaceFile})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no content to send")
 	})
 
-	// Test with non-existent file
-	t.Run("non-existent file", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
+	t.Run("reports an unreadable file", func(t *testing.T) {
+		err := runContextSend(newSendCmd(t), []string{"/non/existent/file.txt"})
 
-		err := runContextSend(cmd, []string{"/non/existent/file.txt"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read file")
 	})
 }
 
 func TestRunContextSend_Flags(t *testing.T) {
 	tempDir := t.TempDir()
-	testFile := tempDir + "/test-prompt.txt"
-	err := os.WriteFile(testFile, []byte("Test content"), 0o600)
-	require.NoError(t, err)
+	testFile := filepath.Join(tempDir, "test-prompt.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("Test content"), 0o600))
 
-	setupCmd := func() *cobra.Command {
-		cmd := &cobra.Command{}
-		cmd.Flags().String("output", "", "")
-		cmd.Flags().String("model", "", "")
-		cmd.Flags().Int("timeout", 0, "")
-		cmd.Flags().Bool("raw", false, "")
-		return cmd
+	// The returned Config is empty until runContextSend reaches the registry.
+	arrange := func(t *testing.T) *llm.Config {
+		t.Helper()
+		got := &llm.Config{}
+		mock := &mockLLMProvider{
+			available: true,
+			result:    &llm.Result{Response: "processed", RawResponse: `{"raw":"payload"}`},
+		}
+		registry := llm.NewRegistry()
+		registry.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) {
+			*got = cfg
+			return mock, nil
+		})
+		installSendService(t, registry)
+		setViper(t, config.KeyLLMProvider, "openai")
+		setViper(t, config.KeyLLMAPIKey, "test-key")
+		setViper(t, config.KeyLLMSaveResponse, false)
+		return got
 	}
 
-	t.Run("custom model flag parsing", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
-		viper.Set("gemini.model", "default-model")
+	t.Run("model flag overrides the configured model", func(t *testing.T) {
+		got := arrange(t)
+		setViper(t, config.KeyLLMModel, "config-model")
 
-		cmd := setupCmd()
-		_ = cmd.Flags().Set("model", "gemini-3.0-pro")
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("model", "flag-model"))
+		require.NoError(t, cmd.Flags().Set("output", filepath.Join(t.TempDir(), "out.md")))
 
-		err := runContextSend(cmd, []string{testFile})
-		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		assert.Equal(t, "flag-model", got.Model)
 	})
 
-	t.Run("custom timeout flag parsing", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
-		viper.Set("gemini.timeout", 60)
+	t.Run("timeout flag overrides the configured timeout", func(t *testing.T) {
+		got := arrange(t)
+		setViper(t, config.KeyLLMTimeout, 60)
 
-		cmd := setupCmd()
-		_ = cmd.Flags().Set("timeout", "30")
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("timeout", "30"))
+		require.NoError(t, cmd.Flags().Set("output", filepath.Join(t.TempDir(), "out.md")))
 
-		err := runContextSend(cmd, []string{testFile})
-		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		assert.Equal(t, 30, got.Timeout)
 	})
 
-	t.Run("output to file flag", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
+	t.Run("output flag selects the destination path", func(t *testing.T) {
+		arrange(t)
+		outputFile := filepath.Join(t.TempDir(), "response.txt")
 
-		outputFile := tempDir + "/response.txt"
-		cmd := setupCmd()
-		_ = cmd.Flags().Set("output", outputFile)
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("output", outputFile))
 
-		err := runContextSend(cmd, []string{testFile})
-		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		written, err := os.ReadFile(outputFile)
+		require.NoError(t, err)
+		assert.Equal(t, "processed", string(written))
 	})
 
-	t.Run("raw output flag", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
+	t.Run("raw flag selects the raw payload", func(t *testing.T) {
+		arrange(t)
+		outputFile := filepath.Join(t.TempDir(), "response.txt")
 
-		cmd := setupCmd()
-		_ = cmd.Flags().Set("raw", "true")
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("output", outputFile))
+		require.NoError(t, cmd.Flags().Set("raw", "true"))
 
-		err := runContextSend(cmd, []string{testFile})
-		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		written, err := os.ReadFile(outputFile)
+		require.NoError(t, err)
+		assert.Equal(t, `{"raw":"payload"}`, string(written))
 	})
 
-	t.Run("viper config integration", func(t *testing.T) {
-		viper.Reset()
-		viper.Set("llm.provider", "openai")
-		viper.Set("llm.api-key", "test-key")
-		viper.Set("gemini.model", "config-model")
-		viper.Set("gemini.timeout", 45)
-		viper.Set("gemini.binary-path", "/path/to/binary")
-		viper.Set("gemini.browser-refresh", "always")
-		viper.Set("verbose", true)
+	t.Run("config values feed through when no flags are set", func(t *testing.T) {
+		got := arrange(t)
+		setViper(t, config.KeyLLMModel, "config-model")
+		setViper(t, config.KeyLLMTimeout, 45)
 
-		cmd := setupCmd()
+		cmd := newSendCmd(t)
+		require.NoError(t, cmd.Flags().Set("output", filepath.Join(t.TempDir(), "out.md")))
 
-		err := runContextSend(cmd, []string{testFile})
-		assert.True(t, isExpectedProviderError(err), "unexpected error: %v", err)
+		require.NoError(t, runContextSend(cmd, []string{testFile}))
+
+		assert.Equal(t, "config-model", got.Model)
+		assert.Equal(t, 45, got.Timeout)
+		assert.Equal(t, llm.ProviderOpenAI, got.Provider)
+		assert.Equal(t, "test-key", got.APIKey)
 	})
 }
 
@@ -448,28 +503,4 @@ func TestFormatDuration(t *testing.T) {
 			assert.Equal(t, tt.want, got, "formatDuration(%s) = %s, want %s", tt.duration, got, tt.want)
 		})
 	}
-}
-
-func TestRunContextSend_UsesInjectedService(t *testing.T) {
-	dir := t.TempDir()
-	promptFile := filepath.Join(dir, "prompt.md")
-	require.NoError(t, os.WriteFile(promptFile, []byte("hello context"), 0o600))
-	outputFile := filepath.Join(dir, "out.md")
-
-	mock := &mockLLMProvider{
-		available: true,
-		result:    &llm.Result{Response: "processed", RawResponse: `{"raw":"payload"}`},
-	}
-	installSendService(t, newMockRegistry(mock))
-	setViper(t, config.KeyLLMProvider, "openai")
-	setViper(t, config.KeyLLMAPIKey, "test-key")
-
-	cmd := newSendCmd(t)
-	require.NoError(t, cmd.Flags().Set("output", outputFile))
-
-	require.NoError(t, runContextSend(cmd, []string{promptFile}))
-
-	written, err := os.ReadFile(outputFile)
-	require.NoError(t, err)
-	assert.Equal(t, "processed", string(written))
 }
