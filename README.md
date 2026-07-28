@@ -386,11 +386,9 @@ Error: failed to parse integer value
 | `scanner.max-file-size` | size | 10MB | Maximum size per file (e.g., 10MB, 500KB) |
 | `scanner.respect-gitignore` | bool | true | Respect .gitignore files during scanning |
 | `scanner.skip-binary` | bool | true | Skip binary files during scanning |
-| `scanner.workers` | int | 4 | Number of parallel scanner workers (1-32) |
 | `scanner.include-hidden` | bool | false | Include hidden files (starting with .) |
 | `scanner.include-ignored` | bool | false | Include git-ignored files |
 | `scanner.respect-shotgunignore` | bool | true | Respect .shotgunignore files |
-| `scanner.max-memory` | size | 100MB | Maximum memory usage for scanning |
 
 #### Context Settings
 
@@ -433,13 +431,11 @@ The configuration system provides centralized validation through `internal/confi
 |-----|-----------|-------|----------------|
 | `scanner.max-files` | `validateMaxFiles` | Positive integer, rejects size formats | "expected a positive integer", "expected a number, got size format", "must be positive" |
 | `scanner.max-file-size` | `validateSizeFormat` | Size format (KB/MB/GB/B) or plain number | "expected size format (e.g., 1MB, 500KB)" |
-| `scanner.workers` | `validateWorkers` | Integer between 1 and 32 | "must be between 1 and 32", "expected a positive integer" |
 | `scanner.respect-gitignore` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `scanner.skip-binary` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `scanner.include-hidden` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `scanner.include-ignored` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `scanner.respect-shotgunignore` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
-| `scanner.max-memory` | `validateSizeFormat` | Size format (KB/MB/GB/B) or plain number | "expected size format (e.g., 1MB, 500KB)" |
 | `context.max-size` | `validateSizeFormat` | Size format (KB/MB/GB/B) or plain number | "expected size format (e.g., 1MB, 500KB)" |
 | `context.include-tree` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `context.include-summary` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
@@ -454,13 +450,12 @@ The configuration system provides centralized validation through `internal/confi
 
 #### Validation Rules Detail
 
-**Integer Validation** (`scanner.max-files`, `scanner.workers`):
+**Integer Validation** (`scanner.max-files`):
 - Must be a valid integer format (e.g., `100`, `5000`)
-- Workers: Range 1-32
 - Max-files: Must be positive
 - Max-files specifically rejects size formats like "10MB" or "1KB"
 
-**Size Format Validation** (`scanner.max-file-size`, `context.max-size`, `scanner.max-memory`):
+**Size Format Validation** (`scanner.max-file-size`, `context.max-size`):
 - Supports suffixes: `KB`, `MB`, `GB`, `B`
 - Also accepts plain numbers (bytes)
 - Examples: `100`, `1KB`, `10MB`, `1GB`, `500KB`
@@ -501,7 +496,7 @@ The `ConvertValue()` function converts validated string values to their appropri
 | Boolean keys | `strings.ToLower == "true"` | `bool` |
 | All other keys | Identity | `string` |
 
-**Integer Keys**: `scanner.max-files`, `scanner.workers`, `llm.timeout`
+**Integer Keys**: `scanner.max-files`, `llm.timeout`
 
 **Boolean Keys**: All `*enabled`, `*include*`, `*skip*`, `*respect*`, `clipboard` keys
 
@@ -511,7 +506,8 @@ Configuration validation is tested in `internal/config/validator_test.go`:
 
 - `TestIsValidKey`: Valid key detection
 - `TestValidKeys`: No duplicates in valid keys list
-- `TestValidateValue_*`: Per-key validation tests (workers, max-files, size format, boolean, provider, format, timeout, URL, path)
+- `TestValidateValue_*`: Per-key validation tests (max-files, size format, boolean, provider, format, timeout, URL, path)
+- `TestDeprecationMessage` / `TestDeprecatedKeysAreNotValid`: retired keys report why they were removed
 - `TestConvertValue_*`: Type conversion tests
 - `TestValidatePath_*`: Path validation with existing files
 

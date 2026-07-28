@@ -23,7 +23,6 @@ type CLIConfig struct {
 	CustomVars map[string]string
 
 	// Scanner overrides
-	Workers        int
 	IncludeHidden  bool
 	IncludeIgnored bool
 

@@ -53,8 +53,7 @@ type GenerateConfig struct {
 	Task       string            // Task description for LLM
 	Rules      string            // Rules/constraints for LLM
 	CustomVars map[string]string // Custom template variables (KEY=VALUE)
-	// Scanner overrides (0/false = use config)
-	Workers        int
+	// Scanner overrides (false = use config)
 	IncludeHidden  bool
 	IncludeIgnored bool
 	// Progress output
@@ -154,7 +153,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	varFlags, _ := cmd.Flags().GetStringArray("var")
 
 	// Scanner override flags
-	workers, _ := cmd.Flags().GetInt("workers")
 	includeHidden, _ := cmd.Flags().GetBool("include-hidden")
 	includeIgnored, _ := cmd.Flags().GetBool("include-ignored")
 
@@ -211,7 +209,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		Task:           task,
 		Rules:          rules,
 		CustomVars:     customVars,
-		Workers:        workers,
 		IncludeHidden:  includeHidden,
 		IncludeIgnored: includeIgnored,
 		ProgressMode:   progressMode,
@@ -284,20 +281,15 @@ func buildScannerConfig(cfg GenerateConfig) scanner.ScanConfig {
 	scannerConfig := scanner.ScanConfig{
 		MaxFiles:             viper.GetInt64(cfgkeys.KeyScannerMaxFiles),
 		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(cfgkeys.KeyScannerMaxFileSize), 1024*1024),
-		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(cfgkeys.KeyScannerMaxMemory), 500*1024*1024),
 		SkipBinary:           viper.GetBool(cfgkeys.KeyScannerSkipBinary),
 		IncludeHidden:        viper.GetBool(cfgkeys.KeyScannerIncludeHidden),
 		IncludeIgnored:       viper.GetBool(cfgkeys.KeyScannerIncludeIgnored),
-		Workers:              viper.GetInt(cfgkeys.KeyScannerWorkers),
 		RespectGitignore:     viper.GetBool(cfgkeys.KeyScannerRespectGitignore),
 		RespectShotgunignore: viper.GetBool(cfgkeys.KeyScannerRespectShotgunignore),
 		IgnorePatterns:       cfg.Exclude,
 		IncludePatterns:      cfg.Include,
 	}
 
-	if cfg.Workers > 0 {
-		scannerConfig.Workers = cfg.Workers
-	}
 	if cfg.IncludeHidden {
 		scannerConfig.IncludeHidden = true
 	}
@@ -411,7 +403,6 @@ func init() {
 	contextGenerateCmd.Flags().StringArrayP("var", "V", []string{}, "Custom template vars KEY=VALUE (repeatable)")
 
 	// Scanner override flags
-	contextGenerateCmd.Flags().Int("workers", 0, "Number of parallel workers (0 = use config)")
 	contextGenerateCmd.Flags().Bool("include-hidden", false, "Include hidden files")
 	contextGenerateCmd.Flags().Bool("include-ignored", false, "Include ignored files")
 

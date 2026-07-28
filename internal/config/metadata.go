@@ -148,7 +148,7 @@ func AllCategories() []ConfigCategory {
 // buildAllMetadata constructs the complete metadata list.
 func buildAllMetadata() []ConfigMetadata {
 	return []ConfigMetadata{
-		// Scanner (9 keys)
+		// Scanner (7 keys)
 		{
 			Key:          KeyScannerMaxFiles,
 			Category:     CategoryScanner,
@@ -164,13 +164,6 @@ func buildAllMetadata() []ConfigMetadata {
 			Type:         TypeSize,
 			Description:  "Maximum size per file (e.g., 10MB, 500KB)",
 			DefaultValue: "1MB",
-		},
-		{
-			Key:          KeyScannerMaxMemory,
-			Category:     CategoryScanner,
-			Type:         TypeSize,
-			Description:  "Maximum memory usage for scanning",
-			DefaultValue: "500MB",
 		},
 		{
 			Key:          KeyScannerSkipBinary,
@@ -192,15 +185,6 @@ func buildAllMetadata() []ConfigMetadata {
 			Type:         TypeBool,
 			Description:  "Include git-ignored files",
 			DefaultValue: false,
-		},
-		{
-			Key:          KeyScannerWorkers,
-			Category:     CategoryScanner,
-			Type:         TypeInt,
-			Description:  "Number of parallel scanner workers",
-			DefaultValue: 1,
-			MinValue:     1,
-			MaxValue:     32,
 		},
 		{
 			Key:          KeyScannerRespectGitignore,

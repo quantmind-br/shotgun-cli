@@ -38,7 +38,7 @@ func TestAllConfigMetadata_ReturnsAllKeys(t *testing.T) {
 	metadata := AllConfigMetadata()
 
 	assert.NotEmpty(t, metadata)
-	assert.Len(t, metadata, 21, "should have 21 configuration keys")
+	assert.Len(t, metadata, 19, "should have 19 configuration keys")
 }
 
 func TestAllConfigMetadata_MatchesValidKeys(t *testing.T) {
@@ -156,7 +156,7 @@ func TestGetMetadata_ExistingKey(t *testing.T) {
 	}{
 		{KeyScannerMaxFiles, CategoryScanner, TypeInt},
 		{KeyScannerMaxFileSize, CategoryScanner, TypeSize},
-		{KeyScannerWorkers, CategoryScanner, TypeInt},
+		{KeyScannerSkipBinary, CategoryScanner, TypeBool},
 		{KeyContextIncludeTree, CategoryContext, TypeBool},
 		{KeyTemplateCustomPath, CategoryTemplate, TypePath},
 		{KeyOutputFormat, CategoryOutput, TypeEnum},
@@ -190,7 +190,7 @@ func TestGetByCategory_ReturnsCorrectKeys(t *testing.T) {
 		expectedCount int
 		expectedKeys  []string
 	}{
-		{CategoryScanner, 9, []string{KeyScannerMaxFiles, KeyScannerWorkers}},
+		{CategoryScanner, 7, []string{KeyScannerMaxFiles, KeyScannerSkipBinary}},
 		{CategoryContext, 3, []string{KeyContextIncludeTree, KeyContextMaxSize}},
 		{CategoryTemplate, 1, []string{KeyTemplateCustomPath}},
 		{CategoryOutput, 2, []string{KeyOutputFormat, KeyOutputClipboard}},
@@ -259,11 +259,9 @@ func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
 	expectedDefaults := map[string]interface{}{
 		KeyScannerMaxFiles:             10000,
 		KeyScannerMaxFileSize:          "1MB",
-		KeyScannerMaxMemory:            "500MB",
 		KeyScannerSkipBinary:           true,
 		KeyScannerIncludeHidden:        false,
 		KeyScannerIncludeIgnored:       false,
-		KeyScannerWorkers:              1,
 		KeyScannerRespectGitignore:     true,
 		KeyScannerRespectShotgunignore: true,
 		KeyContextIncludeTree:          true,
@@ -320,7 +318,6 @@ func TestMetadataRanges_MatchValidators(t *testing.T) {
 		min int
 		max int
 	}{
-		{KeyScannerWorkers, 1, 32},
 		{KeyScannerMaxFiles, 1, 1000000},
 		{KeyLLMTimeout, 1, 3600},
 	}

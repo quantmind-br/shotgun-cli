@@ -74,17 +74,11 @@ type ScanConfig struct {
 	// MaxFiles limits the total number of files to scan (0 = no limit)
 	MaxFiles int64 `json:"max_files"`
 
-	// MaxMemory limits memory usage during scanning (in bytes, 0 = no limit)
-	MaxMemory int64 `json:"max_memory"`
-
 	// SkipBinary indicates whether to skip binary files
 	SkipBinary bool `json:"skip_binary"`
 
 	// IncludeHidden indicates whether to include hidden files and directories
 	IncludeHidden bool `json:"include_hidden"`
-
-	// Workers specifies the number of concurrent workers for scanning
-	Workers int `json:"workers"`
 
 	// IgnorePatterns contains custom ignore patterns
 	// NOTE: These patterns now use gitignore semantics instead of legacy glob patterns.
@@ -113,10 +107,8 @@ func DefaultScanConfig() *ScanConfig {
 	return &ScanConfig{
 		MaxFileSize:          0, // No limit
 		MaxFiles:             0, // No limit
-		MaxMemory:            0, // No limit
 		SkipBinary:           false,
 		IncludeHidden:        false,
-		Workers:              1, // Single-threaded by default for simplicity
 		RespectGitignore:     true,
 		RespectShotgunignore: true,
 	}

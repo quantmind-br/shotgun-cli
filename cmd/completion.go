@@ -85,11 +85,9 @@ func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, c
 		"scanner.max-file-size\tMaximum size per file (e.g., 1MB)",
 		"scanner.respect-gitignore\tRespect .gitignore files (true/false)",
 		"scanner.skip-binary\tSkip binary files (true/false)",
-		"scanner.workers\tNumber of parallel workers (1-32)",
 		"scanner.include-hidden\tInclude hidden files (true/false)",
 		"scanner.include-ignored\tInclude ignored files (true/false)",
 		"scanner.respect-shotgunignore\tRespect .shotgunignore files (true/false)",
-		"scanner.max-memory\tMax memory usage (e.g., 500MB)",
 		// Context keys
 		"context.max-size\tMaximum context size (e.g., 10MB)",
 		"context.include-tree\tInclude directory tree (true/false)",

@@ -81,11 +81,9 @@ func launchTUIWizard() {
 	scanConfig := &scanner.ScanConfig{
 		MaxFiles:             viper.GetInt64(config.KeyScannerMaxFiles),
 		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxFileSize), 1024*1024),
-		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxMemory), 500*1024*1024),
 		SkipBinary:           viper.GetBool(config.KeyScannerSkipBinary),
 		IncludeHidden:        viper.GetBool(config.KeyScannerIncludeHidden),
 		IncludeIgnored:       viper.GetBool(config.KeyScannerIncludeIgnored),
-		Workers:              viper.GetInt(config.KeyScannerWorkers),
 		RespectGitignore:     viper.GetBool(config.KeyScannerRespectGitignore),
 		RespectShotgunignore: viper.GetBool(config.KeyScannerRespectShotgunignore),
 	}
@@ -239,11 +237,9 @@ func setConfigDefaults() {
 	viper.SetDefault(config.KeyScannerMaxFileSize, "1MB")
 	viper.SetDefault(config.KeyScannerRespectGitignore, true)
 	viper.SetDefault(config.KeyScannerSkipBinary, true)
-	viper.SetDefault(config.KeyScannerWorkers, 1)
 	viper.SetDefault(config.KeyScannerIncludeHidden, false)
 	viper.SetDefault(config.KeyScannerIncludeIgnored, false)
 	viper.SetDefault(config.KeyScannerRespectShotgunignore, true)
-	viper.SetDefault(config.KeyScannerMaxMemory, "500MB")
 
 	viper.SetDefault(config.KeyContextMaxSize, "10MB")
 	viper.SetDefault(config.KeyContextIncludeTree, true)

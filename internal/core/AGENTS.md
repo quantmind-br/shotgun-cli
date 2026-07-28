@@ -9,7 +9,7 @@ Parent: [../AGENTS.md](../AGENTS.md)
 ## PACKAGES
 
 ### scanner/
-Filesystem traversal with layered ignore support. Parallel workers.
+Filesystem traversal with layered ignore support. Single-pass, sequential walk.
 
 ```go
 type FileNode struct {
@@ -25,7 +25,7 @@ scanner := scanner.NewFilesystemScanner()
 tree, err := scanner.Scan(rootPath, config)
 ```
 
-**ScanConfig**: MaxFileSize, MaxFiles, MaxMemory, Workers (1-32), SkipBinary, IncludeHidden, IncludeIgnored, IgnorePatterns, IncludePatterns, RespectGitignore, RespectShotgunignore.
+**ScanConfig**: MaxFileSize, MaxFiles, SkipBinary, IncludeHidden, IncludeIgnored, IgnorePatterns, IncludePatterns, RespectGitignore, RespectShotgunignore.
 
 ### contextgen/
 Generates LLM context from templates, file tree, and file contents.

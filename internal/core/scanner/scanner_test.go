@@ -299,10 +299,6 @@ func TestDefaultScanConfig(t *testing.T) {
 		t.Errorf("Expected MaxFiles to be 0, got %d", config.MaxFiles)
 	}
 
-	if config.MaxMemory != 0 {
-		t.Errorf("Expected MaxMemory to be 0, got %d", config.MaxMemory)
-	}
-
 	if config.SkipBinary != false {
 		t.Errorf("Expected SkipBinary to be false, got %t", config.SkipBinary)
 	}
@@ -311,8 +307,12 @@ func TestDefaultScanConfig(t *testing.T) {
 		t.Errorf("Expected IncludeHidden to be false, got %t", config.IncludeHidden)
 	}
 
-	if config.Workers != 1 {
-		t.Errorf("Expected Workers to be 1, got %d", config.Workers)
+	if !config.RespectGitignore {
+		t.Error("Expected RespectGitignore to be true")
+	}
+
+	if !config.RespectShotgunignore {
+		t.Error("Expected RespectShotgunignore to be true")
 	}
 }
 

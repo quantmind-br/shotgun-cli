@@ -18,11 +18,9 @@ func ValidKeys() []string {
 		KeyScannerMaxFileSize,
 		KeyScannerRespectGitignore,
 		KeyScannerSkipBinary,
-		KeyScannerWorkers,
 		KeyScannerIncludeHidden,
 		KeyScannerIncludeIgnored,
 		KeyScannerRespectShotgunignore,
-		KeyScannerMaxMemory,
 		// Context keys
 		KeyContextMaxSize,
 		KeyContextIncludeTree,
@@ -43,6 +41,23 @@ func ValidKeys() []string {
 	}
 }
 
+// deprecatedKeys maps retired configuration keys to the message shown when one is
+// still used. Raw string literals on purpose: the Key* constants are gone, and
+// the whole point is to keep recognising what users may still have on disk.
+var deprecatedKeys = map[string]string{
+	"scanner.workers":    "scanner.workers was removed; it had no effect",
+	"scanner.max-memory": "scanner.max-memory was removed; it had no effect",
+}
+
+// DeprecationMessage reports whether key was retired and, if so, the message
+// explaining it. Callers should consult this before IsValidKey so a retired key
+// produces a specific explanation rather than a generic "invalid key" error.
+func DeprecationMessage(key string) (string, bool) {
+	msg, ok := deprecatedKeys[key]
+
+	return msg, ok
+}
+
 // IsValidKey checks if the given key is a valid configuration key.
 func IsValidKey(key string) bool {
 	for _, validKey := range ValidKeys() {
@@ -58,15 +73,13 @@ func ValidateValue(key, value string) error {
 	switch key {
 	case KeyScannerMaxFiles:
 		return validateMaxFiles(value)
-	case KeyScannerMaxFileSize, KeyContextMaxSize, KeyScannerMaxMemory:
+	case KeyScannerMaxFileSize, KeyContextMaxSize:
 		return validateSizeFormat(value)
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
 		KeyLLMSaveResponse:
 		return validateBooleanValue(value)
-	case KeyScannerWorkers:
-		return validateWorkers(value)
 	case KeyOutputFormat:
 		return validateOutputFormat(value)
 	case KeyTemplateCustomPath:
@@ -89,7 +102,7 @@ func ValidateValue(key, value string) error {
 // ConvertValue converts a string configuration value to the appropriate type.
 func ConvertValue(key, value string) (interface{}, error) {
 	switch key {
-	case KeyScannerMaxFiles, KeyScannerWorkers, KeyLLMTimeout:
+	case KeyScannerMaxFiles, KeyLLMTimeout:
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, fmt.Errorf("failed to parse integer value: %w", err)
@@ -106,18 +119,6 @@ func ConvertValue(key, value string) (interface{}, error) {
 		// String values
 		return value, nil
 	}
-}
-
-// validateWorkers validates the workers configuration value.
-func validateWorkers(value string) error {
-	var workers int
-	if _, err := fmt.Sscanf(value, "%d", &workers); err != nil {
-		return fmt.Errorf("expected a positive integer")
-	}
-	if workers < 1 || workers > 32 {
-		return fmt.Errorf("must be between 1 and 32, got %d", workers)
-	}
-	return nil
 }
 
 // validateMaxFiles validates the max-files configuration value.

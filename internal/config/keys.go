@@ -5,11 +5,9 @@ const (
 	// Scanner
 	KeyScannerMaxFiles             = "scanner.max-files"
 	KeyScannerMaxFileSize          = "scanner.max-file-size"
-	KeyScannerMaxMemory            = "scanner.max-memory"
 	KeyScannerSkipBinary           = "scanner.skip-binary"
 	KeyScannerIncludeHidden        = "scanner.include-hidden"
 	KeyScannerIncludeIgnored       = "scanner.include-ignored"
-	KeyScannerWorkers              = "scanner.workers"
 	KeyScannerRespectGitignore     = "scanner.respect-gitignore"
 	KeyScannerRespectShotgunignore = "scanner.respect-shotgunignore"
 
