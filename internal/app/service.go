@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
@@ -142,10 +144,18 @@ func (s *DefaultContextService) GenerateWithProgress(
 
 	report("generating", "Generating context...", 0, 0)
 
+	// With EnforceLimit off, the generator must not impose the size limit at all:
+	// the documented contract is that generation proceeds past it and warns. A
+	// zero MaxTotalSize means "no limit", so this is expressible now.
+	generatorMaxTotal := cfg.MaxSize
+	if !cfg.EnforceLimit {
+		generatorMaxTotal = 0
+	}
+
 	// ScannerLimits first, then the fields this path owns: SkipBinary is an
 	// explicit GenerateConfig field here and must win over the scanner's copy.
 	genInput := ScannerLimits(scanConfig, GeneratorConfigInput{
-		MaxTotalSize:   cfg.MaxSize,
+		MaxTotalSize:   generatorMaxTotal,
 		TemplateVars:   cfg.TemplateVars,
 		Template:       cfg.Template,
 		IncludeTree:    cfg.IncludeTree,
@@ -169,8 +179,18 @@ func (s *DefaultContextService) GenerateWithProgress(
 	}
 
 	contentSize := int64(len(content))
-	if cfg.EnforceLimit && cfg.MaxSize > 0 && contentSize > cfg.MaxSize {
-		return nil, fmt.Errorf("content size (%d) exceeds limit (%d)", contentSize, cfg.MaxSize)
+	if cfg.MaxSize > 0 && contentSize > cfg.MaxSize {
+		if cfg.EnforceLimit {
+			// Belt and braces: the generator already caps at MaxTotalSize, but
+			// ContextGenerator is an injectable interface and this is the
+			// service's own guarantee.
+			return nil, fmt.Errorf("content size (%d) exceeds limit (%d)", contentSize, cfg.MaxSize)
+		}
+
+		log.Warn().
+			Int64("size", contentSize).
+			Int64("limit", cfg.MaxSize).
+			Msg("Generated context exceeds the size limit; continuing because the limit is not enforced")
 	}
 
 	report("saving", "Saving output...", 0, 0)

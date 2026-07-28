@@ -76,14 +76,14 @@ context file suitable for LLM consumption. The output includes a directory tree,
 file summaries, and file contents within the specified size limits.
 
 By default, the context generation will fail if the output exceeds the max-size limit.
-Use --no-enforce-limit to allow generation that exceeds the limit with a warning.
+Use --enforce-limit=false to allow generation that exceeds the limit with a warning.
 
 Examples:
   shotgun-cli context generate --root . --include "*.go"
   shotgun-cli context generate --exclude "vendor/*,*.test.go" --max-size 5MB
   shotgun-cli context generate --output my-context.md --root ./src
   shotgun-cli context generate --include "*.py,*.js" --exclude "node_modules/*"
-  shotgun-cli context generate --no-enforce-limit --max-size 5MB`,
+  shotgun-cli context generate --enforce-limit=false --max-size 5MB`,
 
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Validate root path

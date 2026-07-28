@@ -143,6 +143,96 @@ func TestDefaultContextService_Generate_EnforceLimitExceeded(t *testing.T) {
 	assert.Contains(t, err.Error(), "exceeds limit")
 }
 
+// TestDefaultContextService_Generate_LimitNotEnforced pins the contract the help
+// text has always promised and the code never delivered: with EnforceLimit off,
+// generation proceeds past the limit instead of failing.
+//
+// Two things blocked this before. The service returned an error whenever the
+// content exceeded MaxSize regardless of the flag, and -- decisively -- MaxSize
+// was handed to the generator unconditionally, so the generator aborted first.
+// `--enforce-limit=false` was inert in both directions.
+func TestDefaultContextService_Generate_LimitNotEnforced(t *testing.T) {
+	tmpDir := t.TempDir()
+	mockScan := &mockScanner{
+		tree: &scanner.FileNode{Name: "root", IsDir: true, Path: tmpDir},
+	}
+	mockGen := &mockGenerator{content: "this is some content that exceeds the limit"}
+	svc := NewContextService(WithScanner(mockScan), WithGenerator(mockGen))
+
+	outputFile := filepath.Join(tmpDir, "output.md")
+	cfg := GenerateConfig{
+		RootPath:     tmpDir,
+		OutputPath:   outputFile,
+		MaxSize:      10,
+		EnforceLimit: false,
+	}
+	result, err := svc.Generate(context.Background(), cfg)
+
+	require.NoError(t, err, "an unenforced limit must not fail generation")
+	require.NotNil(t, result)
+	assert.Greater(t, result.ContentSize, cfg.MaxSize, "the content is expected to exceed the limit")
+}
+
+// TestDefaultContextService_Generate_UnenforcedLimitNotPassedToGenerator is the
+// other half: the generator must receive no total-size cap, otherwise it aborts
+// before the service ever gets to decide.
+func TestDefaultContextService_Generate_UnenforcedLimitNotPassedToGenerator(t *testing.T) {
+	tmpDir := t.TempDir()
+	mockScan := &mockScanner{
+		tree: &scanner.FileNode{Name: "root", IsDir: true, Path: tmpDir},
+	}
+	spy := &configSpyGenerator{content: "content"}
+	svc := NewContextService(WithScanner(mockScan), WithGenerator(spy))
+
+	_, err := svc.Generate(context.Background(), GenerateConfig{
+		RootPath:     tmpDir,
+		OutputPath:   filepath.Join(tmpDir, "out.md"),
+		MaxSize:      1024,
+		EnforceLimit: false,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), spy.seen.MaxTotalSize,
+		"an unenforced limit must reach the generator as 'no limit'")
+
+	spy2 := &configSpyGenerator{content: "content"}
+	svc2 := NewContextService(WithScanner(mockScan), WithGenerator(spy2))
+	_, err = svc2.Generate(context.Background(), GenerateConfig{
+		RootPath:     tmpDir,
+		OutputPath:   filepath.Join(tmpDir, "out2.md"),
+		MaxSize:      1024,
+		EnforceLimit: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1024), spy2.seen.MaxTotalSize,
+		"an enforced limit must still cap the generator")
+}
+
+// configSpyGenerator records the config it was handed.
+type configSpyGenerator struct {
+	content string
+	seen    contextgen.GenerateConfig
+}
+
+func (g *configSpyGenerator) Generate(
+	_ *scanner.FileNode, _ map[string]bool, config contextgen.GenerateConfig,
+) (string, error) {
+	g.seen = config
+
+	return g.content, nil
+}
+
+func (g *configSpyGenerator) GenerateWithProgress(
+	root *scanner.FileNode, sel map[string]bool, config contextgen.GenerateConfig, _ func(string),
+) (string, error) {
+	return g.Generate(root, sel, config)
+}
+
+func (g *configSpyGenerator) GenerateWithProgressEx(
+	root *scanner.FileNode, sel map[string]bool, config contextgen.GenerateConfig, _ func(contextgen.GenProgress),
+) (string, error) {
+	return g.Generate(root, sel, config)
+}
+
 func TestDefaultContextService_Generate_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	mockScan := &mockScanner{
