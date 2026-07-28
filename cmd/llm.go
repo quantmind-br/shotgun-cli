@@ -40,9 +40,14 @@ var llmDoctorCmd = &cobra.Command{
 Checks all aspects of the provider configuration and provides
 specific guidance on how to fix any issues found.
 
+Exits non-zero when any issue is found, so it can gate a script.
+
 Example:
   shotgun-cli llm doctor`,
 	RunE: runLLMDoctor,
+	// The diagnostics and the remediation steps are already printed to stdout;
+	// dumping the whole usage text after them would bury the actual guidance.
+	SilenceUsage: true,
 }
 
 var llmListCmd = &cobra.Command{
@@ -191,7 +196,9 @@ func runLLMDoctor(cmd *cobra.Command, args []string) error {
 		fmt.Println("  3. (Optional) Set model: shotgun-cli config set llm.model gemini-2.5-flash")
 	}
 
-	return nil
+	// Deliberately terse: the issues are enumerated above, and Cobra prints this
+	// message again on its own, so repeating the list here would duplicate it.
+	return fmt.Errorf("found %d configuration issue(s); see the diagnostics above", len(issues))
 }
 
 func runLLMList(cmd *cobra.Command, args []string) error {

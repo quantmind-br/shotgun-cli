@@ -153,3 +153,75 @@ func TestCLIVersionReportsInjectedBuildInfo(t *testing.T) {
 		}
 	}
 }
+
+// TestCLILLMDoctorExitCode trava o contrato de exit code do `llm doctor`: com
+// provider configurado ele sai 0, sem API key sai non-zero. Antes ele sempre
+// saía 0, então não servia para gatear script nenhum.
+//
+// A configuração é isolada num --config temporário e o ambiente é limpo de
+// SHOTGUN_*: sem isso, um ~/.config/shotgun-cli/config.yaml da máquina pode
+// fornecer uma API key e o caso de falha deixa de falhar.
+func TestCLILLMDoctorExitCode(t *testing.T) {
+	root := repoRoot()
+
+	// Env sem nenhuma variável SHOTGUN_*, que o viper leria via AutomaticEnv.
+	cleanEnv := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "SHOTGUN_") {
+			cleanEnv = append(cleanEnv, kv)
+		}
+	}
+
+	tests := []struct {
+		name       string
+		configYAML string
+		wantErr    bool
+	}{
+		{
+			name:       "sem api key sai non-zero",
+			configYAML: "llm:\n  provider: openai\n  model: gpt-4o\n",
+			wantErr:    true,
+		},
+		{
+			name:       "provider completo sai zero",
+			configYAML: "llm:\n  provider: openai\n  api-key: sk-test-key\n  model: gpt-4o\n",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(cfgPath, []byte(tt.configYAML), 0o600); err != nil {
+				t.Fatalf("não foi possível escrever o config: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
+				"go", "run", ".", "llm", "doctor", "--config", cfgPath,
+			)
+			cmd.Dir = root
+			cmd.Env = cleanEnv
+
+			out, err := cmd.CombinedOutput()
+			if tt.wantErr && err == nil {
+				t.Fatalf("esperava exit non-zero, obteve 0:\n%s", out)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("esperava exit 0, obteve %v:\n%s", err, out)
+			}
+
+			// A lista de issues aparece uma única vez: o erro devolvido é curto e
+			// não a repete.
+			if got := strings.Count(string(out), "API key not configured"); tt.wantErr && got != 1 {
+				t.Errorf("esperava a issue de API key exatamente 1 vez, apareceu %d:\n%s", got, out)
+			}
+			// O usage não deve ser despejado por cima das instruções de correção.
+			if tt.wantErr && strings.Contains(string(out), "Usage:") {
+				t.Errorf("doctor despejou o usage no caminho de falha:\n%s", out)
+			}
+		})
+	}
+}

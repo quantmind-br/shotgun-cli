@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -258,7 +259,8 @@ func TestRunLLMDoctor_OpenAI(t *testing.T) {
 	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	require.NoError(t, err)
+	// No API key and no model configured, so doctor must report a failure.
+	require.Error(t, err)
 	assert.Contains(t, output, "Running diagnostics for openai")
 	assert.Contains(t, output, "Checking provider...")
 	assert.Contains(t, output, "Checking API key...")
@@ -371,7 +373,7 @@ func TestRunLLMDoctor_InvalidProvider(t *testing.T) {
 	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	_ = err
+	require.Error(t, err)
 	assert.Contains(t, output, "Running diagnostics for invalid-provider")
 	assert.Contains(t, output, "Found")
 	assert.Contains(t, output, "Invalid provider")
@@ -397,10 +399,46 @@ func TestRunLLMDoctor_NoAPIKey(t *testing.T) {
 	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
-	require.NoError(t, err)
+	require.Error(t, err)
 	assert.Contains(t, output, "Checking API key... not configured")
 	assert.Contains(t, output, "API key not configured")
 	assert.Contains(t, output, "Found")
+}
+
+// TestRunLLMDoctor_ErrorReportsIssueCount pins the contract CI-010 adds: the
+// returned error exists only to carry a non-zero exit code, and must not repeat
+// the issue list that already went to stdout.
+func TestRunLLMDoctor_ErrorReportsIssueCount(t *testing.T) {
+	viper.Reset()
+	viper.Set(config.KeyLLMProvider, "openai")
+	// Neither API key nor model: two issues.
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runLLMDoctor(&cobra.Command{}, []string{})
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	output := buf.String()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "configuration issue(s)")
+	assert.NotContains(t, err.Error(), "API key not configured",
+		"the error must not duplicate the issue list already printed to stdout")
+
+	// The issue list is printed exactly once.
+	assert.Equal(t, 1, strings.Count(output, "API key not configured"))
+}
+
+// TestRunLLMDoctor_SilencesUsage guards against Cobra burying the remediation
+// steps under a full usage dump when doctor exits non-zero.
+func TestRunLLMDoctor_SilencesUsage(t *testing.T) {
+	assert.True(t, llmDoctorCmd.SilenceUsage, "llm doctor must not print usage on failure")
 }
 
 func TestRunLLMList(t *testing.T) {
