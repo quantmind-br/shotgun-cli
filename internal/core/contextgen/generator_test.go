@@ -25,12 +25,15 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 		expected GenerateConfig
 	}{
 		{
-			name:  "defaults applied",
+			// Zero means "no limit", as in scanner.ScanConfig. validateConfig
+			// must not invent a ceiling: doing so turned a caller's missing
+			// field into a hard abort at a number nobody chose.
+			name:  "zero limits are left alone",
 			input: GenerateConfig{},
 			expected: GenerateConfig{
-				MaxFileSize:  DefaultMaxSize,
-				MaxTotalSize: DefaultMaxSize,
-				MaxFiles:     DefaultMaxFiles,
+				MaxFileSize:  0,
+				MaxTotalSize: 0,
+				MaxFiles:     0,
 				TemplateVars: map[string]string{},
 			},
 		},
@@ -68,6 +71,168 @@ func TestDefaultContextGenerator_validateConfig(t *testing.T) {
 				t.Fatalf("expected non-nil TemplateVars")
 			}
 		})
+	}
+}
+
+// TestDefaultGenerateConfig_YieldsDocumentedCeilings pins the opt-in path: the
+// ceilings still exist, they are just no longer reached by omission.
+func TestDefaultGenerateConfig_YieldsDocumentedCeilings(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultGenerateConfig()
+
+	if cfg.MaxFileSize != DefaultMaxSize {
+		t.Errorf("MaxFileSize = %d, want %d", cfg.MaxFileSize, DefaultMaxSize)
+	}
+	if cfg.MaxTotalSize != DefaultMaxSize {
+		t.Errorf("MaxTotalSize = %d, want %d", cfg.MaxTotalSize, DefaultMaxSize)
+	}
+	if cfg.MaxFiles != DefaultMaxFiles {
+		t.Errorf("MaxFiles = %d, want %d", cfg.MaxFiles, DefaultMaxFiles)
+	}
+	if cfg.TemplateVars == nil {
+		t.Error("TemplateVars should be initialised")
+	}
+}
+
+// TestZeroLimitsMatchScannerSemantics is the cross-package contract: the same
+// field name must mean the same thing in scanner.ScanConfig and GenerateConfig.
+// They disagreed -- scanner treated zero as unlimited while the generator
+// substituted a ceiling -- and that disagreement is why a front end forgetting a
+// limit went unnoticed.
+func TestZeroLimitsMatchScannerSemantics(t *testing.T) {
+	t.Parallel()
+
+	scanCfg := scanner.DefaultScanConfig()
+	if scanCfg.MaxFiles != 0 || scanCfg.MaxFileSize != 0 {
+		t.Fatalf("precondition changed: scanner defaults are no longer zero: %+v", scanCfg)
+	}
+
+	// Same input, both packages: zero must not impose a limit anywhere.
+	genCfg := GenerateConfig{}
+	gen := NewDefaultContextGenerator()
+	if err := gen.validateConfig(&genCfg); err != nil {
+		t.Fatalf("validateConfig returned error: %v", err)
+	}
+
+	if genCfg.MaxFiles != 0 {
+		t.Errorf("GenerateConfig.MaxFiles = %d after validation; scanner treats 0 as no limit", genCfg.MaxFiles)
+	}
+	if genCfg.MaxFileSize != 0 {
+		t.Errorf("GenerateConfig.MaxFileSize = %d after validation; scanner treats 0 as no limit", genCfg.MaxFileSize)
+	}
+	if genCfg.MaxTotalSize != 0 {
+		t.Errorf("GenerateConfig.MaxTotalSize = %d after validation", genCfg.MaxTotalSize)
+	}
+}
+
+// TestGenerate_ZeroLimitsImposeNoCeiling is the behavioural half of the zero
+// contract. With the old substitution these inputs aborted: MaxFiles became 1000
+// and MaxFileSize became 10MB, both silently.
+func TestGenerate_ZeroLimitsImposeNoCeiling(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	const fileCount = DefaultMaxFiles + 50 // past the ceiling the generator used to impose
+
+	children := make([]*scanner.FileNode, 0, fileCount)
+	selections := make(map[string]bool, fileCount)
+	for i := range fileCount {
+		name := "f" + strconv.Itoa(i) + ".go"
+		path := filepath.Join(root, name)
+		body := "package main // " + strconv.Itoa(i) + "\n"
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatalf("fixture write failed: %v", err)
+		}
+		children = append(children, &scanner.FileNode{
+			Name: name, Path: path, RelPath: name, Size: int64(len(body)),
+		})
+		selections[path] = true
+	}
+
+	tree := &scanner.FileNode{Name: filepath.Base(root), Path: root, IsDir: true, Children: children}
+
+	gen := NewDefaultContextGenerator()
+	out, err := gen.Generate(tree, selections, GenerateConfig{Template: "{FILE_STRUCTURE}"})
+	if err != nil {
+		t.Fatalf("a zero-limit config must impose no ceiling, got: %v", err)
+	}
+
+	if !strings.Contains(out, "f"+strconv.Itoa(fileCount-1)+".go") {
+		t.Error("the last file past the old 1000-file ceiling is missing from the output")
+	}
+}
+
+// TestGenerate_ZeroMaxFileSizeIncludesLargeFile guards the shouldSkipFile arm
+// specifically: a zero MaxFileSize must not silently drop anything.
+func TestGenerate_ZeroMaxFileSizeIncludesLargeFile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	path := filepath.Join(root, "big.txt")
+	body := strings.Repeat("x", 64*1024)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("fixture write failed: %v", err)
+	}
+
+	tree := &scanner.FileNode{
+		Name: filepath.Base(root), Path: root, IsDir: true,
+		Children: []*scanner.FileNode{
+			{Name: "big.txt", Path: path, RelPath: "big.txt", Size: int64(len(body))},
+		},
+	}
+
+	gen := NewDefaultContextGenerator()
+	out, err := gen.Generate(tree, map[string]bool{path: true}, GenerateConfig{
+		Template:    "{FILE_STRUCTURE}",
+		MaxFileSize: 0, // no limit
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out, "big.txt") {
+		t.Error("a zero MaxFileSize must not skip a large file")
+	}
+}
+
+// TestGenerate_ExplicitLimitsStillEnforced makes sure removing the substitution
+// did not remove enforcement: a limit the caller does set must still bite.
+func TestGenerate_ExplicitLimitsStillEnforced(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	paths := make([]string, 0, 3)
+	children := make([]*scanner.FileNode, 0, 3)
+	selections := make(map[string]bool, 3)
+	for i := range 3 {
+		name := "f" + strconv.Itoa(i) + ".go"
+		path := filepath.Join(root, name)
+		body := "package main\n"
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatalf("fixture write failed: %v", err)
+		}
+		paths = append(paths, path)
+		children = append(children, &scanner.FileNode{
+			Name: name, Path: path, RelPath: name, Size: int64(len(body)),
+		})
+		selections[path] = true
+	}
+	_ = paths
+
+	tree := &scanner.FileNode{Name: filepath.Base(root), Path: root, IsDir: true, Children: children}
+	gen := NewDefaultContextGenerator()
+
+	if _, err := gen.Generate(tree, selections, GenerateConfig{
+		Template: "{FILE_STRUCTURE}", MaxFiles: 2,
+	}); err == nil {
+		t.Error("MaxFiles: 2 with three selected files should still abort")
+	}
+
+	if _, err := gen.Generate(tree, selections, GenerateConfig{
+		Template: "{FILE_STRUCTURE}", MaxTotalSize: 8,
+	}); err == nil {
+		t.Error("a tiny MaxTotalSize should still abort")
 	}
 }
 

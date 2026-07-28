@@ -29,12 +29,33 @@ func TestParseSize(t *testing.T) {
 		{"zero", "0", 0, false},
 		{"zero mb", "0MB", 0, false},
 
+		// Absorbed from the deleted internal/ui and internal/ui/screens parsers.
+		// The canonical parser is stricter about suffixes and, unlike both
+		// duplicates, handles decimals rather than truncating or rejecting them.
+		{"ten megabytes", "10MB", 10485760, false},
+		{"decimal ten and a half MB", "10.5MB", 11010048, false},
+		{"space before suffix", "10 MB", 10485760, false},
+		{"decimal kilobytes", "1.0KB", 1024, false},
+		{"decimal gigabytes", "0.5GB", 536870912, false},
+		{"negative bytes", "-100", -100, false},
+		{"negative kilobytes", "-1KB", -1024, false},
+		{"lowercase gb", "1gB", 1024 * 1024 * 1024, false},
+		{"leading space", " 1KB", 1024, false},
+		{"trailing space", "1KB ", 1024, false},
+
 		// Invalid cases
 		{"empty string", "", 0, true},
 		{"invalid suffix", "10XB", 0, true},
 		{"no number", "MB", 0, true},
 		{"invalid format", "abc", 0, true},
 		{"special chars", "10@MB", 0, true},
+		// Hex is rejected: strconv.ParseFloat only accepts hex floats that carry
+		// a 'p' exponent, so "0X10" fails rather than silently parsing as 16.
+		{"hex prefix", "0x10MB", 0, true},
+		{"garbage before suffix", "10XMB", 0, true},
+		{"unsupported terabytes", "1TB", 0, true},
+		{"unsupported petabytes", "1PB", 0, true},
+		{"multiple dots", "10.5.5MB", 0, true},
 	}
 
 	for _, tt := range tests {

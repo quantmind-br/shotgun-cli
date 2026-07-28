@@ -13,7 +13,12 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
+
+// defaultMaxContextSize is the fallback used when context.max-size cannot be
+// parsed. It mirrors the documented default of that key (config/metadata.go).
+const defaultMaxContextSize int64 = 10 * 1024 * 1024
 
 type ReviewModel struct {
 	selectedFiles   map[string]bool
@@ -66,7 +71,7 @@ func NewReview(
 	m.totalBytes, m.totalTokens = m.calculateStats()
 
 	if m.maxSizeStr != "" {
-		m.maxSizeBytes, _ = parseSize(m.maxSizeStr)
+		m.maxSizeBytes = utils.ParseSizeWithDefault(m.maxSizeStr, defaultMaxContextSize)
 	}
 
 	return m
@@ -298,21 +303,23 @@ func (m *ReviewModel) buildScrollableContent() string {
 
 func (m *ReviewModel) renderFixedFooter() string {
 	if m.generated {
-		lines := [][]string{{"↑/↓: Scroll", "c: Copy"}}
+		lines := make([][]string, 0, 2)
+		actions := []string{"↑/↓: Scroll", "c: Copy"}
 		if m.llmAvailable && !m.llmSending && !m.llmComplete {
-			lines[0] = append(lines[0], "s: LLM", "F9: LLM")
+			actions = append(actions, "s: LLM", "F9: LLM")
 		}
-		lines = append(lines, []string{"F1/?: Help", "q: Exit"})
+		lines = append(lines, actions, []string{"F1/?: Help", "q: Exit"})
 		return styles.RenderStatusBar(m.width, lines)
 	}
 
-	preGenLines := [][]string{{"↑/↓: Scroll", "g: Generate", "F8: Generate", "F7: Back", "c: Copy"}}
+	preGenLines := make([][]string, 0, 2)
+	preGenActions := []string{"↑/↓: Scroll", "g: Generate", "F8: Generate", "F7: Back", "c: Copy"}
 	if m.llmAvailable {
-		preGenLines[0] = append(preGenLines[0], "s: LLM", "F9: LLM")
+		preGenActions = append(preGenActions, "s: LLM", "F9: LLM")
 	} else {
-		preGenLines[0] = append(preGenLines[0], styles.HelpStyle.Render("s/F9: LLM [not configured]"))
+		preGenActions = append(preGenActions, styles.HelpStyle.Render("s/F9: LLM [not configured]"))
 	}
-	preGenLines = append(preGenLines, []string{"F1/?: Help", "q: Quit"})
+	preGenLines = append(preGenLines, preGenActions, []string{"F1/?: Help", "q: Quit"})
 	return styles.RenderStatusBar(m.width, preGenLines)
 }
 
@@ -542,31 +549,4 @@ func formatSizeHelper(bytes int64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-// parseSize converts size strings like "10MB" to bytes
-func parseSize(sizeStr string) (int64, error) {
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-
-	var multiplier int64 = 1
-	if strings.HasSuffix(sizeStr, "KB") {
-		multiplier = 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	} else if strings.HasSuffix(sizeStr, "MB") {
-		multiplier = 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	} else if strings.HasSuffix(sizeStr, "GB") {
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	} else if strings.HasSuffix(sizeStr, "B") {
-		sizeStr = strings.TrimSuffix(sizeStr, "B")
-	}
-
-	var size int64
-	_, err := fmt.Sscanf(sizeStr, "%d", &size)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse size value: %w", err)
-	}
-
-	return size * multiplier, nil
 }

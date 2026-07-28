@@ -47,6 +47,22 @@ func (t ConfigType) String() string {
 	}
 }
 
+// Accepted values for the enum-typed configuration keys. Declared here so the
+// metadata table and the validators cannot drift apart.
+const (
+	// FormatMarkdown is the markdown value of KeyOutputFormat.
+	FormatMarkdown = "markdown"
+	// FormatText is the plain-text value of KeyOutputFormat.
+	FormatText = "text"
+
+	// ProviderOpenAI is the OpenAI value of KeyLLMProvider.
+	ProviderOpenAI = "openai"
+	// ProviderAnthropic is the Anthropic value of KeyLLMProvider.
+	ProviderAnthropic = "anthropic"
+	// ProviderGemini is the Gemini value of KeyLLMProvider.
+	ProviderGemini = "gemini"
+)
+
 // ConfigCategory represents a logical grouping of configuration keys.
 type ConfigCategory string
 
@@ -61,6 +77,8 @@ const (
 	CategoryOutput ConfigCategory = "Output"
 	// CategoryLLM groups LLM provider configuration.
 	CategoryLLM ConfigCategory = "LLM Provider"
+	// CategoryGlobal groups settings that apply across every command.
+	CategoryGlobal ConfigCategory = "Global"
 )
 
 // ConfigMetadata describes a single configuration key.
@@ -126,13 +144,14 @@ func AllCategories() []ConfigCategory {
 		CategoryTemplate,
 		CategoryOutput,
 		CategoryLLM,
+		CategoryGlobal,
 	}
 }
 
 // buildAllMetadata constructs the complete metadata list.
 func buildAllMetadata() []ConfigMetadata {
 	return []ConfigMetadata{
-		// Scanner (9 keys)
+		// Scanner (7 keys)
 		{
 			Key:          KeyScannerMaxFiles,
 			Category:     CategoryScanner,
@@ -148,13 +167,6 @@ func buildAllMetadata() []ConfigMetadata {
 			Type:         TypeSize,
 			Description:  "Maximum size per file (e.g., 10MB, 500KB)",
 			DefaultValue: "1MB",
-		},
-		{
-			Key:          KeyScannerMaxMemory,
-			Category:     CategoryScanner,
-			Type:         TypeSize,
-			Description:  "Maximum memory usage for scanning",
-			DefaultValue: "500MB",
 		},
 		{
 			Key:          KeyScannerSkipBinary,
@@ -176,15 +188,6 @@ func buildAllMetadata() []ConfigMetadata {
 			Type:         TypeBool,
 			Description:  "Include git-ignored files",
 			DefaultValue: false,
-		},
-		{
-			Key:          KeyScannerWorkers,
-			Category:     CategoryScanner,
-			Type:         TypeInt,
-			Description:  "Number of parallel scanner workers",
-			DefaultValue: 1,
-			MinValue:     1,
-			MaxValue:     32,
 		},
 		{
 			Key:          KeyScannerRespectGitignore,
@@ -239,8 +242,8 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryOutput,
 			Type:         TypeEnum,
 			Description:  "Output format for generated context",
-			DefaultValue: "markdown",
-			EnumOptions:  []string{"markdown", "text"},
+			DefaultValue: FormatMarkdown,
+			EnumOptions:  []string{FormatMarkdown, FormatText},
 		},
 		{
 			Key:          KeyOutputClipboard,
@@ -256,8 +259,8 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeEnum,
 			Description:  "LLM provider to use",
-			DefaultValue: "gemini",
-			EnumOptions:  []string{"openai", "anthropic", "gemini"},
+			DefaultValue: ProviderGemini,
+			EnumOptions:  []string{ProviderOpenAI, ProviderAnthropic, ProviderGemini},
 		},
 		{
 			Key:          KeyLLMAPIKey,
@@ -294,6 +297,24 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeBool,
 			Description:  "Save LLM response to file",
+			DefaultValue: false,
+		},
+
+		// Global (2 keys). Both are also bound to persistent flags in
+		// cmd/root.go; registering them here is what makes them settable and
+		// completable like every other key.
+		{
+			Key:          KeyVerbose,
+			Category:     CategoryGlobal,
+			Type:         TypeBool,
+			Description:  "Enable verbose output",
+			DefaultValue: false,
+		},
+		{
+			Key:          KeyQuiet,
+			Category:     CategoryGlobal,
+			Type:         TypeBool,
+			Description:  "Suppress non-essential output",
 			DefaultValue: false,
 		},
 	}

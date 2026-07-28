@@ -55,8 +55,8 @@ func TestSetConfigValue_ConvertValueError(t *testing.T) {
 		viper.Reset()
 	})
 
-	// Test a value that cannot be converted (workers requires integer)
-	key := "scanner.workers"
+	// Test a value that cannot be converted (max-files requires an integer)
+	key := "scanner.max-files"
 	value := "not-a-number"
 
 	err := setConfigValue(key, value)

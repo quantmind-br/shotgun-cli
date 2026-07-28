@@ -17,7 +17,7 @@ func TestNewConfigCategory(t *testing.T) {
 		category      config.ConfigCategory
 		expectedCount int
 	}{
-		{"Scanner category", config.CategoryScanner, 9},
+		{"Scanner category", config.CategoryScanner, 7},
 		{"Context category", config.CategoryContext, 3},
 		{"Template category", config.CategoryTemplate, 1},
 		{"Output category", config.CategoryOutput, 2},
@@ -92,20 +92,23 @@ func TestConfigCategory_HomeEnd(t *testing.T) {
 
 	model := NewConfigCategory(config.CategoryScanner)
 	model.SetSize(80, 100)
-	model.cursor = 4
+	// Derived, not hardcoded: the item count comes from the metadata registry,
+	// so adding or retiring a scanner key must not break this test.
+	lastIndex := model.ItemCount() - 1
+	model.cursor = 2
 
 	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 	assert.Equal(t, 0, model.Cursor())
 
 	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
-	assert.Equal(t, 8, model.Cursor())
+	assert.Equal(t, lastIndex, model.Cursor())
 
-	model.cursor = 4
+	model.cursor = 2
 	model.Update(tea.KeyMsg{Type: tea.KeyHome})
 	assert.Equal(t, 0, model.Cursor())
 
 	model.Update(tea.KeyMsg{Type: tea.KeyEnd})
-	assert.Equal(t, 8, model.Cursor())
+	assert.Equal(t, lastIndex, model.Cursor())
 }
 
 func TestConfigCategory_EnterEditMode(t *testing.T) {

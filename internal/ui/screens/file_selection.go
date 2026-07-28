@@ -11,6 +11,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 const (
@@ -60,7 +61,7 @@ func NewFileSelection(fileTree *scanner.FileNode, selections map[string]bool, ma
 	}
 
 	if maxSizeStr != "" {
-		m.maxSizeBytes, _ = parseSize(maxSizeStr)
+		m.maxSizeBytes = utils.ParseSizeWithDefault(maxSizeStr, defaultMaxContextSize)
 	}
 
 	return m
@@ -248,7 +249,7 @@ func (m *FileSelectionModel) renderBody() string {
 	body.WriteString("\n")
 
 	if m.filterMode {
-		body.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
+		fmt.Fprintf(&body, "Filter: %s_", m.filterBuffer)
 		body.WriteString("\n")
 	} else if m.tree != nil && m.tree.GetFilter() != "" {
 		filterIndicator := styles.HelpStyle.Render(fmt.Sprintf("Filter: %s [x to clear]", m.tree.GetFilter()))

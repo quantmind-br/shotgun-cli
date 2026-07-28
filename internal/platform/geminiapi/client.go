@@ -127,7 +127,7 @@ func (c *Client) GetProviderName() string {
 }
 
 func (c *Client) handleError(err error) error {
-	return c.BaseClient.HandleHTTPError(err, func(body []byte) string {
+	return c.HandleHTTPError(err, func(body []byte) string {
 		return ""
 	})
 }

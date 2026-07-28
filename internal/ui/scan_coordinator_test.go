@@ -70,7 +70,11 @@ func TestScanCoordinator_Start(t *testing.T) {
 	}
 
 	coordinator := NewScanCoordinator(mockSc)
-	cfg := &scanner.ScanConfig{MaxFiles: 100}
+	cfg := &scanner.ScanConfig{
+		MaxFiles:        100,
+		IgnorePatterns:  []string{"*.log"},
+		IncludePatterns: []string{"*.go"},
+	}
 
 	cmd := coordinator.Start("/test", cfg)
 
@@ -85,9 +89,23 @@ func TestScanCoordinator_Start(t *testing.T) {
 	if coordinator.rootPath != "/test" {
 		t.Errorf("rootPath not set: got %s", coordinator.rootPath)
 	}
-	if coordinator.config != cfg {
-		t.Errorf("config not set")
+
+	// Start must hold a private clone, never the caller's pointer: the wizard
+	// toggles IncludeIgnored on the struct it passed in and hands the same
+	// pointer to the next run.
+	if coordinator.config == cfg {
+		t.Error("Start retained the caller's ScanConfig pointer")
 	}
+	if coordinator.config.MaxFiles != cfg.MaxFiles {
+		t.Errorf("clone lost MaxFiles: got %d, want %d", coordinator.config.MaxFiles, cfg.MaxFiles)
+	}
+	if &coordinator.config.IgnorePatterns[0] == &cfg.IgnorePatterns[0] {
+		t.Error("IgnorePatterns still aliases the caller's backing array")
+	}
+	if &coordinator.config.IncludePatterns[0] == &cfg.IncludePatterns[0] {
+		t.Error("IncludePatterns still aliases the caller's backing array")
+	}
+
 	if coordinator.progressCh == nil {
 		t.Errorf("progressCh not initialized")
 	}
@@ -97,42 +115,102 @@ func TestScanCoordinator_Start(t *testing.T) {
 	if coordinator.started != false {
 		t.Errorf("should not be started yet")
 	}
+	if !coordinator.IsRunning() {
+		t.Error("IsRunning should be true once Start accepted the run")
+	}
+	if coordinator.generation != 1 || coordinator.activeGen != 1 {
+		t.Errorf("expected generation/activeGen 1/1, got %d/%d", coordinator.generation, coordinator.activeGen)
+	}
 	if coordinator.result != nil || coordinator.scanErr != nil {
 		t.Errorf("result and scanErr should be nil initially")
 	}
 }
 
-func TestScanCoordinator_Start_CalledTwice(t *testing.T) {
+// TestScanCoordinator_Start_QueuesWhileRunning pins the single-flight contract.
+// The first command is deliberately never invoked: running is set inside Start,
+// not inside the command, so the gate is already closed.
+func TestScanCoordinator_Start_QueuesWhileRunning(t *testing.T) {
 	t.Parallel()
 
 	mockSc := &scanCoordinatorMockScanner{}
 	coordinator := NewScanCoordinator(mockSc)
 	cfg := &scanner.ScanConfig{MaxFiles: 100}
 
-	// First start
-	coordinator.Start("/test1", cfg)
+	cmd1 := coordinator.Start("/test1", cfg)
+	if cmd1 == nil {
+		t.Fatal("first Start should return a command")
+	}
 
 	firstDoneChan := coordinator.done
 	firstProgressCh := coordinator.progressCh
 
-	// Second start - should reinitialize
-	coordinator.Start("/test2", cfg)
+	cmd2 := coordinator.Start("/test2", cfg)
 
-	// Verify state was reset
-	if coordinator.started {
-		t.Error("started should be false after restart")
+	// Returning a command here would start a rival poll chain, and once done
+	// closes both chains would emit the terminal message.
+	if cmd2 != nil {
+		t.Error("Start should return nil while a run is in flight")
+	}
+	if coordinator.pending == nil {
+		t.Fatal("second request should have been recorded as pending")
+	}
+	if coordinator.pending.rootPath != "/test2" {
+		t.Errorf("pending holds the wrong request: got %s", coordinator.pending.rootPath)
+	}
+	if coordinator.pending.config == cfg {
+		t.Error("pending retained the caller's ScanConfig pointer")
+	}
+	if coordinator.done != firstDoneChan {
+		t.Error("queued Start must not replace the live run's done channel")
+	}
+	if coordinator.progressCh != firstProgressCh {
+		t.Error("queued Start must not replace the live run's progress channel")
+	}
+	if coordinator.generation != 1 {
+		t.Errorf("generation should not advance on a queued request, got %d", coordinator.generation)
+	}
+	if coordinator.result != nil || coordinator.scanErr != nil {
+		t.Error("result and scanErr should still be nil")
+	}
+}
+
+// TestScanCoordinator_Start_AfterReapStartsNewRun is the other half: once Poll
+// has reaped the previous run, Start begins immediately instead of queueing.
+func TestScanCoordinator_Start_AfterReapStartsNewRun(t *testing.T) {
+	t.Parallel()
+
+	mockSc := &scanCoordinatorMockScanner{
+		scanProgressFunc: func(rootPath string, config *scanner.ScanConfig, progress chan<- scanner.Progress) (*scanner.FileNode, error) {
+			return &scanner.FileNode{Name: "root", Path: rootPath}, nil
+		},
+	}
+	coordinator := NewScanCoordinator(mockSc)
+	cfg := &scanner.ScanConfig{MaxFiles: 100}
+
+	cmd := coordinator.Start("/test1", cfg)
+	firstDoneChan := coordinator.done
+	cmd()
+	<-firstDoneChan
+
+	if terminal := coordinator.Poll(); terminal == nil {
+		t.Fatal("Poll should have reaped the completed run")
+	}
+	if coordinator.IsRunning() {
+		t.Error("IsRunning should be false after the run was reaped")
+	}
+
+	cmd2 := coordinator.Start("/test2", cfg)
+	if cmd2 == nil {
+		t.Fatal("Start after a reap should begin a new run")
 	}
 	if coordinator.done == firstDoneChan {
-		t.Error("done channel should be new instance")
+		t.Error("the new run should own new channels")
 	}
-	if coordinator.progressCh == firstProgressCh {
-		t.Error("progress channel should be new instance")
+	if coordinator.generation != 2 {
+		t.Errorf("generation should be 2, got %d", coordinator.generation)
 	}
-	if coordinator.result != nil {
-		t.Error("result should be reset")
-	}
-	if coordinator.scanErr != nil {
-		t.Error("scanErr should be reset")
+	if coordinator.result != nil || coordinator.scanErr != nil {
+		t.Error("the new run should start from clean result state")
 	}
 }
 
@@ -526,6 +604,11 @@ func TestScanCoordinator_Reset(t *testing.T) {
 
 	<-coordinator.done
 
+	// Reap first. Reset deliberately preserves the channels of an unreaped run,
+	// so without this Poll the nil-channel assertions below would not hold --
+	// and could not, without stranding the live poll chain.
+	coordinator.Poll()
+
 	coordinator.Reset()
 
 	if coordinator.rootPath != "" {
@@ -548,5 +631,11 @@ func TestScanCoordinator_Reset(t *testing.T) {
 	}
 	if coordinator.started != false {
 		t.Error("started should be false after reset")
+	}
+	if coordinator.pending != nil {
+		t.Error("pending should be nil after reset")
+	}
+	if coordinator.generation == 0 {
+		t.Error("Reset should increment generation, so an in-flight run's result is discarded")
 	}
 }

@@ -40,8 +40,8 @@ func TestKeyValueFormat(t *testing.T) {
 func TestAllKeysDocumented(t *testing.T) {
 	keys := getAllKeyValues()
 
-	if len(keys) < 22 {
-		t.Errorf("expected at least 22 configuration keys, got %d", len(keys))
+	if len(keys) < 21 {
+		t.Errorf("expected at least 21 configuration keys, got %d", len(keys))
 	}
 }
 
@@ -49,10 +49,9 @@ func TestScannerKeysExist(t *testing.T) {
 	expected := []string{
 		KeyScannerMaxFiles,
 		KeyScannerMaxFileSize,
-		KeyScannerMaxMemory,
 		KeyScannerSkipBinary,
 		KeyScannerIncludeHidden,
-		KeyScannerWorkers,
+		KeyScannerIncludeIgnored,
 		KeyScannerRespectGitignore,
 		KeyScannerRespectShotgunignore,
 	}
@@ -90,11 +89,9 @@ func getAllKeyValues() map[string]string {
 	return map[string]string{
 		"KeyScannerMaxFiles":             KeyScannerMaxFiles,
 		"KeyScannerMaxFileSize":          KeyScannerMaxFileSize,
-		"KeyScannerMaxMemory":            KeyScannerMaxMemory,
 		"KeyScannerSkipBinary":           KeyScannerSkipBinary,
 		"KeyScannerIncludeHidden":        KeyScannerIncludeHidden,
 		"KeyScannerIncludeIgnored":       KeyScannerIncludeIgnored,
-		"KeyScannerWorkers":              KeyScannerWorkers,
 		"KeyScannerRespectGitignore":     KeyScannerRespectGitignore,
 		"KeyScannerRespectShotgunignore": KeyScannerRespectShotgunignore,
 		"KeyLLMProvider":                 KeyLLMProvider,
@@ -102,6 +99,7 @@ func getAllKeyValues() map[string]string {
 		"KeyLLMBaseURL":                  KeyLLMBaseURL,
 		"KeyLLMModel":                    KeyLLMModel,
 		"KeyLLMTimeout":                  KeyLLMTimeout,
+		"KeyLLMSaveResponse":             KeyLLMSaveResponse,
 		"KeyContextIncludeTree":          KeyContextIncludeTree,
 		"KeyContextIncludeSummary":       KeyContextIncludeSummary,
 		"KeyContextMaxSize":              KeyContextMaxSize,

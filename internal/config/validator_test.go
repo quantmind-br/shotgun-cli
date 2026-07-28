@@ -47,30 +47,81 @@ func TestValidKeys(t *testing.T) {
 	}
 }
 
-func TestValidateValue_Workers(t *testing.T) {
+// TestValidKeys_MatchesRegistry pins CI-009's contract: ValidKeys() is derived
+// from the metadata registry, so registering a key is the only edit needed to
+// make it settable. Before this, the two lists were maintained by hand and a key
+// had to appear in both to work at all.
+func TestValidKeys_MatchesRegistry(t *testing.T) {
+	t.Parallel()
+
+	metadata := AllConfigMetadata()
+	want := make([]string, 0, len(metadata))
+	for _, m := range metadata {
+		want = append(want, m.Key)
+	}
+
+	got := ValidKeys()
+	if len(got) != len(want) {
+		t.Fatalf("ValidKeys() has %d keys, registry has %d", len(got), len(want))
+	}
+
+	inRegistry := make(map[string]bool, len(want))
+	for _, k := range want {
+		inRegistry[k] = true
+	}
+	for _, k := range got {
+		if !inRegistry[k] {
+			t.Errorf("ValidKeys() returned %q, which is not in the metadata registry", k)
+		}
+	}
+	for _, k := range want {
+		if !IsValidKey(k) {
+			t.Errorf("registry key %q is not reported valid by IsValidKey", k)
+		}
+	}
+}
+
+func TestDeprecationMessage(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		value   string
-		wantErr bool
+		key            string
+		wantDeprecated bool
 	}{
-		{"1", false},
-		{"4", false},
-		{"32", false},
-		{"0", true},
-		{"33", true},
-		{"-1", true},
-		{"abc", true},
+		{"scanner.workers", true},
+		{"scanner.max-memory", true},
+		{KeyScannerMaxFiles, false},
+		{"nonsense.key", false},
+		{"", false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
+		t.Run(tt.key, func(t *testing.T) {
 			t.Parallel()
-			err := ValidateValue(KeyScannerWorkers, tt.value)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateValue(workers, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			msg, deprecated := DeprecationMessage(tt.key)
+			if deprecated != tt.wantDeprecated {
+				t.Fatalf("DeprecationMessage(%q) deprecated = %v, want %v", tt.key, deprecated, tt.wantDeprecated)
+			}
+			if deprecated && msg == "" {
+				t.Errorf("DeprecationMessage(%q) reported deprecated with an empty message", tt.key)
 			}
 		})
+	}
+}
+
+// TestDeprecatedKeysAreNotValid guards the invariant that a retired key is gone
+// from the key set, so `config set` reaches the deprecation branch rather than
+// silently writing a key nothing reads.
+func TestDeprecatedKeysAreNotValid(t *testing.T) {
+	t.Parallel()
+
+	for key := range deprecatedKeys {
+		if IsValidKey(key) {
+			t.Errorf("deprecated key %q is still reported as valid", key)
+		}
+		if _, found := GetMetadata(key); found {
+			t.Errorf("deprecated key %q is still in the metadata registry", key)
+		}
 	}
 }
 

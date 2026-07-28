@@ -81,10 +81,8 @@ Supported configuration keys:
   Scanner:
     scanner.max-files         - Maximum number of files to scan (default: 10000)
     scanner.max-file-size     - Maximum size per file (default: "1MB")
-    scanner.max-memory        - Maximum memory usage (default: "500MB")
     scanner.respect-gitignore - Respect .gitignore files (default: true)
     scanner.skip-binary       - Skip binary files (default: true)
-    scanner.workers           - Number of parallel workers (default: 1)
     scanner.include-hidden    - Include hidden files (default: false)
     scanner.respect-shotgunignore - Respect .shotgunignore files (default: true)
 
@@ -129,6 +127,12 @@ Supported configuration keys:
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 		value := args[1]
+
+		// Retired keys get a specific explanation instead of the generic
+		// "invalid key" error, so a user following an old README knows why.
+		if msg, deprecated := config.DeprecationMessage(key); deprecated {
+			return fmt.Errorf("%s", msg)
+		}
 
 		if !config.IsValidKey(key) {
 			return fmt.Errorf(
@@ -186,9 +190,14 @@ func showCurrentConfig() error {
 	allKeys := viper.AllKeys()
 	sort.Strings(allKeys)
 
-	// Group keys by category
+	// Group keys by category. Retired keys are skipped: viper still surfaces
+	// them when they linger in an existing config file, and listing them would
+	// suggest they still do something.
 	categories := make(map[string][]string)
 	for _, key := range allKeys {
+		if _, deprecated := config.DeprecationMessage(key); deprecated {
+			continue
+		}
 		parts := strings.Split(key, ".")
 		category := parts[0]
 		categories[category] = append(categories[category], key)

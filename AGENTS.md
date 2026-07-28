@@ -50,7 +50,7 @@ cmd/context.go → Build GenerateConfig → app.NewContextService()
 **Core Generation Pipeline**:
 ```
 1. Validate config
-2. Scan filesystem (parallel workers, respect .gitignore/.shotgunignore)
+2. Scan filesystem (single-pass sequential walk, respect .gitignore/.shotgunignore)
 3. Apply selections
 4. Generate context (tree rendering + file assembly + template substitution)
 5. Estimate tokens (~4 bytes per token)
@@ -64,7 +64,7 @@ cmd/context.go → Build GenerateConfig → app.NewContextService()
 | `cmd/` | CLI commands (Cobra), config initialization, composition root |
 | `internal/ui/` | TUI wizard, screens, components, coordinators |
 | `internal/app/` | ContextService (main API), ProviderRegistry |
-| `internal/core/scanner/` | Filesystem traversal, parallel workers |
+| `internal/core/scanner/` | Filesystem traversal, layered ignore rules |
 | `internal/core/contextgen/` | Context assembly, tree rendering |
 | `internal/core/template/` | Template loading, variable substitution |
 | `internal/core/ignore/` | Layered ignore engine (explicit → built-in → gitignore) |

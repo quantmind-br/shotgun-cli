@@ -801,32 +801,31 @@ func TestReview_ViewSizeLimit(t *testing.T) {
 	}
 }
 
-func TestReview_parseSize(t *testing.T) {
+// TestReview_maxSizeFallsBackToDefault covers the constructor's size handling now
+// that it delegates to utils.ParseSize: an unparseable value must yield the
+// documented context.max-size default, never a silent 0.
+func TestReview_maxSizeFallsBackToDefault(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		input       string
-		expectError bool
-		expected    int64
+		name     string
+		maxSize  string
+		expected int64
 	}{
-		{"100", false, 100},
-		{"1KB", false, 1024},
-		{"2MB", false, 2 * 1024 * 1024},
-		{"invalid", true, 0},
-		{"", true, 0},
+		{"valid megabytes", "2MB", 2 * 1024 * 1024},
+		{"decimal megabytes", "10.5MB", 11010048},
+		{"plain bytes", "100", 100},
+		{"unparseable falls back", "invalid", defaultMaxContextSize},
+		{"bad suffix falls back", "10XMB", defaultMaxContextSize},
+		{"empty leaves zero", "", 0},
 	}
 
 	for _, tt := range tests {
-		t.Run("parse "+tt.input, func(t *testing.T) {
-			result, err := parseSize(tt.input)
-			if tt.expectError && err == nil {
-				t.Fatalf("expected error for input '%s'", tt.input)
-			}
-			if !tt.expectError && err != nil {
-				t.Fatalf("unexpected error for input '%s': %v", tt.input, err)
-			}
-			if !tt.expectError && result != tt.expected {
-				t.Fatalf("expected %d, got %d for input '%s'", tt.expected, result, tt.input)
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := NewReview(nil, nil, nil, "", "", tt.maxSize)
+			if m.maxSizeBytes != tt.expected {
+				t.Fatalf("maxSizeBytes = %d, want %d for input %q", m.maxSizeBytes, tt.expected, tt.maxSize)
 			}
 		})
 	}

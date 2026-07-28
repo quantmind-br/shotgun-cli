@@ -9,7 +9,7 @@ Parent: [../AGENTS.md](../AGENTS.md)
 ## PACKAGES
 
 ### scanner/
-Filesystem traversal with layered ignore support. Parallel workers.
+Filesystem traversal with layered ignore support. Single-pass, sequential walk.
 
 ```go
 type FileNode struct {
@@ -25,7 +25,7 @@ scanner := scanner.NewFilesystemScanner()
 tree, err := scanner.Scan(rootPath, config)
 ```
 
-**ScanConfig**: MaxFileSize, MaxFiles, MaxMemory, Workers (1-32), SkipBinary, IncludeHidden, IncludeIgnored, IgnorePatterns, IncludePatterns, RespectGitignore, RespectShotgunignore.
+**ScanConfig**: MaxFileSize, MaxFiles, SkipBinary, IncludeHidden, IncludeIgnored, IgnorePatterns, IncludePatterns, RespectGitignore, RespectShotgunignore.
 
 ### contextgen/
 Generates LLM context from templates, file tree, and file contents.
@@ -34,6 +34,22 @@ Generates LLM context from templates, file tree, and file contents.
 generator := contextgen.NewGenerator()
 result, err := generator.Generate(cfg)
 ```
+
+**GenerateConfig**: MaxFileSize, MaxTotalSize, MaxFiles, SkipBinary, TemplateVars, Template, IncludeTree, IncludeSummary, IncludeIgnored.
+
+### Zero means "no limit"
+
+Both `ScanConfig` and `GenerateConfig` treat a zero limit as **no limit**. Never
+substitute a default for a caller's zero: doing so turns a missing field into a
+policy nobody chose, and `MaxFiles`/`MaxTotalSize` abort generation rather than
+degrade. Callers wanting the documented ceilings ask for them:
+
+```go
+cfg := contextgen.DefaultGenerateConfig() // 10MB / 10MB / 1000 files
+```
+
+**Front ends do not build a `GenerateConfig` directly** — `app.BuildGeneratorConfig`
+is the only producer, so the TUI and the headless path cannot drift apart.
 
 ### template/
 Template loading from embedded FS + custom paths. Variable substitution with `{VARIABLE_NAME}` pattern.

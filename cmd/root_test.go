@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -30,17 +31,32 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-func TestRunRootCommandVersionFlag(t *testing.T) {
-	cmd := &cobra.Command{}
-	cmd.Flags().Bool("version", false, "")
-	_ = cmd.Flags().Set("version", "true")
+// TestBuildVersionStringRendersAllFields garante que os quatro campos
+// injetados por -ldflags são consumidos. Cobra intercepta --version em
+// Command.execute e nunca chega a runRootCommand, então o alvo do teste é a
+// string entregue a rootCmd.Version — não o Run.
+func TestBuildVersionStringRendersAllFields(t *testing.T) {
+	t.Parallel()
 
-	output := captureStdout(t, func() {
-		runRootCommand(cmd, nil)
-	})
+	got := buildVersionString()
 
-	if output == "" {
-		t.Fatal("expected version output")
+	for _, want := range []string{version, commit, date, builtBy} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildVersionString() = %q, não contém %q", got, want)
+		}
+	}
+	for _, label := range []string{"commit:", "built:", "built by:"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("buildVersionString() = %q, não contém o rótulo %q", got, label)
+		}
+	}
+}
+
+func TestRootCmdVersionIsBuildVersionString(t *testing.T) {
+	t.Parallel()
+
+	if rootCmd.Version != buildVersionString() {
+		t.Errorf("rootCmd.Version = %q, esperado %q", rootCmd.Version, buildVersionString())
 	}
 }
 
@@ -132,11 +148,9 @@ func TestSetConfigDefaults(t *testing.T) {
 		{"scanner.max-file-size", "1MB"},
 		{"scanner.respect-gitignore", true},
 		{"scanner.skip-binary", true},
-		{"scanner.workers", 1},
 		{"scanner.include-hidden", false},
 		{"scanner.include-ignored", false},
 		{"scanner.respect-shotgunignore", true},
-		{"scanner.max-memory", "500MB"},
 		{"context.max-size", "10MB"},
 		{"context.include-tree", true},
 		{"context.include-summary", true},

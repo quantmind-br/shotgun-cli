@@ -11,7 +11,20 @@ INSTALL_DIR := $(HOME)/.local/bin
 
 OS_ARCHES := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
-.PHONY: help build build-all test test-race test-bench test-e2e lint fmt vet clean install uninstall deps generate coverage release version-bump version-patch version-minor version-major release-tag release-push release-snapshot
+# Build information injected into package cmd at link time. The fallback chain
+# matters: a shallow CI checkout has no tags, and without `rev-parse` the
+# version would silently degrade to the "dev" sentinel.
+VERSION_PKG   := github.com/quantmind-br/shotgun-cli/cmd
+BUILD_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo dev)
+BUILD_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -s -w \
+	-X $(VERSION_PKG).version=$(BUILD_VERSION) \
+	-X $(VERSION_PKG).commit=$(BUILD_COMMIT) \
+	-X $(VERSION_PKG).date=$(BUILD_DATE) \
+	-X $(VERSION_PKG).builtBy=make
+
+.PHONY: help build build-all test test-race test-bench test-e2e lint fmt fmt-check vet clean install uninstall deps generate coverage release version-bump version-patch version-minor version-major release-tag release-push release-snapshot
 
 help:
 	@echo "Usage: make <target>"
@@ -19,7 +32,7 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' Makefile | sed 's/:.*##/: /'
 
 build: ## Build the binary for the current platform
-	$(GO) build -o $(BUILD_DIR)/$(BINARY) .
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) .
 
 build-all: clean ## Cross-compile for common platforms
 	@mkdir -p $(BUILD_DIR)
@@ -28,7 +41,7 @@ build-all: clean ## Cross-compile for common platforms
 		echo "Building $$os/$$arch"; \
 		ext=""; \
 		if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
-		GOOS=$$os GOARCH=$$arch $(GO) build -o $(BUILD_DIR)/$(BINARY)-$$os-$$arch$$ext .; \
+		GOOS=$$os GOARCH=$$arch $(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY)-$$os-$$arch$$ext .; \
 	done
 
 test: ## Run unit tests with default settings
@@ -40,7 +53,7 @@ test-race: ## Run tests with the race detector
 test-bench: ## Run package benchmarks
 	$(GO) test -bench=. -run=^$$ $(PKG)
 
-test-e2e: ## Execute end-to-end CLI tests
+test-e2e: build ## Execute end-to-end CLI tests
 	$(GO) test ./test/e2e -v
 
 lint: ## Run golangci-lint
@@ -48,6 +61,10 @@ lint: ## Run golangci-lint
 
 fmt: ## Format Go source files
 	$(GO) fmt ./...
+
+fmt-check: ## Fail if any Go source file is not gofmt-clean
+	@out="$$(gofmt -l .)"; \
+	if [ -n "$$out" ]; then echo "Not gofmt-clean:"; echo "$$out"; exit 1; fi
 
 vet: ## Run go vet static analysis
 	$(GO) vet $(PKG)

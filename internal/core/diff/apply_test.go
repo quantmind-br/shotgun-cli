@@ -40,7 +40,8 @@ func TestIntelligentSplit_ChunksApplyWithGit(t *testing.T) {
 	git(t, repo, "init", "-q")
 
 	// Arquivo com hunks bem separados e conteúdo que parece cabeçalho de diff.
-	var original, modified []string
+	original := make([]string, 0, 48)
+	modified := make([]string, 0, 48)
 	for i := range 12 {
 		original = append(original, "linha "+strconv.Itoa(i), "estavel a", "estavel b", "estavel c")
 		if i%2 == 0 {
@@ -101,12 +102,13 @@ func TestIntelligentSplit_ChunksApplyWithGit(t *testing.T) {
 // exigiria recalcular os contadores do cabeçalho "@@" — e um chunk com
 // contadores errados seria rejeitado por qualquer ferramenta de patch.
 func TestIntelligentSplit_SingleHunkExceedsBudget(t *testing.T) {
-	lines := []string{
+	lines := make([]string, 0, 54)
+	lines = append(lines,
 		"diff --git a/big.txt b/big.txt",
 		"--- a/big.txt",
 		"+++ b/big.txt",
 		"@@ -1,50 +1,50 @@",
-	}
+	)
 	for range 50 {
 		lines = append(lines, " ctx")
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/ui/components"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/screens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -968,11 +968,34 @@ func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
 		TaskDesc:       msg.taskDesc,
 		Rules:          msg.rules,
 		RootPath:       msg.rootPath,
+		MaxTotalSize:   m.contextMaxSize(),
 		IncludeTree:    m.wizardConfig.Context.IncludeTree,
 		IncludeSummary: m.wizardConfig.Context.IncludeSummary,
 	}
 
+	// The scanner's limits and the ignored-file toggle apply to generation too.
+	// Leaving them unset made the TUI run under the generator's own ceilings
+	// rather than the user's, and rendered a tree that omitted ignored files the
+	// user had explicitly selected.
+	if m.scanConfig != nil {
+		cfg.MaxFileSize = m.scanConfig.MaxFileSize
+		cfg.MaxFiles = int(m.scanConfig.MaxFiles)
+		cfg.SkipBinary = m.scanConfig.SkipBinary
+		cfg.IncludeIgnored = m.scanConfig.IncludeIgnored
+	}
+
 	return m.generateCoordinator.Start(cfg)
+}
+
+// contextMaxSize resolves context.max-size to bytes. An empty setting means no
+// limit, which is what validateContentSize has always assumed.
+func (m *WizardModel) contextMaxSize() int64 {
+	maxSizeStr := m.wizardConfig.Context.MaxSize
+	if maxSizeStr == "" {
+		return 0
+	}
+
+	return utils.ParseSizeWithDefault(maxSizeStr, 0)
 }
 
 func (m *WizardModel) handleRescanRequest() tea.Cmd {
@@ -1211,34 +1234,6 @@ func (m *WizardModel) clipboardCopyCmd(content string) tea.Cmd {
 	}
 }
 
-// parseSize converts size strings like "10MB" to bytes
-func parseSize(sizeStr string) (int64, error) {
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
-
-	var multiplier int64 = 1
-
-	switch {
-	case strings.HasSuffix(sizeStr, "KB"):
-		multiplier = 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "KB")
-	case strings.HasSuffix(sizeStr, "MB"):
-		multiplier = 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "MB")
-	case strings.HasSuffix(sizeStr, "GB"):
-		multiplier = 1024 * 1024 * 1024
-		sizeStr = strings.TrimSuffix(sizeStr, "GB")
-	case strings.HasSuffix(sizeStr, "B"):
-		sizeStr = strings.TrimSuffix(sizeStr, "B")
-	}
-
-	size, err := strconv.ParseInt(sizeStr, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse size integer: %w", err)
-	}
-
-	return size * multiplier, nil
-}
-
 func (m *WizardModel) pollGenerate() tea.Cmd {
 	if m.generateCoordinator == nil {
 		return nil
@@ -1252,7 +1247,7 @@ func (m *WizardModel) validateContentSize(content string) error {
 		return nil
 	}
 
-	maxSize, err := parseSize(maxSizeStr)
+	maxSize, err := utils.ParseSize(maxSizeStr)
 	if err != nil {
 		return fmt.Errorf("invalid max-size configuration: %w", err)
 	}

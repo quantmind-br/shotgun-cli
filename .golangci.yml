@@ -1,64 +1,91 @@
-# golangci-lint configuration
+# golangci-lint configuration (schema v2)
 # Matches CI workflow settings with appropriate exclusions
-
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
-    - govet
-    - errcheck
-    - staticcheck
     - goconst
-    - misspell
     - gocyclo
     - gosec
     - lll
+    - misspell
     - prealloc
     - unconvert
     - unparam
-    - unused
-
-linters-settings:
-  lll:
-    line-length: 120
-    tab-width: 4
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  gocyclo:
-    min-complexity: 25
-  gosec:
-    excludes:
-      # G101: false positive for config key names containing "key"
-      - G101
-      # G306: WriteFile permissions in tests are fine
-      - G306
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - goconst
-    - path: _test\.go
-      linters:
-        - lll
-    - path: internal/ui/
-      linters:
-        - goconst
-    - path: cmd/root\.go
-      linters:
-        - goconst
-    - source: "^func.*interface.*\\{"
-      linters:
-        - lll
-    - source: "func.*progress func\\(.*\\).*\\{"
-      linters:
-        - lll
-    - source: "^func \\(.*\\) \\w+\\(ctx context\\.Context"
-      linters:
-        - lll
-    - path: internal/ui/
-      linters:
-        - unparam
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      # The exclusion rule below already declares that goconst findings inside
+      # tests are not actionable. Without this, occurrences in _test.go still
+      # count toward the threshold and the report lands on production code —
+      # inflating the backlog from 8 real duplicates to 74.
+      ignore-tests: true
+    gocyclo:
+      min-complexity: 25
+    gosec:
+      excludes:
+        # G101: false positive for config key names containing "key"
+        - G101
+        # G306: WriteFile permissions in tests are fine
+        - G306
+    lll:
+      line-length: 120
+      tab-width: 4
+  exclusions:
+    generated: lax
+    # "common-false-positives" and "legacy" are deliberately NOT enabled: their
+    # EXC0009/EXC0010 entries silently suppress gosec G301/G302/G304 everywhere,
+    # including production code (they were hiding a real finding in
+    # internal/core/selection/store.go). Test fixtures are excluded explicitly
+    # below instead. The two presets kept here mask nothing in this codebase.
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      - linters:
+          - goconst
+        path: _test\.go
+      - linters:
+          - lll
+        path: _test\.go
+      - linters:
+          - goconst
+        path: internal/ui/
+      - linters:
+          - goconst
+        path: cmd/root\.go
+      - linters:
+          - lll
+        source: ^func.*interface.*\{
+      - linters:
+          - lll
+        source: func.*progress func\(.*\).*\{
+      - linters:
+          - lll
+        source: ^func \(.*\) \w+\(ctx context\.Context
+      - linters:
+          - unparam
+        path: internal/ui/
+      # Portuguese fixture data in these tests ("comando", "comandos",
+      # "argumentos") is not a misspelling of an English word.
+      - linters:
+          - misspell
+        path: (cmd/diff_test\.go|internal/core/diff/apply_test\.go)
+      # Test fixtures deliberately use temp dirs, loose permissions and
+      # deterministic seeding (G301/G302/G304/G404).
+      - linters:
+          - gosec
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

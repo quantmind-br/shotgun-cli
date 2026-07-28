@@ -56,7 +56,7 @@ See [Architecture](architecture.md) for details.
 | `cmd/` | CLI commands (Cobra), composition root |
 | `internal/app/` | `ContextService` main API, `ProviderRegistry` |
 | `internal/ui/` | TUI wizard, screens, components, coordinators |
-| `internal/core/scanner/` | Filesystem traversal, parallel workers |
+| `internal/core/scanner/` | Filesystem traversal, layered ignore rules |
 | `internal/core/contextgen/` | Context assembly, tree rendering |
 | `internal/core/template/` | Template loading, variable substitution |
 | `internal/core/ignore/` | Layered ignore engine |
@@ -105,7 +105,7 @@ See [Domains](domains.md) (selection store) and [Workflows](workflows.md) (selec
 
 Read about each core domain in [Domains](domains.md):
 
-- Scanner — filesystem traversal, FileNode tree, parallel workers
+- Scanner — filesystem traversal, FileNode tree, layered ignore rules
 - Ignore engine — layered rules from .gitignore, .shotgunignore, custom rules
 - Context generation — tree rendering, file assembly, template substitution
 - Template management — multi-source loading, variable interpolation

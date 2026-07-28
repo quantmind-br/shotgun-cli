@@ -5,10 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-)
 
-const (
-	configKeyTemplateCustomPath = "template.custom-path"
+	"github.com/quantmind-br/shotgun-cli/internal/config"
 )
 
 var completionCmd = &cobra.Command{
@@ -72,74 +70,49 @@ After installing completion, restart your shell or source the completion file.`,
 	},
 }
 
-// Custom completion functions for dynamic values.
+// configKeyCompletion offers every registered configuration key, derived from
+// the metadata registry rather than a hand-maintained list. The previous
+// hardcoded slice had already drifted: it was missing all six llm.* keys.
 func configKeyCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 	// Only complete the first argument (config key)
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	configKeys := []string{
-		// Scanner keys
-		"scanner.max-files\tMaximum number of files to scan",
-		"scanner.max-file-size\tMaximum size per file (e.g., 1MB)",
-		"scanner.respect-gitignore\tRespect .gitignore files (true/false)",
-		"scanner.skip-binary\tSkip binary files (true/false)",
-		"scanner.workers\tNumber of parallel workers (1-32)",
-		"scanner.include-hidden\tInclude hidden files (true/false)",
-		"scanner.include-ignored\tInclude ignored files (true/false)",
-		"scanner.respect-shotgunignore\tRespect .shotgunignore files (true/false)",
-		"scanner.max-memory\tMax memory usage (e.g., 500MB)",
-		// Context keys
-		"context.max-size\tMaximum context size (e.g., 10MB)",
-		"context.include-tree\tInclude directory tree (true/false)",
-		"context.include-summary\tInclude file summaries (true/false)",
-		// Template keys
-		configKeyTemplateCustomPath + "\tPath to custom templates",
-		// Output keys
-		"output.format\tOutput format (markdown/text)",
-		"output.clipboard\tCopy to clipboard (true/false)",
+	metadata := config.AllConfigMetadata()
+	configKeys := make([]string, 0, len(metadata))
+	for _, m := range metadata {
+		configKeys = append(configKeys, m.Key+"\t"+m.Description)
 	}
 
 	return configKeys, cobra.ShellCompDirectiveNoFileComp
 }
 
+// boolValueCompletion offers the candidate values for a key, driven by its
+// declared type in the metadata registry.
 func boolValueCompletion(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-	// Only complete the second argument (config value) for boolean keys
+	// Only complete the second argument (config value)
 	if len(args) != 1 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	key := args[0]
-	boolKeys := []string{
-		"scanner.respect-gitignore",
-		"scanner.skip-binary",
-		"scanner.include-hidden",
-		"scanner.include-ignored",
-		"scanner.respect-shotgunignore",
-		"context.include-tree",
-		"context.include-summary",
-		"output.clipboard",
+	m, found := config.GetMetadata(args[0])
+	if !found {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	for _, boolKey := range boolKeys {
-		if key == boolKey {
-			return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
-		}
-	}
-
-	// For output.format, provide format options
-	if key == "output.format" {
-		return []string{"markdown", "text"}, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// For path-based configs, enable file completion
-	if key == configKeyTemplateCustomPath {
+	switch m.Type {
+	case config.TypeBool:
+		return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+	case config.TypeEnum:
+		return m.EnumOptions, cobra.ShellCompDirectiveNoFileComp
+	case config.TypePath:
+		// Paths are the one case where the shell's own file completion is better
+		// than anything we can enumerate.
 		return nil, cobra.ShellCompDirectiveDefault
+	default:
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-
-	// For other keys, no specific completion
-	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
 func init() {

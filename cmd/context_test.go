@@ -700,14 +700,13 @@ func TestBuildScannerConfig(t *testing.T) {
 	viper.Set("scanner.skip-binary", true)
 	viper.Set("scanner.include-hidden", false)
 	viper.Set("scanner.include-ignored", false)
-	viper.Set("scanner.workers", 4)
 	viper.Set("scanner.respect-gitignore", true)
 	viper.Set("scanner.respect-shotgunignore", true)
 
 	cfg := GenerateConfig{
-		Include: []string{"*.go"},
-		Exclude: []string{"vendor/*"},
-		Workers: 8,
+		Include:       []string{"*.go"},
+		Exclude:       []string{"vendor/*"},
+		IncludeHidden: true,
 	}
 
 	scanCfg := buildScannerConfig(cfg)
@@ -715,8 +714,8 @@ func TestBuildScannerConfig(t *testing.T) {
 	if scanCfg.MaxFiles != 5000 {
 		t.Errorf("expected MaxFiles=5000, got %d", scanCfg.MaxFiles)
 	}
-	if scanCfg.Workers != 8 {
-		t.Errorf("expected Workers=8 (from override), got %d", scanCfg.Workers)
+	if !scanCfg.IncludeHidden {
+		t.Error("expected IncludeHidden=true (from override)")
 	}
 	if len(scanCfg.IncludePatterns) != 1 || scanCfg.IncludePatterns[0] != "*.go" {
 		t.Errorf("expected IncludePatterns=[*.go], got %v", scanCfg.IncludePatterns)

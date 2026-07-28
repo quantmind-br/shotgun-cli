@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,5 +121,174 @@ func TestCLIContextGenerateIncludeIgnored(t *testing.T) {
 	}
 	if !strings.Contains(with, "ignored.txt") {
 		t.Error("com --include-ignored o arquivo ignorado precisa aparecer na árvore")
+	}
+}
+
+// TestCLIVersionReportsInjectedBuildInfo trava o contrato de build-info: o
+// binário de build/ é produzido por `make build`, que injeta os quatro campos
+// via -ldflags. Se algum -X deixar de resolver (prefixo de pacote errado, alvo
+// sem LDFLAGS), o campo cai no sentinela e este teste falha.
+//
+// Precisa do binário compilado: `go run .` nunca recebe ldflags.
+func TestCLIVersionReportsInjectedBuildInfo(t *testing.T) {
+	binaryPath := filepath.Join("..", "..", "build", "shotgun-cli")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, binaryPath, "--version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("--version falhou: %v\n%s", err, out)
+	}
+
+	got := string(out)
+	for _, field := range []string{"commit:", "built:", "built by:"} {
+		if !strings.Contains(got, field) {
+			t.Errorf("--version não reportou %q:\n%s", field, got)
+		}
+	}
+	for _, sentinel := range []string{"version dev", "unknown"} {
+		if strings.Contains(got, sentinel) {
+			t.Errorf("--version reportou o sentinela %q — os -ldflags não chegaram ao binário:\n%s",
+				sentinel, got)
+		}
+	}
+}
+
+// TestCLIContextGenerateHonoursConfiguredLimits trava o contrato de CI-012: os
+// limites configurados chegam ao gerador.
+//
+// Antes, nenhum dos dois front ends encaminhava MaxFiles, então o gerador
+// substituía o zero pelo próprio teto de 1000 e uma seleção de 1200 arquivos
+// abortava com "maximum file count exceeded: 1000" mesmo com
+// scanner.max-files: 10000. E `context.max-size` do arquivo de config nunca era
+// lido: só a flag --max-size, cujo default literal é 10MB.
+func TestCLIContextGenerateHonoursConfiguredLimits(t *testing.T) {
+	root := repoRoot()
+
+	fixture := t.TempDir()
+	const fileCount = 1200
+	for i := range fileCount {
+		name := filepath.Join(fixture, fmt.Sprintf("f%04d.go", i))
+		if err := os.WriteFile(name, []byte("package main\n"), 0o600); err != nil {
+			t.Fatalf("não foi possível criar a fixture: %v", err)
+		}
+	}
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	cfgYAML := "scanner:\n  max-files: 10000\ncontext:\n  max-size: 50MB\n"
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0o600); err != nil {
+		t.Fatalf("não foi possível escrever o config: %v", err)
+	}
+
+	output := filepath.Join(t.TempDir(), "context.md")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
+		"go", "run", ".", "context", "generate",
+		"--root", fixture, "--output", output, "--config", cfgPath,
+	)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "SHOTGUN_VERBOSE=false")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("geração falhou com scanner.max-files=10000 e %d arquivos: %v\n%s", fileCount, err, out)
+	}
+
+	content, err := os.ReadFile(output) //nolint:gosec // path built by the test
+	if err != nil {
+		t.Fatalf("não foi possível ler a saída: %v", err)
+	}
+
+	// O rodapé do template renderiza MaxTotalSize; se context.max-size não
+	// chegasse ao gerador, ele diria 10.0MB.
+	if !strings.Contains(string(content), "50.0MB size limit") {
+		t.Errorf("o limite configurado (50MB) não chegou ao gerador; rodapé não bate:\n%s",
+			lastLines(string(content), 3))
+	}
+}
+
+// lastLines devolve as últimas n linhas de s, para mensagens de erro legíveis.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// TestCLILLMDoctorExitCode trava o contrato de exit code do `llm doctor`: com
+// provider configurado ele sai 0, sem API key sai non-zero. Antes ele sempre
+// saía 0, então não servia para gatear script nenhum.
+//
+// A configuração é isolada num --config temporário e o ambiente é limpo de
+// SHOTGUN_*: sem isso, um ~/.config/shotgun-cli/config.yaml da máquina pode
+// fornecer uma API key e o caso de falha deixa de falhar.
+func TestCLILLMDoctorExitCode(t *testing.T) {
+	root := repoRoot()
+
+	// Env sem nenhuma variável SHOTGUN_*, que o viper leria via AutomaticEnv.
+	cleanEnv := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "SHOTGUN_") {
+			cleanEnv = append(cleanEnv, kv)
+		}
+	}
+
+	tests := []struct {
+		name       string
+		configYAML string
+		wantErr    bool
+	}{
+		{
+			name:       "sem api key sai non-zero",
+			configYAML: "llm:\n  provider: openai\n  model: gpt-4o\n",
+			wantErr:    true,
+		},
+		{
+			name:       "provider completo sai zero",
+			configYAML: "llm:\n  provider: openai\n  api-key: sk-test-key\n  model: gpt-4o\n",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(cfgPath, []byte(tt.configYAML), 0o600); err != nil {
+				t.Fatalf("não foi possível escrever o config: %v", err)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
+				"go", "run", ".", "llm", "doctor", "--config", cfgPath,
+			)
+			cmd.Dir = root
+			cmd.Env = cleanEnv
+
+			out, err := cmd.CombinedOutput()
+			if tt.wantErr && err == nil {
+				t.Fatalf("esperava exit non-zero, obteve 0:\n%s", out)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("esperava exit 0, obteve %v:\n%s", err, out)
+			}
+
+			// A lista de issues aparece uma única vez: o erro devolvido é curto e
+			// não a repete.
+			if got := strings.Count(string(out), "API key not configured"); tt.wantErr && got != 1 {
+				t.Errorf("esperava a issue de API key exatamente 1 vez, apareceu %d:\n%s", got, out)
+			}
+			// O usage não deve ser despejado por cima das instruções de correção.
+			if tt.wantErr && strings.Contains(string(out), "Usage:") {
+				t.Errorf("doctor despejou o usage no caminho de falha:\n%s", out)
+			}
+		})
 	}
 }

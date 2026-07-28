@@ -21,10 +21,23 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
+// Build information, injected at link time with
+// -ldflags "-X github.com/quantmind-br/shotgun-cli/cmd.<name>=<value>".
 var (
-	version = "dev" // Will be set during build
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+	builtBy = "unknown"
+
 	cfgFile string
 )
+
+// buildVersionString renders every injected build-info field. Cobra prints it
+// through its default version template, so all four variables are consumed.
+func buildVersionString() string {
+	return fmt.Sprintf("%s\n  commit:   %s\n  built:    %s\n  built by: %s",
+		version, commit, date, builtBy)
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -35,16 +48,13 @@ codebase contexts with both TUI wizard and headless CLI modes.
 
 When called without arguments, it launches an interactive 5-step wizard.
 When called with arguments, it runs in headless CLI mode.`,
-	Version: version,
+	Version: buildVersionString(),
 	Run:     runRootCommand,
 }
 
 func runRootCommand(cmd *cobra.Command, args []string) {
-	// Check for version flag
-	if v, _ := cmd.Flags().GetBool("version"); v {
-		fmt.Printf("shotgun-cli version %s\n", version)
-		return
-	}
+	// --version never reaches here: Cobra intercepts it in Command.execute
+	// whenever Command.Version is non-empty and returns before Run.
 
 	// If no subcommands and no flags (except global ones), launch TUI wizard
 	if len(args) == 0 && len(os.Args) == 1 {
@@ -71,11 +81,9 @@ func launchTUIWizard() {
 	scanConfig := &scanner.ScanConfig{
 		MaxFiles:             viper.GetInt64(config.KeyScannerMaxFiles),
 		MaxFileSize:          utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxFileSize), 1024*1024),
-		MaxMemory:            utils.ParseSizeWithDefault(viper.GetString(config.KeyScannerMaxMemory), 500*1024*1024),
 		SkipBinary:           viper.GetBool(config.KeyScannerSkipBinary),
 		IncludeHidden:        viper.GetBool(config.KeyScannerIncludeHidden),
 		IncludeIgnored:       viper.GetBool(config.KeyScannerIncludeIgnored),
-		Workers:              viper.GetInt(config.KeyScannerWorkers),
 		RespectGitignore:     viper.GetBool(config.KeyScannerRespectGitignore),
 		RespectShotgunignore: viper.GetBool(config.KeyScannerRespectShotgunignore),
 	}
@@ -229,11 +237,9 @@ func setConfigDefaults() {
 	viper.SetDefault(config.KeyScannerMaxFileSize, "1MB")
 	viper.SetDefault(config.KeyScannerRespectGitignore, true)
 	viper.SetDefault(config.KeyScannerSkipBinary, true)
-	viper.SetDefault(config.KeyScannerWorkers, 1)
 	viper.SetDefault(config.KeyScannerIncludeHidden, false)
 	viper.SetDefault(config.KeyScannerIncludeIgnored, false)
 	viper.SetDefault(config.KeyScannerRespectShotgunignore, true)
-	viper.SetDefault(config.KeyScannerMaxMemory, "500MB")
 
 	viper.SetDefault(config.KeyContextMaxSize, "10MB")
 	viper.SetDefault(config.KeyContextIncludeTree, true)
