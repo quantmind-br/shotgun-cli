@@ -31,25 +31,22 @@ builds:
       - -X github.com/quantmind-br/shotgun-cli/cmd.builtBy=goreleaser
 
 archives:
-  - format: tar.gz
-    name_template: >-
-      {{ .ProjectName }}-
-      {{ .Version }}-
-      {{ .Os }}-
-      {{ .Arch }}
+  # `formats` (list), not the deprecated `format` scalar.
+  - formats: [tar.gz]
+    # Single line on purpose: a YAML folded scalar (>-) joins lines with spaces,
+    # which produced archive names like "shotgun-cli- v1.0.0- linux- amd64.tar.gz".
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     files:
       - README.md
-      - LICENSE
-      - docs/*.md
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc

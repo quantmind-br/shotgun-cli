@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Semver only. A plain 'v*' also matched the malformed vv1.0.0 tag, which
+      # fired a release run for a version string nothing can order.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
 
 permissions:
   contents: write
@@ -30,11 +33,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Run tests
-        run: go test ./...
-      - name: Install Goreleaser
-        run: go install github.com/goreleaser/goreleaser/v2/cmd/goreleaser@latest
+        # Same skip as the test workflow: this one needs a clipboard utility the
+        # runner does not have.
+        run: go test -skip "TestWizardClipboardCopyCmd" ./...
       - name: Release
+        # The official action rather than `go install`: the previous step ran
+        # `go install github.com/goreleaser/goreleaser/v2/cmd/goreleaser@latest`,
+        # a package path that does not exist in goreleaser v2 (the main package
+        # sits at the module root). Every release run failed on it.
+        #
+        # The four skipped stages each need infrastructure this workflow does not
+        # have. Remove one from the list once its prerequisite exists:
+        #   homebrew - the HOMEBREW_TAP_GITHUB_TOKEN secret and the
+        #              quantmind-br/homebrew-tap repository
+        #   docker   - `packages: write` permission plus a ghcr.io login step
+        #   sign     - cosign installed on the runner
+        #   sbom     - syft installed on the runner
+        # What ships today: cross-platform binaries, checksums, a source archive
+        # and the generated changelog.
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean --skip=homebrew,docker,sign,sbom
         env:
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: goreleaser release --clean
