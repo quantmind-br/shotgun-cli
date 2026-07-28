@@ -53,7 +53,7 @@ func collectFileContents(
 			return nil
 		}
 
-		if fileCount >= config.MaxFiles {
+		if config.MaxFiles > 0 && fileCount >= config.MaxFiles {
 			return fmt.Errorf("maximum file count exceeded: %d", config.MaxFiles)
 		}
 
@@ -77,7 +77,7 @@ func collectFileContents(
 			return fmt.Errorf("failed to read file %s: %w", node.Path, err)
 		}
 
-		if totalSize+int64(len(content)) > config.MaxTotalSize {
+		if config.MaxTotalSize > 0 && totalSize+int64(len(content)) > config.MaxTotalSize {
 			return fmt.Errorf(
 				"cumulative content size exceeds total size limit: %d + %d > %d",
 				totalSize, len(content), config.MaxTotalSize,
@@ -289,7 +289,8 @@ func shouldSkipFile(node *scanner.FileNode, config GenerateConfig) bool {
 		return true
 	}
 
-	if node.Size > config.MaxFileSize {
+	// A zero MaxFileSize means no limit, as in scanner.ScanConfig.
+	if config.MaxFileSize > 0 && node.Size > config.MaxFileSize {
 		return true
 	}
 

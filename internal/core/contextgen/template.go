@@ -103,5 +103,9 @@ func (tr *TemplateRenderer) getDefaultTemplate() string {
 {{end}}
 
 ---
-*Context generated with {{formatSize .Config.MaxTotalSize}} size limit*`
+{{if gt .Config.MaxTotalSize 0 -}}
+*Context generated with {{formatSize .Config.MaxTotalSize}} size limit*
+{{- else -}}
+*Context generated with no size limit*
+{{- end}}`
 }

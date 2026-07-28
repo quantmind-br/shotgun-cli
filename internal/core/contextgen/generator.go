@@ -31,10 +31,17 @@ type ContextGenerator interface {
 	) (string, error)
 }
 
+// GenerateConfig configures a generation run.
+//
+// A zero limit means "no limit", matching scanner.ScanConfig. Callers wanting
+// the documented ceilings start from DefaultGenerateConfig(). The generator used
+// to substitute its own constants for a zero, which meant a caller that forgot a
+// field silently ran under a policy it never chose -- enforced as a hard abort in
+// two of three cases.
 type GenerateConfig struct {
-	MaxFileSize    int64             `json:"maxFileSize"`  // Maximum size for individual files
-	MaxTotalSize   int64             `json:"maxTotalSize"` // Maximum total size of all content
-	MaxFiles       int               `json:"maxFiles"`
+	MaxFileSize    int64             `json:"maxFileSize"`  // Maximum size per file; 0 = no limit
+	MaxTotalSize   int64             `json:"maxTotalSize"` // Maximum total content size; 0 = no limit
+	MaxFiles       int               `json:"maxFiles"`     // Maximum file count; 0 = no limit
 	SkipBinary     bool              `json:"skipBinary"`
 	TemplateVars   map[string]string `json:"templateVars"`
 	Template       string            `json:"template,omitempty"`
@@ -164,7 +171,7 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 		return "", fmt.Errorf("failed to render template: %w", err)
 	}
 
-	if int64(len(result)) > config.MaxTotalSize {
+	if config.MaxTotalSize > 0 && int64(len(result)) > config.MaxTotalSize {
 		return "", fmt.Errorf(
 			"generated context exceeds total size limit: %d bytes > %d bytes",
 			len(result), config.MaxTotalSize,
@@ -178,18 +185,17 @@ func (g *DefaultContextGenerator) GenerateWithProgressEx(
 	return result, nil
 }
 
+// validateConfig normalises a config for use.
+//
+// It deliberately does NOT substitute limits. It used to rewrite every zero into
+// DefaultMaxSize/DefaultMaxFiles, which turned a caller's missing field into a
+// silent ceiling -- and, for MaxFiles and MaxTotalSize, into a hard abort at a
+// number the caller never chose. Zero now means "no limit" here exactly as it
+// does in scanner.ScanConfig; DefaultGenerateConfig() is how a caller asks for
+// the documented ceilings.
+//
 //nolint:unparam // error return reserved for future validation logic
 func (g *DefaultContextGenerator) validateConfig(config *GenerateConfig) error {
-	// Set defaults if fields are not set
-	if config.MaxFileSize == 0 {
-		config.MaxFileSize = DefaultMaxSize
-	}
-	if config.MaxTotalSize == 0 {
-		config.MaxTotalSize = DefaultMaxSize
-	}
-	if config.MaxFiles <= 0 {
-		config.MaxFiles = DefaultMaxFiles
-	}
 	if config.TemplateVars == nil {
 		config.TemplateVars = make(map[string]string)
 	}
