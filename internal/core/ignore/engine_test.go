@@ -731,3 +731,83 @@ func TestLoadIgnoreFiles_UnreadableDirectory(t *testing.T) {
 	got, _ := engine.ShouldIgnore("a.secretx")
 	assert.True(t, got, "as regras legíveis continuam valendo")
 }
+
+// TestShouldIgnore_NegationCannotEscapeExcludedDirectory trava a regra do git:
+// "It is not possible to re-include a file if a parent directory of that file is
+// excluded." Git para de descer num diretório excluído, então a negação lá dentro
+// nunca é consultada.
+//
+// Antes, cada nível compilava num único matcher last-match-wins e os padrões
+// aninhados vinham depois, então a negação vencia. As expectativas abaixo foram
+// conferidas contra `git check-ignore` num repositório com a mesma estrutura.
+//
+// A direção do erro é o que importa: o arquivo era ENTREGUE ao LLM apesar de o
+// usuário ter excluído o diretório.
+func TestShouldIgnore_NegationCannotEscapeExcludedDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	secrets := filepath.Join(root, "secrets")
+	require.NoError(t, os.MkdirAll(filepath.Join(secrets, "deeper"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, ".gitignore"), []byte("secrets/\n"), 0o600))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(secrets, ".gitignore"), []byte("!important.txt\n!deeper/also.txt\n"), 0o600))
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.LoadGitignore(root))
+
+	tests := []struct {
+		path string
+		want bool
+		why  string
+	}{
+		{"secrets/important.txt", true, "negação não re-inclui sob diretório excluído"},
+		{"secrets/deeper/also.txt", true, "vale em qualquer profundidade abaixo do excluído"},
+		{"secrets/other.txt", true, "o diretório excluído leva todo o conteúdo"},
+		{"outside/important.txt", false, "fora do diretório excluído nada muda"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got, _ := engine.ShouldIgnore(tt.path)
+			assert.Equal(t, tt.want, got, tt.why)
+		})
+	}
+}
+
+// TestShouldIgnore_NegationStillWorksWithoutExcludedParent garante que a correção
+// não engoliu as negações legítimas: sem diretório-pai excluído, o `!` continua
+// valendo, que é o comportamento do git.
+func TestShouldIgnore_NegationStillWorksWithoutExcludedParent(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.MkdirAll(sub, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, ".gitignore"), []byte("*.secretx\n"), 0o600))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sub, ".gitignore"), []byte("!keep.secretx\n"), 0o600))
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.LoadGitignore(root))
+
+	got, _ := engine.ShouldIgnore("sub/keep.secretx")
+	assert.False(t, got, "o diretório-pai não está excluído, então a negação vale")
+
+	got, _ = engine.ShouldIgnore("sub/drop.secretx")
+	assert.True(t, got, "os demais continuam ignorados")
+}
+
+// TestShouldIgnore_CustomRulesRespectExcludedDirectory cobre a mesma regra na
+// camada custom, que é onde .shotgunignore desemboca.
+func TestShouldIgnore_CustomRulesRespectExcludedDirectory(t *testing.T) {
+	t.Parallel()
+
+	engine := NewIgnoreEngine()
+	require.NoError(t, engine.AddCustomRules([]string{"vendor/", "!vendor/keep.go"}))
+
+	got, _ := engine.ShouldIgnore("vendor/keep.go")
+	assert.True(t, got, "negação não re-inclui sob diretório excluído por regra custom")
+}

@@ -208,17 +208,57 @@ func (e *LayeredIgnoreEngine) ShouldIgnore(relPath string) (bool, IgnoreReason) 
 	}
 
 	// 4. Check .gitignore patterns
-	if e.gitignoreMatcher.MatchesPath(normalizedPath) {
+	if matchesWithAncestors(e.gitignoreMatcher, normalizedPath) {
 		return true, IgnoreReasonGitignore
 	}
 
-	// 5. Check custom patterns (lowest priority)
-	if e.customMatcher.MatchesPath(normalizedPath) {
+	// 5. Check custom patterns (lowest priority). .shotgunignore feeds this
+	// layer, and both use gitignore semantics.
+	if matchesWithAncestors(e.customMatcher, normalizedPath) {
 		return true, IgnoreReasonCustom
 	}
 
 	// Path is not ignored
 	return false, IgnoreReasonNone
+}
+
+// matchesWithAncestors reports whether matcher excludes normalizedPath, applying
+// git's rule that a negation cannot re-include a file whose parent directory is
+// excluded.
+//
+// Without the ancestor check, a nested ignore file re-includes anything it names,
+// because every level's patterns compile into one last-match-wins matcher and the
+// nested ones come later. Git instead stops descending at an excluded directory,
+// so the negation is never consulted. The difference leaks: with `secrets/` in the
+// root .gitignore and any `!` line in `secrets/.gitignore`, the named file was
+// handed to the LLM despite the user excluding the directory.
+func matchesWithAncestors(matcher *gitignore.GitIgnore, normalizedPath string) bool {
+	if matcher == nil {
+		return false
+	}
+
+	if hasIgnoredAncestor(matcher, normalizedPath) {
+		return true
+	}
+
+	return matcher.MatchesPath(normalizedPath)
+}
+
+// hasIgnoredAncestor walks the path's directories from the shallowest down,
+// mirroring the order git descends in: the first excluded directory settles the
+// question for everything beneath it.
+func hasIgnoredAncestor(matcher *gitignore.GitIgnore, normalizedPath string) bool {
+	parts := strings.Split(normalizedPath, "/")
+	for i := 1; i < len(parts); i++ {
+		dir := strings.Join(parts[:i], "/")
+		// The trailing slash matters: it is how a directory-only pattern such as
+		// `sub/` is matched.
+		if matcher.MatchesPath(dir+"/") || matcher.MatchesPath(dir) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // LoadGitignore loads .gitignore rules from the specified directory
