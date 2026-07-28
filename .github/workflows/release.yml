@@ -32,6 +32,11 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Build binary for e2e tests
+        # The e2e suite shells out to build/shotgun-cli. Without this the tests
+        # below fail with "no such file or directory" and no release is cut.
+        run: make build
+
       - name: Run tests
         # Same skip as the test workflow: this one needs a clipboard utility the
         # runner does not have.
