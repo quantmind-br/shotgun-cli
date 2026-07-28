@@ -46,7 +46,6 @@ DefaultProviderRegistry.Register(llm.ProviderMyProvider, func(cfg llm.Config) (l
 
 | Type | File | Purpose |
 |------|------|---------|
-| `CLIConfig` | `config.go` | CLI flag parsing, Viper-bound |
 | `GenerateConfig` | `service.go` | Context generation parameters |
 | `LLMSendConfig` | `service_llm.go` | LLM send parameters (provider, key, model, output) |
 
@@ -57,7 +56,6 @@ DefaultProviderRegistry.Register(llm.ProviderMyProvider, func(cfg llm.Config) (l
 | `service.go` | ContextService: Generate, GenerateWithProgress |
 | `service_llm.go` | ContextService: SendToLLM*, provider creation |
 | `providers.go` | DefaultProviderRegistry, provider init |
-| `config.go` | CLIConfig, config-to-service bridging |
 
 ## TESTING
 

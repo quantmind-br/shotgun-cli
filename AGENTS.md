@@ -2,410 +2,302 @@
 
 ## Project Overview
 
-**shotgun-cli** is a Go CLI that generates LLM-optimized codebase contexts. It provides both an interactive TUI wizard (Bubble Tea) and headless CLI commands (Cobra) for scanning codebases, assembling context with templates, and sending to LLM providers (OpenAI, Anthropic, Gemini).
+**shotgun-cli** is a Go CLI that turns a codebase into an LLM-optimized context document. It scans the filesystem with layered ignore rules, renders a file tree plus selected file contents into a prompt template, estimates tokens, and optionally sends the result to an LLM provider (OpenAI, Anthropic, Gemini).
 
-**Module**: `github.com/quantmind-br/shotgun-cli` | **Go 1.24** | **Clean Architecture**
+Two front-ends share one application service: an interactive 5-step Bubble Tea wizard (launched with no arguments) and headless Cobra subcommands.
+
+**Module**: `github.com/quantmind-br/shotgun-cli` | **Go 1.24.0** | Clean Architecture
 
 ## Architecture & Data Flow
 
 ### Layer Structure
 
 ```
-cmd/              → Presentation (CLI commands, composition root)
-internal/ui/      → Presentation (TUI wizard, Bubble Tea MVU)
-internal/app/     → Application (ContextService, ProviderRegistry)
-internal/core/    → Domain (scanner, contextgen, template, ignore, tokens, llm interfaces)
-internal/platform/ → Infrastructure (openai, anthropic, geminiapi, http, clipboard)
-internal/config/  → Configuration keys, validation, metadata
+cmd/               → Presentation: Cobra commands, viper init, composition root
+internal/ui/       → Presentation: Bubble Tea TUI (wizard + config wizard), MVU
+internal/app/      → Application: ContextService (generate/send orchestration), provider registry
+internal/core/     → Domain: scanner, ignore, contextgen, template, tokens, selection, diff, llm interfaces
+internal/platform/ → Infrastructure: openai, anthropic, geminiapi, llmbase, http, clipboard
+internal/config/   → Config key constants, metadata/defaults, validation
+internal/assets/   → go:embed of built-in prompt templates
 ```
 
-### Dependency Rules (Strictly Enforced)
+### Dependency Rules (as actually enforced)
 
-- `core/` → stdlib ONLY (no external deps, no internal packages)
-- `platform/` → core interfaces only
-- `app/` → core + platform + config
-- `ui/` → app + core + config + Bubble Tea/Lipgloss
-- `cmd/` → everything (composition root)
+- `core/` → stdlib + a small set of pure libs (`go-gitignore`, `golang.org/x/text`, `adrg/xdg`) and other `core/` packages. **No viper, no app/ui/platform imports.**
+- `platform/` → core interfaces + stdlib. **No viper.**
+- `app/` → core + platform + config.
+- `ui/` → app + core + config + Bubble Tea/Lipgloss. It *does* read viper directly in [config_wizard.go](file:///home/diogo/dev/shotgun-cli/internal/ui/config_wizard.go), [screens/config_category.go](file:///home/diogo/dev/shotgun-cli/internal/ui/screens/config_category.go), and [screens/template_selection.go](file:///home/diogo/dev/shotgun-cli/internal/ui/screens/template_selection.go) — a known deviation; do not extend it.
+- `cmd/` → everything (composition root).
 
-### Data Flow
+### Call Chains
 
-**TUI Wizard** (no args):
+**TUI wizard** (only when `len(os.Args) == 1`):
 ```
-main.go → cmd.Execute() → launchTUIWizard()
-  → ui.NewWizard() → 5-step state machine
-  → Step 1: File selection (ScanCoordinator async scan)
-  → Step 2: Template selection
-  → Step 3-4: Task/Rules input
-  → Step 5: Review & send (GenerateCoordinator async generation)
-  → Optional: SendToLLMWithProgress() via ProviderRegistry
+main.go → cmd.Execute() → rootCmd.Execute() → initConfig() → runRootCommand()
+  → launchTUIWizard() → ui.NewWizard() → tea.NewProgram(...).Run()
+  → Step 1 file selection (ScanCoordinator, async)
+  → Step 2 template → Step 3 task → Step 4 rules
+  → Step 5 review (GenerateCoordinator, async) → save / clipboard / SendToLLMWithProgress
 ```
 
-**Headless CLI** (subcommand):
+**Headless generate**:
 ```
-cmd/context.go → Build GenerateConfig → app.NewContextService()
-  → svc.Generate(ctx, cfg) [synchronous]
-  → Return result → print/save/copy
+cmd/context.go: buildGenerateConfig() → generateContextHeadless()
+  → app.NewContextService(WithSelectionStore(...)) → svc.Generate() / svc.GenerateWithProgress()
 ```
 
-**Core Generation Pipeline**:
+**Headless send** (separate from generation):
 ```
-1. Validate config
-2. Scan filesystem (single-pass sequential walk, respect .gitignore/.shotgunignore)
-3. Apply selections
-4. Generate context (tree rendering + file assembly + template substitution)
-5. Estimate tokens (~4 bytes per token)
-6. Save output or send to LLM
+cmd/send.go: BuildLLMConfigWithOverrides() → CreateLLMProvider() → provider.Send()
 ```
+
+**Config TUI**: `shotgun-cli config` (no subcommand) → `launchConfigTUI()` → `ui.NewConfigWizard()`.
+
+### Generation Pipeline
+
+1. `scanner.FileSystemScanner.ScanWithProgress()` — single-pass walk.
+2. `ignore.LayeredIgnoreEngine.ShouldIgnore()` — precedence: explicit excludes → explicit includes → built-in patterns → `.gitignore` → custom/`.shotgunignore`. An ancestor exclusion blocks re-inclusion of nested paths.
+3. `contextgen.DefaultContextGenerator.GenerateWithProgressEx()` — tree render + file content assembly (binary skip, language detection).
+4. `contextgen/template.go` renders the final assembled context (Go `text/template`); the user-facing prompt template is loaded earlier via `internal/core/template`.
+5. `tokens.EstimateFromBytes()` / `tokens.FormatTokens()`.
+6. Output saved by `app` (headless) or `WizardModel.saveGeneratedContent()` (TUI); clipboard optional.
+
+### LLM Provider Strategy
+
+`llm.Provider` (core interface) ← `llmbase.BaseClient` (shared HTTP/auth/progress) + `llmbase.Sender` strategy implemented per provider (`BuildRequest`, `NewResponse`, `ParseResponse`, `GetEndpoint`, `GetHeaders`, `GetProviderName`). All HTTP goes through `platform/http.JSONClient`.
+
+Two registries exist and both register openai/anthropic/gemini: [cmd/providers.go](file:///home/diogo/dev/shotgun-cli/cmd/providers.go) (headless path) and [internal/app/providers.go](file:///home/diogo/dev/shotgun-cli/internal/app/providers.go) (service path). Adding a provider means touching both.
 
 ## Key Directories
 
 | Directory | Purpose |
 |-----------|---------|
-| `cmd/` | CLI commands (Cobra), config initialization, composition root |
-| `internal/ui/` | TUI wizard, screens, components, coordinators |
-| `internal/app/` | ContextService (main API), ProviderRegistry |
-| `internal/core/scanner/` | Filesystem traversal, layered ignore rules |
-| `internal/core/contextgen/` | Context assembly, tree rendering |
-| `internal/core/template/` | Template loading, variable substitution |
-| `internal/core/ignore/` | Layered ignore engine (explicit → built-in → gitignore) |
-| `internal/core/llm/` | Provider interfaces, Config, Registry |
-| `internal/platform/openai/` | OpenAI implementation |
-| `internal/platform/anthropic/` | Anthropic implementation |
-| `internal/platform/geminiapi/` | Gemini implementation |
-| `internal/platform/llmbase/` | Base client with common HTTP logic |
-| `internal/platform/http/` | Shared JSON HTTP client |
-| `internal/config/` | Config key constants, validation, metadata |
-| `test/e2e/` | End-to-end CLI tests |
-| `test/fixtures/` | Sample project fixtures |
+| `cmd/` | Cobra commands, viper/env init, provider factory, LLM config builder |
+| `internal/app/` | `ContextService` (Generate, SendToLLM), config bridging, provider registry |
+| `internal/config/` | `keys.go` constants, `metadata.go` defaults/categories, `validator.go` |
+| `internal/core/scanner/` | `Scanner` interface, `FileNode`, `ScanConfig`, selection helpers |
+| `internal/core/ignore/` | Layered ignore engine + built-in pattern list |
+| `internal/core/contextgen/` | Context assembly, tree rendering, content collection |
+| `internal/core/template/` | Template sources (embedded/user/custom), `{VAR}` renderer, metadata |
+| `internal/core/tokens/` | Heuristic token estimation and formatting |
+| `internal/core/selection/` | Per-project deselection persistence (one file per project) |
+| `internal/core/diff/` | Intelligent diff splitting at file boundaries |
+| `internal/core/llm/` | `Provider` interface, `Config`/defaults, `Registry` |
+| `internal/platform/llmbase/` | `BaseClient` + `Sender` strategy interface |
+| `internal/platform/{openai,anthropic,geminiapi}/` | Provider clients, models, DTOs |
+| `internal/platform/http/` | Shared `JSONClient` and `HTTPError` |
+| `internal/ui/` | Wizard orchestrator, config wizard, scan/generate coordinators |
+| `internal/ui/{screens,components,styles}/` | Step screens, widgets, theme |
+| `internal/assets/templates/` | Embedded built-in prompt templates |
+| `test/e2e/`, `test/fixtures/sample-project/` | E2E tests and the fixture project they scan |
 
 ## Development Commands
 
 ```bash
 # Build
-make build                    # → build/shotgun-cli (current platform)
-make build-all                # Cross-compile: linux/darwin/windows × amd64/arm64
+make build                 # go build -ldflags "$(LDFLAGS)" -o build/shotgun-cli .
+make build-all             # linux/darwin{amd64,arm64} + windows/amd64 → build/shotgun-cli-$os-$arch
 
 # Test
-make test                     # Unit tests (go test ./...)
-make test-race                # Tests with race detector (preferred)
-make test-e2e                 # End-to-end tests (requires build first)
-go test -v -run TestFoo ./internal/core/scanner/...  # Single test
-
-# Lint
-make lint                     # golangci-lint with .golangci.yml
-golangci-lint run ./...       # Direct invocation
-
-# Coverage
-make coverage                 # Generate coverage.out + report
-go test -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | grep total
+make test                  # go test ./...
+make test-race             # go test -race ./...          (preferred locally)
+make test-e2e              # depends on build; go test ./test/e2e -v
+make test-bench            # go test -bench=. -run=^$ ./...
+go test -v -run TestFoo ./internal/core/scanner/...
 
 # Quality
-make fmt                      # go fmt
-make vet                      # go vet
+make lint                  # golangci-lint run --config .golangci.yml ./...
+make fmt                   # go fmt ./...
+make fmt-check             # gofmt -l . ; fails if non-empty (CI gate)
+make vet                   # go vet ./...
+make coverage              # go test -coverprofile=coverage.out ./... && go tool cover -func
 
-# Run
-go run . --help               # Run directly
-./build/shotgun-cli           # Run built binary
-
-# Install
-make install                  # → ~/.local/bin/shotgun-cli
-make uninstall                # Remove from ~/.local/bin
+# Run / install
+go run . --help
+./build/shotgun-cli
+make install               # → ~/.local/bin/shotgun-cli
+make uninstall
 
 # Release
-make release-snapshot         # Local test build (goreleaser)
-make release VERSION=1.2.3    # Full release (tag + push)
+make version-patch|version-minor|version-major|version-set VERSION=x.y.z
+make release-snapshot      # goreleaser release --snapshot --clean
+make release VERSION=1.2.3 # release-tag + release-push
 ```
+
+Build metadata is injected via ldflags into package `cmd`: `version`, `commit`, `date`, `builtBy`. There is no `make docker` target — container images are built by goreleaser.
+
+## CLI Surface
+
+| Command | Notable flags |
+|---|---|
+| `shotgun-cli` (no args) | launches TUI wizard |
+| `context generate` | `--root/-r .`, `--include/-i *`, `--exclude/-e`, `--output/-o`, `--max-size 10MB`, `--enforce-limit true`, `--template/-t`, `--task`, `--rules`, `--var/-V KEY=VALUE`, `--include-hidden`, `--include-ignored`, `--progress none\|human\|json` |
+| `context send [file]` | `--output/-o`, `--model/-m`, `--timeout`, `--raw` |
+| `config` / `config show` / `config set <key> <value>` | bare `config` opens the config TUI |
+| `llm status` / `llm doctor` / `llm list` | — |
+| `template list\|render\|import\|export` | `render`: `--var`, `--output/-o` |
+| `diff split` | `--input/-i` (required), `--output-dir/-o chunks`, `--approx-lines 500`, `--no-header` |
+| `completion [bash\|zsh\|fish\|powershell]` | — |
+
+Global flags: `--config <file>`, `--verbose/-v`, `--quiet/-q`, `--version`.
+
+## Configuration
+
+Keys are constants in [internal/config/keys.go](file:///home/diogo/dev/shotgun-cli/internal/config/keys.go); defaults/types in `metadata.go`; validation in `validator.go`.
+
+| Key | Default | Notes |
+|---|---|---|
+| `scanner.max-files` | `10000` | positive int; rejects size strings |
+| `scanner.max-file-size` | `1MB` | size format |
+| `scanner.skip-binary` | `true` | |
+| `scanner.include-hidden` | `false` | |
+| `scanner.include-ignored` | `false` | |
+| `scanner.respect-gitignore` | `true` | |
+| `scanner.respect-shotgunignore` | `true` | |
+| `context.include-tree` | `true` | |
+| `context.include-summary` | `true` | |
+| `context.max-size` | `10MB` | size format |
+| `template.custom-path` | `""` | expands `~/` |
+| `output.format` | `markdown` | `markdown\|text` |
+| `output.clipboard` | `true` | |
+| `llm.provider` | `openai` | `openai\|anthropic\|gemini` |
+| `llm.api-key` | `""` | |
+| `llm.base-url` | `""` | empty or `http(s)://` |
+| `llm.model` | `""` | |
+| `llm.timeout` | `300` | 1–3600 seconds |
+| `llm.save-response` | `true` | |
+| `verbose` / `quiet` | `false` | |
+
+Resolution: `--config` file if given, else search platform config dir (`%APPDATA%\shotgun-cli`, `~/Library/Application Support/shotgun-cli`, or `$XDG_CONFIG_HOME/shotgun-cli`), then `$HOME`, then `.`; file is `config.yaml`. Env prefix `SHOTGUN_` with dots → underscores (`SHOTGUN_LLM_PROVIDER`). Precedence: flags > env > file > defaults.
+
+## Templates
+
+Built-in templates are `go:embed`-ed from `internal/assets/templates/*.md`: `prompt_analyzeBug.md`, `prompt_makePlan.md`, `prompt_makeDiffGitFormat.md`, `prompt_projectManager.md`. User templates load from `$XDG_CONFIG_HOME/shotgun-cli/templates`, plus an optional dir from `template.custom-path`; later sources override earlier ones by name.
+
+Substitution syntax is **`{VARIABLE_NAME}`**, not Go template syntax. Built-in variables: `TASK`, `RULES`, `FILE_STRUCTURE`, `CURRENT_DATE` (auto-supplied). Missing required variables fail validation before render.
 
 ## Code Conventions & Common Patterns
 
-### Imports (Three Groups, Blank-Line Separated)
+**Imports** — three blank-line-separated groups: stdlib, third-party, `github.com/quantmind-br/shotgun-cli/...`.
 
+**Config keys** — never raw strings:
 ```go
-import (
-    "context"
-    "fmt"
-    "path/filepath"
-
-    "github.com/spf13/cobra"
-    "github.com/rs/zerolog"
-
-    "github.com/quantmind-br/shotgun-cli/internal/app"
-    "github.com/quantmind-br/shotgun-cli/internal/config"
-)
+provider := viper.GetString(config.KeyLLMProvider)   // not "llm.provider"
 ```
 
-### Configuration Keys (Never Raw Strings)
-
+**Logging** — zerolog only, structured, never `fmt.Println` for diagnostics:
 ```go
-// ✅ CORRECT
-maxFiles := viper.GetInt(config.KeyScannerMaxFiles)
-
-// ❌ WRONG
-maxFiles := viper.GetInt("scanner.max-files")
-```
-
-All config keys defined in `internal/config/keys.go` as constants.
-
-### Logging (Zerolog Only)
-
-```go
-// ✅ CORRECT
-log.Debug().Str("file", path).Msg("Processing file")
+log.Info().Str("root", cfg.RootPath).Msg("Starting context generation...")
 log.Error().Err(err).Str("config", name).Msg("Failed to load config")
-
-// ❌ WRONG
-fmt.Println("Processing file")
-log.Printf("Error: %v", err)
 ```
 
-### Error Wrapping
-
+**Error wrapping** — always add context:
 ```go
-// Always wrap with context
-absPath, err := filepath.Abs(rootPath)
-if err != nil {
-    return fmt.Errorf("invalid root path: %w", err)
-}
+return fmt.Errorf("failed to save output: %w", err)
 ```
 
-### Dependency Injection (Functional Options)
-
+**Dependency injection** — functional options, no globals:
 ```go
-// Service with injectable dependencies
-svc := NewContextService(
-    WithScanner(mockScanner),
-    WithGenerator(mockGenerator),
-    WithRegistry(mockRegistry),
+svc := app.NewContextService(
+    app.WithScanner(mockScanner),
+    app.WithGenerator(mockGenerator),
+    app.WithSelectionStore(store),
 )
-
-// Usage in tests
-mockScanner := &mockScanner{tree: testTree, err: nil}
-svc := NewContextService(WithScanner(mockScanner))
 ```
 
-### Async Operations (Coordinator Pattern)
-
+**Async in the TUI** — coordinator pattern; `Start()` returns a `tea.Cmd`, `Poll()` re-arms itself, `Result()` is mutex-guarded:
 ```go
-// TUI: Non-blocking async with progress
-coordinator := NewScanCoordinator(scanner)
-cmd := coordinator.Start(rootPath, config)  // Returns tea.Cmd
-
-// Poll for updates in Update() loop
-func (m *WizardModel) Update(msg tea.Msg) {
-    if coordinator.IsComplete() {
-        tree, err := coordinator.Result()  // Mutex-guarded
-    }
-}
+return tea.Batch(m.fileSelection.Init(), m.scanCoordinator.Start(msg.rootPath, msg.config))
 ```
 
-### Progress Callbacks
+**Progress callbacks** — two styles, both mandatory on the TUI path (dropping them stalls the UI):
+- channel-based: `ScanWithProgress(root, cfg, progress chan<- Progress)`
+- callback-based: `GenerateWithProgress(ctx, cfg, func(stage, msg string, cur, total int64))`, `SendWithProgress(ctx, content, func(stage string))`
 
-Two styles:
-- **Channel-based** (scanner): `progress chan<- Progress`
-- **Callback-based** (generators, LLM): `progress func(GenProgress)`
-
-**Critical**: Progress callbacks in TUI path are NOT optional — dropping them stalls the UI.
-
-### Naming Conventions
+**Naming**
 
 | Category | Pattern | Example |
-|----------|---------|---------|
-| Interface | `<Name>` (noun) | `Scanner`, `Provider` |
-| Implementation | `<Impl><Name>` or `Default<Name>` | `FilesystemScanner`, `DefaultContextGenerator` |
-| Config struct | `<Name>Config` | `ScanConfig`, `GenerateConfig` |
-| Message struct | `<Action>Msg` | `ScanProgressMsg`, `ScanCompleteMsg` |
-| Test helper | `mock<Interface>` | `mockScanner`, `mockProvider` |
-| Model struct | `<Name>Model` | `FileSelectionModel`, `WizardModel` |
-
-### Testing (Table-Driven, Parallel)
-
-```go
-func TestScanConfig_Validate(t *testing.T) {
-    t.Parallel()
-    
-    tests := []struct {
-        name    string
-        config  *ScanConfig
-        wantErr bool
-        errMsg  string
-    }{
-        {"valid config", &ScanConfig{MaxFiles: 100}, false, ""},
-        {"negative max files", &ScanConfig{MaxFiles: -1}, true, "must be non-negative"},
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            err := tt.config.Validate()
-            if tt.wantErr {
-                require.Error(t, err)
-                assert.Contains(t, err.Error(), tt.errMsg)
-            } else {
-                require.NoError(t, err)
-            }
-        })
-    }
-}
-```
-
-### LLM Provider Strategy Pattern
-
-```go
-// Core interface (internal/core/llm/)
-type Provider interface {
-    Send(ctx context.Context, content string) (*Result, error)
-    SendWithProgress(ctx context.Context, content string, progress func(string)) (*Result, error)
-    Name() string
-    IsAvailable() bool
-}
-
-// Platform implementation (internal/platform/openai/)
-type OpenAI struct {
-    *llmbase.BaseClient
-}
-
-func (c *OpenAI) BuildRequest(content string) (interface{}, error) { ... }
-func (c *OpenAI) ParseResponse(resp interface{}, raw []byte) (*llm.Result, error) { ... }
-func (c *OpenAI) GetEndpoint() string { return "/chat/completions" }
-func (c *OpenAI) GetHeaders() map[string]string { return map[string]string{"Authorization": "Bearer " + c.APIKey} }
-
-// Registry factory (internal/app/providers.go)
-provider, err := app.DefaultProviderRegistry.Create(llm.ProviderOpenAI, cfg)
-```
-
-### Layered Ignore Engine
-
-Priority (high → low):
-1. Explicit excludes (forced ignore)
-2. Explicit includes (forced include)
-3. Built-in patterns (node_modules, .git, etc.)
-4. .gitignore rules
-5. .shotgunignore rules
-6. Custom patterns
+|---|---|---|
+| Interface | noun | `Scanner`, `Provider`, `ContextGenerator`, `TemplateSource` |
+| Implementation | `<Impl><Name>` / `Default<Name>` | `FileSystemScanner`, `DefaultContextGenerator`, `LayeredIgnoreEngine` |
+| Config struct | `<Name>Config` | `ScanConfig`, `GenerateConfig`, `LLMSendConfig` |
+| Bubble Tea message | `<Action>Msg` | `ScanProgressMsg`, `GenerationCompleteMsg`, `LLMErrorMsg` |
+| TUI model | `<Name>Model` | `WizardModel`, `FileSelectionModel` |
+| Test double | `mock<Interface>` | `mockScanner`, `mockProvider`, `mockContextService` |
 
 ## Important Files
 
-### Entry Points
-- `main.go` — Application entry point
-- `cmd/root.go` — Root command, TUI launch, config initialization
-- `cmd/context.go` — `context generate` command
-- `cmd/send.go` — `send` command (send to LLM)
-
-### Core Services
-- `internal/app/context.go` — ContextService (main API: Generate, SendToLLM)
-- `internal/app/providers.go` — ProviderRegistry factory
-- `internal/core/scanner/scanner.go` — Scanner interface + FilesystemScanner
-- `internal/core/contextgen/generator.go` — Context generation pipeline
-- `internal/core/template/manager.go` — Template loading and rendering
-- `internal/core/ignore/engine.go` — Layered ignore engine
-
-### Configuration
-- `internal/config/keys.go` — All config key constants
-- `internal/config/validator.go` — Validation rules
-- `internal/config/metadata.go` — Config descriptions and types
-
-### TUI
-- `internal/ui/wizard.go` — Main wizard coordination (5-step state machine)
-- `internal/ui/screens/file_selection.go` — File selection screen
-- `internal/ui/screens/review.go` — Review & send screen
-- `internal/ui/scan_coordinator.go` — Async scan coordination
-- `internal/ui/generate_coordinator.go` — Async generation coordination
-
-### Testing
-- `test/e2e/cli_test.go` — E2E CLI tests
-- `test/fixtures/sample-project/` — Test fixture project
-- `internal/app/service_test.go` — ContextService unit tests with mocks
+- [main.go](file:///home/diogo/dev/shotgun-cli/main.go) — entry point; zerolog console setup → `cmd.Execute()`
+- [cmd/root.go](file:///home/diogo/dev/shotgun-cli/cmd/root.go) — root command, viper/env init, TUI launch
+- [cmd/context.go](file:///home/diogo/dev/shotgun-cli/cmd/context.go) / [cmd/send.go](file:///home/diogo/dev/shotgun-cli/cmd/send.go) — headless generate / send
+- [internal/app/service.go](file:///home/diogo/dev/shotgun-cli/internal/app/service.go) — generate + send orchestration, output, clipboard, token estimate
+- [internal/app/context.go](file:///home/diogo/dev/shotgun-cli/internal/app/context.go) — `ContextService` interface and config/result types
+- [internal/core/scanner/filesystem.go](file:///home/diogo/dev/shotgun-cli/internal/core/scanner/filesystem.go) — the walk
+- [internal/core/ignore/engine.go](file:///home/diogo/dev/shotgun-cli/internal/core/ignore/engine.go) — ignore precedence + built-ins
+- [internal/core/contextgen/generator.go](file:///home/diogo/dev/shotgun-cli/internal/core/contextgen/generator.go) — assembly pipeline
+- [internal/core/template/manager.go](file:///home/diogo/dev/shotgun-cli/internal/core/template/manager.go) — source aggregation
+- [internal/ui/wizard.go](file:///home/diogo/dev/shotgun-cli/internal/ui/wizard.go) — 5-step state machine
+- [internal/ui/scan_coordinator.go](file:///home/diogo/dev/shotgun-cli/internal/ui/scan_coordinator.go) / [generate_coordinator.go](file:///home/diogo/dev/shotgun-cli/internal/ui/generate_coordinator.go) — async coordination
 
 ## Runtime/Tooling Preferences
 
-**Required Runtime**: Go 1.24.0+
-
-**Package Manager**: Go modules (`go.mod`, `go.sum`)
-
-**Key Dependencies**:
-- CLI: `github.com/spf13/cobra` v1.10.2
-- Config: `github.com/spf13/viper` v1.21.0
-- TUI: `github.com/charmbracelet/bubbletea` v1.3.5
-- Styling: `github.com/charmbracelet/lipgloss` v1.1.0
-- Logging: `github.com/rs/zerolog` v1.33.0
-- Testing: `github.com/stretchr/testify` v1.11.1
-
-**Build Tools**:
-- `make` — Build orchestration
-- `golangci-lint` — Linting (v6)
-- `goreleaser` — Release automation
-- `docker` — Container builds (optional)
-
-**Linting Rules** (`.golangci.yml`):
-- Line length: 120 characters
-- Cyclomatic complexity: 25 max
-- Enabled linters: govet, errcheck, staticcheck, goconst, misspell, gocyclo, gosec, lll, prealloc, unconvert, unparam, unused
+- **Go 1.24.0** (`go.mod`; CI uses `1.24.x`). No `toolchain` directive.
+- **Package manager**: Go modules.
+- **Direct deps**: cobra `v1.10.2`, viper `v1.21.0`, bubbletea `v1.3.5`, bubbles `v0.21.0`, lipgloss `v1.1.0`, zerolog `v1.33.0`, go-gitignore, `adrg/xdg v0.5.3`, `atotto/clipboard v0.1.4`, `golang.org/x/text v0.32.0`, testify `v1.11.1`.
+- **Tools**: `make`, `golangci-lint` (CI pins `v2.12.2` via action v8), `goreleaser` v2, `docker` (release images), `git`.
+- **Lint config** (`.golangci.yml`, schema v2): explicitly enables `goconst`, `gocyclo`, `gosec`, `lll`, `misspell`, `prealloc`, `unconvert`, `unparam` *on top of* the v2 defaults (`errcheck`, `govet`, `ineffassign`, `staticcheck`, `unused`). Line length 120, gocyclo 25, goconst min-len 3 / min-occurrences 3 with `ignore-tests`, gosec excludes `G101`/`G306`. `_test.go` is exempt from `goconst`/`lll`/`gosec`; `internal/ui/` is exempt from `goconst`/`unparam`. Legacy/common-false-positive exclusion presets are deliberately **not** enabled.
 
 ## Testing & QA
 
-**Test Framework**: Go `testing` + `stretchr/testify`
+**Layout**: 66 `*_test.go` files alongside source, 3 in `test/e2e/`, 8 inside the fixture project. All tests are **same-package** (no `_test` package suffix), so unexported helpers are tested directly. Heaviest suites: `internal/ui` (21 files), `internal/core` (15), `cmd` (8).
 
-**Test Organization**:
-- Unit tests: Co-located with source (`*_test.go`)
-- Integration tests: `internal/app/integration_test.go`
-- E2E tests: `test/e2e/`
-- Fixtures: `test/fixtures/sample-project/`
+**Frameworks**: stdlib `testing` everywhere; `stretchr/testify` `assert`/`require` for most non-trivial checks; `net/http/httptest` for `platform/http` and every provider client; `bubbletea` for UI tests. No golden files, no build tags.
 
-**Running Tests**:
-```bash
-go test ./...                          # All tests
-go test -race ./...                    # With race detector (preferred)
-go test -v -run TestName ./pkg         # Specific test
-make test-e2e                          # E2E only (requires build first)
-```
+**Patterns**: table-driven with `t.Run()`, liberal `t.Parallel()`, `t.TempDir()` for filesystem isolation, and hand-written mocks:
 
-**Coverage**:
-- Target: 85% minimum, 90%+ for new code
-- CI threshold: 80% (enforced)
-- Generate: `make coverage` or `go test -coverprofile=coverage.out ./...`
+| Mock | Interface | Location |
+|---|---|---|
+| `mockScanner` | `scanner.Scanner` | `internal/app/service_test.go` |
+| `mockGenerator` | `contextgen.ContextGenerator` | `internal/app/service_test.go`, `internal/ui/generate_coordinator_test.go` |
+| `mockProvider` / `mockLLMProvider` | `llm.Provider` | `internal/core/llm/registry_test.go`, `internal/app/*` |
+| `mockContextService` | `app.ContextService` | `internal/ui/wizard_test.go` |
+| `mockTemplateSource` | `template.TemplateSource` | `internal/core/template/manager_test.go` |
+| `mockDirEntry` / `mockFileInfo` | `fs.DirEntry` / `os.FileInfo` | `internal/core/scanner/scanner_test.go` |
 
-**Test Patterns**:
-- Table-driven tests with `t.Run()`
-- `t.Parallel()` for concurrent execution
-- Manual mocks (no code generation)
-- `t.TempDir()` for isolation
-- `httptest.NewServer()` for HTTP mocking
+**Environment-guarded tests** (skip conditions are intentional — do not "fix" them):
+- `TestCopySuccess`, `BenchmarkCopy` — skip when the clipboard is unavailable
+- `requireColorPalette()` in `internal/ui/styles/theme_test.go` — skips under `NO_COLOR`
+- `TestIntelligentSplit_ChunksApplyWithGit` — skips without `git`
+- `TestScannerHandlesPermissionError`, `TestLoadIgnoreFiles_UnreadableDirectory`, `TestStore_Save_UnwritableDirReportsError` — skip when running as root
+- `TestWriteDiffChunk_ReportsWriteError` — skips without `/dev/full`
+- OS-gated: `TestGetConfigDir*`, `TestGetDefaultConfigPath_Windows`
+- CI-only exclusion: `-skip "TestWizardClipboardCopyCmd"` (no clipboard utility on the runner)
 
-**Mocking Example**:
-```go
-type mockScanner struct {
-    tree *scanner.FileNode
-    err  error
-}
+**CI gates** (`.github/workflows/test.yml`, on push/PR to `main`/`master`): `make fmt-check` → `make vet` → `make build` → `go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestWizardClipboardCopyCmd" ./...` → Codecov upload → **fail if total coverage < 80%**. Separate `Lint` and `Build` jobs run golangci-lint and `go build -v ./...`. Releases are tag-triggered (`v*`) and run goreleaser with `--skip=homebrew,docker,sign,sbom`.
 
-func (m *mockScanner) Scan(rootPath string, config *scanner.ScanConfig) (*scanner.FileNode, error) {
-    return m.tree, m.err
-}
-
-// Usage
-mock := &mockScanner{tree: testTree, err: nil}
-svc := NewContextService(WithScanner(mock))
-```
-
-**CI Skips** (environment limitations):
-- `TestScanCoordinator`
-- `TestGenerateCoordinator`
-- `TestWizardClipboardCopyCmd`
+Target 85%+ coverage overall, 90%+ for new code; 80% is the hard CI floor.
 
 ## Anti-Patterns
 
-- ❌ Importing `viper` in `core/` or `platform/` (use DI)
-- ❌ Global state in `internal/`
-- ❌ Skipping progress callbacks in TUI (breaks UI)
-- ❌ Direct HTTP in providers (use `platform/http/JSONClient`)
+- Importing `viper` in `core/` or `platform/` (use DI); do not add new viper reads in `ui/` either.
+- Global mutable state in `internal/`.
+- Dropping progress callbacks on the TUI path — the UI stalls.
+- Direct `net/http` in providers — use `platform/http.JSONClient` via `llmbase.BaseClient`.
+- Registering a new LLM provider in only one of the two registries.
+
+## Known Documentation Drift
+
+`README.md` and `openwiki/` predate several changes. When they conflict with code, **the code wins**:
+
+- The send command is `shotgun-cli context send`, not `shotgun-cli send` (README, quickstart, workflows).
+- The config TUI is `shotgun-cli config`; there is no `--interactive` flag and no `config show --format json`.
+- Template syntax is `{VAR}`, not `{{ .Var }}` — wrong in `openwiki/domains.md` and in `template render` help text. `template_selection.go` copy still mentions `{{FILES}}`; the real variable is `FILE_STRUCTURE`.
+- Ignore precedence puts `.gitignore` before the custom/`.shotgunignore` layer, the reverse of `openwiki/domains.md`. There is no repo-local `.shotgun/templates/` source.
+- Stale defaults: `llm.provider` is `openai` (not blank/`gemini`), `scanner.max-files` is `10000`, `scanner.max-file-size` is `1MB`, `output.clipboard` is `true`, `context.max-size` is `10MB`.
+- `cmd/send.go` help text still says Gemini-only; the implementation uses the configured provider registry.
+- The Gemini platform package is `geminiapi`, not `gemini`.
 
 ## OpenWiki
 
-This repository has documentation located in the /openwiki directory.
-
-Start here:
-- [OpenWiki quickstart](openwiki/quickstart.md)
-
-OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
-
-When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
+Longer-form docs live in `/openwiki`: [quickstart](openwiki/quickstart.md) (current), `architecture.md` (current), `workflows.md` (partly stale), `domains.md` and `operations.md` (materially stale — see drift list above). Read the quickstart first, then follow its links, and verify specifics against source.

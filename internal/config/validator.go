@@ -50,79 +50,99 @@ func IsValidKey(key string) bool {
 	return false
 }
 
-// ValidateValue validates a configuration value for the given key.
+// ValidateValue validates a configuration value for the given key, dispatching
+// on the type declared in the metadata registry. Registering a key in
+// buildAllMetadata() is the single edit needed to make it validate.
 func ValidateValue(key, value string) error {
-	switch key {
-	case KeyScannerMaxFiles:
-		return validateMaxFiles(value)
-	case KeyScannerMaxFileSize, KeyContextMaxSize:
-		return validateSizeFormat(value)
-	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
-		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
-		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyLLMSaveResponse, KeyVerbose, KeyQuiet:
+	meta, ok := GetMetadata(key)
+	if !ok {
+		// Unknown key: IsValidKey is the gate, and the previous per-key switch
+		// fell through to nil here. Preserve that.
+		return nil
+	}
+
+	switch meta.Type {
+	case TypeBool:
 		return validateBooleanValue(value)
-	case KeyOutputFormat:
-		return validateOutputFormat(value)
-	case KeyTemplateCustomPath:
+	case TypeSize:
+		return validateSizeFormat(value)
+	case TypeEnum:
+		return validateEnumValue(value, meta.EnumOptions)
+	case TypeInt:
+		return validateIntValue(value, meta)
+	case TypeTimeout:
+		return validateTimeoutValue(value, meta)
+	case TypePath:
 		return validatePath(value)
-	case KeyLLMTimeout:
-		return validateTimeout(value)
-	case KeyLLMProvider:
-		return validateLLMProvider(value)
-	case KeyLLMAPIKey:
-		return nil // API key can be any string
-	case KeyLLMBaseURL:
+	case TypeURL:
 		return validateURL(value)
-	case KeyLLMModel:
-		return nil // Model can be any string, validation is provider-specific
+	case TypeString:
+		return nil
 	}
 
 	return nil
 }
 
-// ConvertValue converts a string configuration value to the appropriate type.
+// ConvertValue converts a string configuration value to the appropriate type,
+// dispatching on the type declared in the metadata registry.
 func ConvertValue(key, value string) (interface{}, error) {
-	switch key {
-	case KeyScannerMaxFiles, KeyLLMTimeout:
+	meta, ok := GetMetadata(key)
+	if !ok {
+		return value, nil
+	}
+
+	switch meta.Type {
+	case TypeInt, TypeTimeout:
 		var intVal int
 		if _, err := fmt.Sscanf(value, "%d", &intVal); err != nil {
 			return nil, fmt.Errorf("failed to parse integer value: %w", err)
 		}
+
 		return intVal, nil
-
-	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
-		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
-		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyLLMSaveResponse, KeyVerbose, KeyQuiet:
+	case TypeBool:
 		return strings.ToLower(value) == "true", nil
-
 	default:
-		// String values
 		return value, nil
 	}
 }
 
-// validateMaxFiles validates the max-files configuration value.
-func validateMaxFiles(value string) error {
-	// Reject size formats (e.g., "10MB", "1KB")
+// isSizeFormat reports whether value looks like a size literal (e.g. "10MB",
+// "1KB", "512B") rather than a plain integer.
+func isSizeFormat(value string) bool {
 	upper := strings.ToUpper(strings.TrimSpace(value))
-	isSizeFormat := strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") ||
-		strings.HasSuffix(upper, "KB")
-	if !isSizeFormat && strings.HasSuffix(upper, "B") && len(upper) > 1 {
-		isSizeFormat = upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9'
+	if strings.HasSuffix(upper, "GB") || strings.HasSuffix(upper, "MB") || strings.HasSuffix(upper, "KB") {
+		return true
 	}
-	if isSizeFormat {
+	if strings.HasSuffix(upper, "B") && len(upper) > 1 {
+		return upper[len(upper)-2] >= '0' && upper[len(upper)-2] <= '9'
+	}
+
+	return false
+}
+
+// validateIntValue validates a TypeInt value against the bounds declared in its
+// metadata. The size-format pre-check carries a distinct message and is the
+// reason TypeInt does not simply reuse a generic parser.
+func validateIntValue(value string, meta ConfigMetadata) error {
+	if isSizeFormat(value) {
 		return fmt.Errorf("expected a number, got size format")
 	}
 
-	var dummy int
-	if _, err := fmt.Sscanf(value, "%d", &dummy); err != nil {
+	var n int
+	if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
 		return fmt.Errorf("expected a positive integer")
 	}
-	if dummy <= 0 {
-		return fmt.Errorf("must be positive, got %d", dummy)
+	if meta.MinValue > 0 && n < meta.MinValue {
+		if meta.MinValue == 1 {
+			return fmt.Errorf("must be positive, got %d", n)
+		}
+
+		return fmt.Errorf("must be at least %d, got %d", meta.MinValue, n)
 	}
+	if meta.MaxValue > 0 && n > meta.MaxValue {
+		return fmt.Errorf("too large (max %d), got %d", meta.MaxValue, n)
+	}
+
 	return nil
 }
 
@@ -143,12 +163,16 @@ func validateBooleanValue(value string) error {
 	return nil
 }
 
-// validateOutputFormat validates output format configuration values.
-func validateOutputFormat(value string) error {
-	if value != FormatMarkdown && value != FormatText {
-		return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
+// validateEnumValue validates a TypeEnum value against the options declared in
+// its metadata.
+func validateEnumValue(value string, options []string) error {
+	for _, opt := range options {
+		if value == opt {
+			return nil
+		}
 	}
-	return nil
+
+	return fmt.Errorf("expected one of: %s, got '%s'", strings.Join(options, ", "), value)
 }
 
 // validatePath validates file/directory path configuration values.
@@ -177,30 +201,21 @@ func validatePath(value string) error {
 	return nil
 }
 
-// validateTimeout validates timeout configuration values.
-func validateTimeout(value string) error {
+// validateTimeoutValue validates a TypeTimeout value against the bounds declared
+// in its metadata.
+func validateTimeoutValue(value string, meta ConfigMetadata) error {
 	var timeout int
 	if _, err := fmt.Sscanf(value, "%d", &timeout); err != nil {
 		return fmt.Errorf("expected a positive integer (seconds)")
 	}
-	if timeout <= 0 {
+	if meta.MinValue > 0 && timeout < meta.MinValue {
 		return fmt.Errorf("timeout must be positive, got %d", timeout)
 	}
-	if timeout > 3600 {
-		return fmt.Errorf("timeout too large (max 3600 seconds), got %d", timeout)
+	if meta.MaxValue > 0 && timeout > meta.MaxValue {
+		return fmt.Errorf("timeout too large (max %d seconds), got %d", meta.MaxValue, timeout)
 	}
-	return nil
-}
 
-// validateLLMProvider validates LLM provider configuration values.
-func validateLLMProvider(value string) error {
-	validProviders := []string{ProviderOpenAI, ProviderAnthropic, ProviderGemini}
-	for _, provider := range validProviders {
-		if value == provider {
-			return nil
-		}
-	}
-	return fmt.Errorf("expected one of: %s", strings.Join(validProviders, ", "))
+	return nil
 }
 
 // validateURL validates URL configuration values.

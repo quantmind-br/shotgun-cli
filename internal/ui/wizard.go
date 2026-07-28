@@ -1261,14 +1261,11 @@ func (m *WizardModel) validateContentSize(content string) error {
 }
 
 func (m *WizardModel) saveGeneratedContent(content string) (string, error) {
-	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-	filePath := filepath.Join(m.rootPath, filename)
-
-	// #nosec G306 - Generated context files are meant to be world-readable
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	filePath := filepath.Join(m.rootPath, app.DefaultOutputName())
+	if err := os.WriteFile(filePath, []byte(content), 0600); err != nil {
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
+
 	return filePath, nil
 }
 

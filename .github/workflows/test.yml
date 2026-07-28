@@ -13,7 +13,11 @@ permissions:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout code
@@ -32,18 +36,54 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # windows-latest has no GNU make: the image ships MSYS2 but explicitly
+      # keeps it off PATH, and the Makefile also assumes SHELL=/bin/bash plus
+      # POSIX find/date. So the three make-driven steps are mirrored with their
+      # direct Go equivalents on Windows only. Keep both halves in sync.
       - name: Check formatting
+        if: matrix.os != 'windows-latest'
         run: make fmt-check
 
+      - name: Check formatting (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "Not gofmt-clean:"; echo "$out"; exit 1; fi
+
       - name: Run go vet
+        if: matrix.os != 'windows-latest'
         run: make vet
+
+      - name: Run go vet (Windows)
+        if: matrix.os == 'windows-latest'
+        run: go vet ./...
 
       - name: Build binary for e2e tests
         # `make build` (not a bare `go build`): the e2e suite asserts that the
         # -ldflags build info reaches the binary.
+        if: matrix.os != 'windows-latest'
         run: make build
 
+      - name: Build binary for e2e tests (Windows)
+        # Mirrors the Makefile LDFLAGS; TestCLIVersionReportsInjectedBuildInfo
+        # fails if any -X is missing. The .exe suffix is required: the e2e tests
+        # exec the extensionless build/shotgun-cli path, which os/exec resolves
+        # through PATHEXT on Windows.
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          pkg=github.com/quantmind-br/shotgun-cli/cmd
+          ver="$(git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD)"
+          go build -ldflags "-s -w \
+            -X $pkg.version=$ver \
+            -X $pkg.commit=$(git rev-parse --short HEAD) \
+            -X $pkg.date=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            -X $pkg.builtBy=make" \
+            -o build/shotgun-cli.exe .
+
       - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest'
         run: |
           # Only TestWizardClipboardCopyCmd is skipped: it needs a clipboard
           # utility the runner does not have. The coordinator tests used to be
@@ -51,7 +91,14 @@ jobs:
           # race detector; that cause is gone.
           go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestWizardClipboardCopyCmd" ./...
 
+      - name: Run tests
+        # No -race and no coverage off Linux: race adds ~2x runtime for a signal
+        # the Linux run already provides, and only Linux feeds Codecov.
+        if: matrix.os != 'ubuntu-latest'
+        run: go test -v -skip "TestWizardClipboardCopyCmd" ./...
+
       - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -62,6 +109,9 @@ jobs:
           verbose: true
 
       - name: Check coverage threshold
+        # Stays Linux-only: coverage.out is produced only there, and the script
+        # needs `bc`, which windows-latest does not have.
+        if: matrix.os == 'ubuntu-latest'
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${COVERAGE}%"

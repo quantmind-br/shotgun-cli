@@ -429,7 +429,7 @@ The configuration system provides centralized validation through `internal/confi
 
 | Key | Validator | Rules | Error Messages |
 |-----|-----------|-------|----------------|
-| `scanner.max-files` | `validateMaxFiles` | Positive integer, rejects size formats | "expected a positive integer", "expected a number, got size format", "must be positive" |
+| `scanner.max-files` | `validateIntValue` | Integer in 1-1,000,000, rejects size formats | "expected a positive integer", "expected a number, got size format", "must be positive", "too large (max 1000000)" |
 | `scanner.max-file-size` | `validateSizeFormat` | Size format (KB/MB/GB/B) or plain number | "expected size format (e.g., 1MB, 500KB)" |
 | `scanner.respect-gitignore` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `scanner.skip-binary` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
@@ -440,19 +440,19 @@ The configuration system provides centralized validation through `internal/confi
 | `context.include-tree` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `context.include-summary` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
 | `template.custom-path` | `validatePath` | Valid path (empty allowed) | "failed to expand home directory", "parent path exists but is not a directory" |
-| `output.format` | `validateOutputFormat` | "markdown" or "text" | "expected 'markdown' or 'text'" |
+| `output.format` | `validateEnumValue` | "markdown" or "text" | "expected one of: markdown, text" |
 | `output.clipboard` | `validateBooleanValue` | "true" or "false" (case-insensitive) | "expected 'true' or 'false'" |
-| `llm.provider` | `validateLLMProvider` | openai, anthropic, gemini | "expected one of: openai, anthropic, gemini" |
+| `llm.provider` | `validateEnumValue` | openai, anthropic, gemini | "expected one of: openai, anthropic, gemini, got '<value>'" |
 | `llm.api-key` | None | Any string | N/A |
 | `llm.base-url` | `validateURL` | Empty or starts with http:// or https:// | "URL must start with http:// or https://" |
 | `llm.model` | None | Any string (provider-specific validation) | N/A |
-| `llm.timeout` | `validateTimeout` | Integer between 1 and 3600 seconds | "timeout must be positive", "timeout too large (max 3600 seconds)" |
+| `llm.timeout` | `validateTimeoutValue` | Integer between 1 and 3600 seconds | "timeout must be positive", "timeout too large (max 3600 seconds)" |
 
 #### Validation Rules Detail
 
 **Integer Validation** (`scanner.max-files`):
 - Must be a valid integer format (e.g., `100`, `5000`)
-- Max-files: Must be positive
+- Max-files: Must be within 1-1,000,000 (bounds declared in `internal/config/metadata.go`)
 - Max-files specifically rejects size formats like "10MB" or "1KB"
 
 **Size Format Validation** (`scanner.max-file-size`, `context.max-size`):

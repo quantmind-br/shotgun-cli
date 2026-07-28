@@ -31,8 +31,10 @@ func TestBuildGenerateConfigDefaults(t *testing.T) {
 		t.Fatalf("buildGenerateConfig error: %v", err)
 	}
 
-	if !strings.HasPrefix(filepath.Base(cfg.Output), "shotgun-prompt-") {
-		t.Fatalf("expected generated output name, got %s", cfg.Output)
+	// The command no longer generates the name; an empty Output means the
+	// service applies app.DefaultOutputName().
+	if cfg.Output != "" {
+		t.Fatalf("expected empty output so the service default applies, got %s", cfg.Output)
 	}
 }
 

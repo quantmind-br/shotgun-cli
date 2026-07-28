@@ -101,12 +101,19 @@ func (c *GenerateConfig) Validate() error {
 	return nil
 }
 
-// GenerateOutputPath returns the configured output path or generates a default one
-// based on the current timestamp.
+// DefaultOutputName returns the default filename for a generated context
+// document. It is the single producer of this convention; both front ends call
+// it rather than formatting the name themselves.
+func DefaultOutputName() string {
+	return fmt.Sprintf("shotgun-prompt-%s.md", time.Now().Format("20060102-150405"))
+}
+
+// GenerateOutputPath returns the configured output path or the default generated
+// name.
 func (c *GenerateConfig) GenerateOutputPath() string {
 	if c.OutputPath != "" {
 		return c.OutputPath
 	}
-	timestamp := time.Now().Format("20060102-150405")
-	return fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
+
+	return DefaultOutputName()
 }

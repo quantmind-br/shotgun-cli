@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -139,6 +140,8 @@ func TestValidateValue_MaxFiles(t *testing.T) {
 		{"10MB", true},
 		{"1KB", true},
 		{"abc", true},
+		{"1000000", false},
+		{"1000001", true},
 	}
 
 	for _, tt := range tests {
@@ -147,6 +150,22 @@ func TestValidateValue_MaxFiles(t *testing.T) {
 			err := ValidateValue(KeyScannerMaxFiles, tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateValue(max-files, %q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateValue_AllDefaultsRoundTrip pins CI-003's contract: validation is
+// derived from the metadata registry, so every registered default must satisfy
+// its own declared type and bounds.
+func TestValidateValue_AllDefaultsRoundTrip(t *testing.T) {
+	t.Parallel()
+	for _, m := range AllConfigMetadata() {
+		m := m
+		t.Run(m.Key, func(t *testing.T) {
+			t.Parallel()
+			if err := ValidateValue(m.Key, fmt.Sprint(m.DefaultValue)); err != nil {
+				t.Errorf("default for %s (%v) fails its own validator: %v", m.Key, m.DefaultValue, err)
 			}
 		})
 	}

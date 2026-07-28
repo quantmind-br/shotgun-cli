@@ -210,12 +210,6 @@ func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 		return GenerateConfig{}, fmt.Errorf("failed to parse max-size: %w", err)
 	}
 
-	// Generate default output filename if not specified
-	if output == "" {
-		timestamp := time.Now().Format("20060102-150405")
-		output = fmt.Sprintf("shotgun-prompt-%s.md", timestamp)
-	}
-
 	return GenerateConfig{
 		RootPath:       absPath,
 		Include:        include,
