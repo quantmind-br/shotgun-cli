@@ -39,15 +39,17 @@ func TestStore_SaveThenLoad_RoundTripsSorted(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"a.go", "b.go", "c.go"}, deselected)
 
-	// The backing file exists and decodes to the {"deselected":{...}} shape.
-	raw, err := os.ReadFile(path)
+	// The project's own file exists and records which project it belongs to.
+	raw, err := os.ReadFile(store.projectFile(project))
 	require.NoError(t, err)
 
 	var onDisk struct {
-		Deselected map[string][]string `json:"deselected"`
+		Project    string   `json:"project"`
+		Deselected []string `json:"deselected"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &onDisk))
-	assert.Equal(t, []string{"a.go", "b.go", "c.go"}, onDisk.Deselected[project])
+	assert.Equal(t, project, onDisk.Project)
+	assert.Equal(t, []string{"a.go", "b.go", "c.go"}, onDisk.Deselected)
 
 	// A fresh Store over the same file reads back the same list.
 	reopened := NewStore(path)
@@ -91,14 +93,8 @@ func TestStore_Save_EmptyOrNilDeletesEntry(t *testing.T) {
 			assert.Empty(t, deselected)
 
 			// Deletion is reflected on disk, not just in memory.
-			raw, err := os.ReadFile(path)
-			require.NoError(t, err)
-			var onDisk struct {
-				Deselected map[string][]string `json:"deselected"`
-			}
-			require.NoError(t, json.Unmarshal(raw, &onDisk))
-			_, ok := onDisk.Deselected[project]
-			assert.False(t, ok, "project entry should be removed from the file")
+			_, err = os.Stat(store.projectFile(project))
+			assert.True(t, os.IsNotExist(err), "the project's file should be removed")
 		})
 	}
 }
@@ -214,5 +210,140 @@ func TestStore_Save_UnwritableDirReportsError(t *testing.T) {
 	s := NewStore(filepath.Join(locked, "sel.json"))
 	err := s.Save("/proj", []string{"a.go"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "write selection store")
+	// The failure now surfaces when creating the per-project directory, which is
+	// the first write the store attempts.
+	assert.Contains(t, err.Error(), "selection store")
+}
+
+// TestStore_ConcurrentProcessesDoNotDropEachOther cobre a suspeita que o bug hunt
+// anterior deixou aberta: o mutex de Store só ordena escritores dentro de um
+// binário, e o arquivo guarda todos os projetos. Duas instâncias de shotgun-cli
+// em projetos diferentes liam o mesmo conteúdo e o segundo `rename` descartava a
+// entrada do primeiro.
+//
+// Dois *Store distintos sobre o mesmo caminho é exatamente o que duas instâncias
+// veem: não compartilham mutex, só o arquivo.
+func TestStore_ConcurrentProcessesDoNotDropEachOther(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "selections.json")
+
+	const projects = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, projects)
+
+	for i := 0; i < projects; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			// Um Store por goroutine: sem mutex compartilhado, como instâncias distintas.
+			s := NewStore(path)
+			if err := s.Save(fmt.Sprintf("/proj/%d", n), []string{fmt.Sprintf("f%d.go", n)}); err != nil {
+				errs <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("Save falhou sob concorrência: %v", err)
+	}
+
+	reader := NewStore(path)
+	for i := 0; i < projects; i++ {
+		got, err := reader.Load(fmt.Sprintf("/proj/%d", i))
+		require.NoError(t, err)
+		assert.Equal(t, []string{fmt.Sprintf("f%d.go", i)}, got,
+			"a entrada do projeto %d foi perdida por outro escritor", i)
+	}
+}
+
+// TestStore_ConcurrentSameProjectConverges garante que a disputa pelo mesmo
+// projeto termina num dos valores gravados, e não num arquivo corrompido ou
+// vazio.
+func TestStore_ConcurrentSameProjectConverges(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "selections.json")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			_ = NewStore(path).Save("/proj", []string{fmt.Sprintf("f%d.go", n)})
+		}(i)
+	}
+	wg.Wait()
+
+	got, err := NewStore(path).Load("/proj")
+	require.NoError(t, err)
+	require.Len(t, got, 1, "o arquivo deve conter exatamente um dos valores gravados")
+	assert.Regexp(t, `^f[0-5]\.go$`, got[0])
+}
+
+// TestStore_MigratesLegacySingleFile cobre o caminho que toca dados de usuários
+// que já usavam a versão anterior: o arquivo único é dividido em arquivos por
+// projeto e removido, sem perder nada.
+func TestStore_MigratesLegacySingleFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "selections.json")
+	legacy := `{"deselected":{"/proj/a":["a1.go","a2.go"],"/proj/b":["b1.go"]}}`
+	require.NoError(t, os.WriteFile(path, []byte(legacy), 0o600))
+
+	store := NewStore(path)
+
+	gotA, err := store.Load("/proj/a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a1.go", "a2.go"}, gotA)
+
+	gotB, err := store.Load("/proj/b")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"b1.go"}, gotB)
+
+	// O arquivo legado sai de cena depois de migrado.
+	_, err = os.Stat(path)
+	assert.True(t, os.IsNotExist(err), "o arquivo legado deve ser removido após a migração")
+
+	// E os dados sobrevivem a uma reabertura, agora vindos dos arquivos novos.
+	reopened := NewStore(path)
+	gotA2, err := reopened.Load("/proj/a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a1.go", "a2.go"}, gotA2)
+}
+
+// TestStore_MigrationDoesNotClobberNewerData garante que a migração não sobrescreve
+// um arquivo por projeto já gravado pelo código novo — ele é mais recente que
+// qualquer coisa no arquivo legado.
+func TestStore_MigrationDoesNotClobberNewerData(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "selections.json")
+
+	store := NewStore(path)
+	require.NoError(t, store.Save("/proj/a", []string{"novo.go"}))
+
+	// Só agora aparece um arquivo legado com um valor antigo para o mesmo projeto.
+	require.NoError(t, os.WriteFile(path, []byte(`{"deselected":{"/proj/a":["antigo.go"]}}`), 0o600))
+
+	got, err := NewStore(path).Load("/proj/a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"novo.go"}, got, "o dado novo não pode ser sobrescrito pelo legado")
+}
+
+// TestStore_MigrationReportsCorruptLegacyFile mantém o comportamento anterior:
+// um arquivo legado corrompido é reportado, não descartado em silêncio.
+func TestStore_MigrationReportsCorruptLegacyFile(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "selections.json")
+	require.NoError(t, os.WriteFile(path, []byte("{nao é json"), 0o600))
+
+	_, err := NewStore(path).Load("/proj")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse selection store")
 }
