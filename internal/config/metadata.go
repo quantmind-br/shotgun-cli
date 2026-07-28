@@ -47,6 +47,22 @@ func (t ConfigType) String() string {
 	}
 }
 
+// Accepted values for the enum-typed configuration keys. Declared here so the
+// metadata table and the validators cannot drift apart.
+const (
+	// FormatMarkdown is the markdown value of KeyOutputFormat.
+	FormatMarkdown = "markdown"
+	// FormatText is the plain-text value of KeyOutputFormat.
+	FormatText = "text"
+
+	// ProviderOpenAI is the OpenAI value of KeyLLMProvider.
+	ProviderOpenAI = "openai"
+	// ProviderAnthropic is the Anthropic value of KeyLLMProvider.
+	ProviderAnthropic = "anthropic"
+	// ProviderGemini is the Gemini value of KeyLLMProvider.
+	ProviderGemini = "gemini"
+)
+
 // ConfigCategory represents a logical grouping of configuration keys.
 type ConfigCategory string
 
@@ -239,8 +255,8 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryOutput,
 			Type:         TypeEnum,
 			Description:  "Output format for generated context",
-			DefaultValue: "markdown",
-			EnumOptions:  []string{"markdown", "text"},
+			DefaultValue: FormatMarkdown,
+			EnumOptions:  []string{FormatMarkdown, FormatText},
 		},
 		{
 			Key:          KeyOutputClipboard,
@@ -256,8 +272,8 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeEnum,
 			Description:  "LLM provider to use",
-			DefaultValue: "gemini",
-			EnumOptions:  []string{"openai", "anthropic", "gemini"},
+			DefaultValue: ProviderGemini,
+			EnumOptions:  []string{ProviderOpenAI, ProviderAnthropic, ProviderGemini},
 		},
 		{
 			Key:          KeyLLMAPIKey,

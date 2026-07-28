@@ -13,8 +13,12 @@ import (
 )
 
 const (
+	langBash       = "bash"
+	langCPP        = "cpp"
 	langDockerfile = "dockerfile"
+	langJavaScript = "javascript"
 	langJSON       = "json"
+	langPython     = "python"
 	langRuby       = "ruby"
 )
 
@@ -208,7 +212,7 @@ func detectLanguageByBasename(base string) string {
 	case "go.mod", "go.sum":
 		return "go"
 	case "requirements.txt", "setup.py", "setup.cfg":
-		return "python"
+		return langPython
 	}
 
 	return ""
@@ -216,31 +220,31 @@ func detectLanguageByBasename(base string) string {
 
 var extensionToLanguage = map[string]string{
 	".go":         "go",
-	".js":         "javascript",
-	".jsx":        "javascript",
-	".mjs":        "javascript",
+	".js":         langJavaScript,
+	".jsx":        langJavaScript,
+	".mjs":        langJavaScript,
 	".ts":         "typescript",
 	".tsx":        "typescript",
-	".py":         "python",
-	".pyw":        "python",
+	".py":         langPython,
+	".pyw":        langPython,
 	".java":       "java",
 	".c":          "c",
-	".cpp":        "cpp",
-	".cc":         "cpp",
-	".cxx":        "cpp",
-	".c++":        "cpp",
-	".h":          "cpp",
-	".hpp":        "cpp",
-	".hh":         "cpp",
-	".hxx":        "cpp",
-	".h++":        "cpp",
+	".cpp":        langCPP,
+	".cc":         langCPP,
+	".cxx":        langCPP,
+	".c++":        langCPP,
+	".h":          langCPP,
+	".hpp":        langCPP,
+	".hh":         langCPP,
+	".hxx":        langCPP,
+	".h++":        langCPP,
 	".cs":         "csharp",
 	".php":        "php",
 	".rb":         langRuby,
 	".rs":         "rust",
-	".sh":         "bash",
-	".bash":       "bash",
-	".zsh":        "bash",
+	".sh":         langBash,
+	".bash":       langBash,
+	".zsh":        langBash,
 	".ps1":        "powershell",
 	".sql":        "sql",
 	".html":       "html",
@@ -297,7 +301,7 @@ func renderFileContentBlocks(files []FileContent) string {
 	var builder strings.Builder
 
 	for _, file := range files {
-		builder.WriteString(fmt.Sprintf("<file path=\"%s\">\n", file.RelPath))
+		fmt.Fprintf(&builder, "<file path=\"%s\">\n", file.RelPath)
 		builder.WriteString(file.Content)
 		// Ensure content ends with newline before closing tag
 		if len(file.Content) > 0 && !strings.HasSuffix(file.Content, "\n") {

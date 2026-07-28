@@ -298,21 +298,23 @@ func (m *ReviewModel) buildScrollableContent() string {
 
 func (m *ReviewModel) renderFixedFooter() string {
 	if m.generated {
-		lines := [][]string{{"↑/↓: Scroll", "c: Copy"}}
+		lines := make([][]string, 0, 2)
+		actions := []string{"↑/↓: Scroll", "c: Copy"}
 		if m.llmAvailable && !m.llmSending && !m.llmComplete {
-			lines[0] = append(lines[0], "s: LLM", "F9: LLM")
+			actions = append(actions, "s: LLM", "F9: LLM")
 		}
-		lines = append(lines, []string{"F1/?: Help", "q: Exit"})
+		lines = append(lines, actions, []string{"F1/?: Help", "q: Exit"})
 		return styles.RenderStatusBar(m.width, lines)
 	}
 
-	preGenLines := [][]string{{"↑/↓: Scroll", "g: Generate", "F8: Generate", "F7: Back", "c: Copy"}}
+	preGenLines := make([][]string, 0, 2)
+	preGenActions := []string{"↑/↓: Scroll", "g: Generate", "F8: Generate", "F7: Back", "c: Copy"}
 	if m.llmAvailable {
-		preGenLines[0] = append(preGenLines[0], "s: LLM", "F9: LLM")
+		preGenActions = append(preGenActions, "s: LLM", "F9: LLM")
 	} else {
-		preGenLines[0] = append(preGenLines[0], styles.HelpStyle.Render("s/F9: LLM [not configured]"))
+		preGenActions = append(preGenActions, styles.HelpStyle.Render("s/F9: LLM [not configured]"))
 	}
-	preGenLines = append(preGenLines, []string{"F1/?: Help", "q: Quit"})
+	preGenLines = append(preGenLines, preGenActions, []string{"F1/?: Help", "q: Quit"})
 	return styles.RenderStatusBar(m.width, preGenLines)
 }
 

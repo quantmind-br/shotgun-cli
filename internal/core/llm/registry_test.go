@@ -21,9 +21,9 @@ func (m *mockProvider) SendWithProgress(ctx context.Context, content string, pro
 	return m.Send(ctx, content)
 }
 
-func (m *mockProvider) Name() string         { return m.name }
-func (m *mockProvider) IsAvailable() bool    { return true }
-func (m *mockProvider) IsConfigured() bool   { return true }
+func (m *mockProvider) Name() string          { return m.name }
+func (m *mockProvider) IsAvailable() bool     { return true }
+func (m *mockProvider) IsConfigured() bool    { return true }
 func (m *mockProvider) ValidateConfig() error { return nil }
 
 func TestRegistry(t *testing.T) {

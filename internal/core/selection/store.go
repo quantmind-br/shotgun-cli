@@ -88,7 +88,7 @@ func (s *Store) Save(projectPath string, deselected []string) error {
 	}
 
 	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create selection store dir: %w", err)
 	}
 

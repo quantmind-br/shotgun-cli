@@ -162,7 +162,7 @@ func validateBooleanValue(value string) error {
 
 // validateOutputFormat validates output format configuration values.
 func validateOutputFormat(value string) error {
-	if value != "markdown" && value != "text" {
+	if value != FormatMarkdown && value != FormatText {
 		return fmt.Errorf("expected 'markdown' or 'text', got '%s'", value)
 	}
 	return nil
@@ -211,7 +211,7 @@ func validateTimeout(value string) error {
 
 // validateLLMProvider validates LLM provider configuration values.
 func validateLLMProvider(value string) error {
-	validProviders := []string{"openai", "anthropic", "gemini"}
+	validProviders := []string{ProviderOpenAI, ProviderAnthropic, ProviderGemini}
 	for _, provider := range validProviders {
 		if value == provider {
 			return nil

@@ -248,7 +248,7 @@ func (m *FileSelectionModel) renderBody() string {
 	body.WriteString("\n")
 
 	if m.filterMode {
-		body.WriteString(fmt.Sprintf("Filter: %s_", m.filterBuffer))
+		fmt.Fprintf(&body, "Filter: %s_", m.filterBuffer)
 		body.WriteString("\n")
 	} else if m.tree != nil && m.tree.GetFilter() != "" {
 		filterIndicator := styles.HelpStyle.Render(fmt.Sprintf("Filter: %s [x to clear]", m.tree.GetFilter()))

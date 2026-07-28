@@ -6,7 +6,8 @@ ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 ARG VERSION=dev
 ARG COMMIT=unknown
-ARG DATE
+ARG DATE=unknown
+ARG BUILT_BY=docker
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -30,7 +31,11 @@ ARG GOARCH=amd64
 
 # Build the application
 RUN CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build \
-    -ldflags="-s -w -X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$DATE" \
+    -ldflags="-s -w \
+        -X github.com/quantmind-br/shotgun-cli/cmd.version=$VERSION \
+        -X github.com/quantmind-br/shotgun-cli/cmd.commit=$COMMIT \
+        -X github.com/quantmind-br/shotgun-cli/cmd.date=$DATE \
+        -X github.com/quantmind-br/shotgun-cli/cmd.builtBy=$BUILT_BY" \
     -a -installsuffix cgo \
     -o shotgun-cli \
     .

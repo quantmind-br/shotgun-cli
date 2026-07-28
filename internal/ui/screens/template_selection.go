@@ -284,14 +284,13 @@ func (m *TemplateSelectionModel) formatTemplateLine(i int) string {
 }
 
 func (m *TemplateSelectionModel) renderFooter() string {
-	lines := [][]string{
-		{
-			"↑/↓: Navigate",
-			"Space: Select",
-			"Enter: Preview",
-			"v: View full",
-		},
-	}
+	lines := make([][]string, 0, 2)
+	lines = append(lines, []string{
+		"↑/↓: Navigate",
+		"Space: Select",
+		"Enter: Preview",
+		"v: View full",
+	})
 
 	nextAction := "F8: Next"
 	if m.selectedTemplate != nil {

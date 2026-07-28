@@ -74,7 +74,8 @@ func TestIntelligentSplit_ChunkSelfConsistent(t *testing.T) {
 }
 
 func randomDiff(rng *rand.Rand) []string {
-	var lines []string
+	// 4 arquivos × (3 linhas de cabeçalho + 3 hunks × 7 linhas) no pior caso.
+	lines := make([]string, 0, 96)
 	for f := range 1 + rng.IntN(4) {
 		lines = append(lines,
 			fmt.Sprintf("diff --git a/f%d.txt b/f%d.txt", f, f),
@@ -211,7 +212,7 @@ func TestParseSections_EdgeCases(t *testing.T) {
 // TestIntelligentSplit_PreambleRespectsBudget garante que um preâmbulo longo
 // (ou um arquivo que não é diff) também é fatiado.
 func TestIntelligentSplit_PreambleRespectsBudget(t *testing.T) {
-	var lines []string
+	lines := make([]string, 0, 20)
 	for i := range 20 {
 		lines = append(lines, "texto "+strconv.Itoa(i))
 	}

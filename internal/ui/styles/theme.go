@@ -46,16 +46,16 @@ var (
 	Nord15 = TierColor("#B48EAD") // Purple (special)
 
 	// Semantic color aliases
-	PrimaryColor   = Nord8                     // Light blue - main interactive elements
-	SecondaryColor = Nord10                    // Dark blue - secondary elements
-	AccentColor    = Nord14                    // Green - success/selected
-	ErrorColor     = Nord11                    // Red - errors
-	WarningColor   = Nord13                    // Yellow - warnings
-	SuccessColor   = Nord14                    // Green - success
+	PrimaryColor   = Nord8                // Light blue - main interactive elements
+	SecondaryColor = Nord10               // Dark blue - secondary elements
+	AccentColor    = Nord14               // Green - success/selected
+	ErrorColor     = Nord11               // Red - errors
+	WarningColor   = Nord13               // Yellow - warnings
+	SuccessColor   = Nord14               // Green - success
 	MutedColor     = TierColor("#7B88A1") // High-contrast gray (~3.5:1 ratio)
-	BorderColor    = Nord2                     // Dark gray - borders
-	TextColor      = Nord4                     // Light gray - main text
-	BrightText     = Nord6                     // White - bright text
+	BorderColor    = Nord2                // Dark gray - borders
+	TextColor      = Nord4                // Light gray - main text
+	BrightText     = Nord6                // White - bright text
 	DimText        = TierColor("#7B88A1") // High-contrast dim text
 
 	// Base styles with improved Nord colors

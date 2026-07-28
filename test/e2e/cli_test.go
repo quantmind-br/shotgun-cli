@@ -122,3 +122,34 @@ func TestCLIContextGenerateIncludeIgnored(t *testing.T) {
 		t.Error("com --include-ignored o arquivo ignorado precisa aparecer na árvore")
 	}
 }
+
+// TestCLIVersionReportsInjectedBuildInfo trava o contrato de build-info: o
+// binário de build/ é produzido por `make build`, que injeta os quatro campos
+// via -ldflags. Se algum -X deixar de resolver (prefixo de pacote errado, alvo
+// sem LDFLAGS), o campo cai no sentinela e este teste falha.
+//
+// Precisa do binário compilado: `go run .` nunca recebe ldflags.
+func TestCLIVersionReportsInjectedBuildInfo(t *testing.T) {
+	binaryPath := filepath.Join("..", "..", "build", "shotgun-cli")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, binaryPath, "--version").CombinedOutput()
+	if err != nil {
+		t.Fatalf("--version falhou: %v\n%s", err, out)
+	}
+
+	got := string(out)
+	for _, field := range []string{"commit:", "built:", "built by:"} {
+		if !strings.Contains(got, field) {
+			t.Errorf("--version não reportou %q:\n%s", field, got)
+		}
+	}
+	for _, sentinel := range []string{"version dev", "unknown"} {
+		if strings.Contains(got, sentinel) {
+			t.Errorf("--version reportou o sentinela %q — os -ldflags não chegaram ao binário:\n%s",
+				sentinel, got)
+		}
+	}
+}

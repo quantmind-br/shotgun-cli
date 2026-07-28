@@ -127,6 +127,7 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 
 	// Output
 	if outputFile != "" {
+		// #nosec G703 -- o caminho vem de --output, informado pelo operador que já roda o binário.
 		if err := os.WriteFile(outputFile, []byte(response), 0600); err != nil {
 			return fmt.Errorf("failed to save response to '%s': %w", outputFile, err)
 		}

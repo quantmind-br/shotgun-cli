@@ -25,10 +25,10 @@ builds:
     binary: shotgun-cli
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
-      - -X main.builtBy=goreleaser
+      - -X github.com/quantmind-br/shotgun-cli/cmd.version={{.Version}}
+      - -X github.com/quantmind-br/shotgun-cli/cmd.commit={{.Commit}}
+      - -X github.com/quantmind-br/shotgun-cli/cmd.date={{.Date}}
+      - -X github.com/quantmind-br/shotgun-cli/cmd.builtBy=goreleaser
 
 archives:
   - format: tar.gz
@@ -60,7 +60,7 @@ changelog:
       - '^test:'
       - '^chore:'
       - Merge pull request
-      Merge branch
+      - Merge branch
 
 source:
   enabled: true
@@ -87,7 +87,7 @@ brews:
       owner: quantmind-br
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    folder: Formula
+    directory: Formula
     homepage: https://github.com/quantmind-br/shotgun-cli
     description: "Cross-platform CLI tool that generates LLM-optimized codebase contexts"
     license: MIT
@@ -103,6 +103,10 @@ dockers:
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/amd64
+      - --build-arg=VERSION={{.Version}}
+      - --build-arg=COMMIT={{.Commit}}
+      - --build-arg=DATE={{.Date}}
+      - --build-arg=BUILT_BY=goreleaser
       - --label=org.opencontainers.image.title={{.ProjectName}}
       - --label=org.opencontainers.image.description={{.ProjectName}}
       - --label=org.opencontainers.image.url={{.GitURL}}
