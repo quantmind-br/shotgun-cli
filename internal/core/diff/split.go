@@ -314,13 +314,14 @@ func parseRangeCount(s string) (int, bool) {
 	return n, true
 }
 
-// IsDiffHeader returns true if the line is a unified diff file header
-// ("--- old" or "+++ new"). The trailing space is required: without it a
-// content line such as "+++i;" (the addition of "++i;") would be mistaken for
-// a header. Structural decisions use the hunk-aware parser, not this helper.
-func IsDiffHeader(line string) bool {
-	return strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ")
-}
+// IsDiffHeader was removed. Whether a line is a file header cannot be decided
+// from the line alone: "--- end of section" is both a valid header (a file whose
+// name contains spaces) and the removal of the line "-- end of section". Only
+// the surrounding hunk settles it, which is what parseSections does.
+//
+// The helper had no callers outside its own tests and its doc already warned
+// against using it for structural decisions, so it was a trap rather than a
+// tool. Use parseSections if you need to know where a file begins.
 
 // IsGitDiffHeader returns true if the line is a git diff header.
 func IsGitDiffHeader(line string) bool {

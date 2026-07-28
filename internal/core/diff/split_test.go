@@ -8,36 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIsDiffHeader(t *testing.T) {
-	tests := []struct {
-		line     string
-		expected bool
-	}{
-		{"--- a/file.go", true},
-		{"+++ b/file.go", true},
-		{"--- /dev/null", true},
-		{"+++ /dev/null", true},
-		// Sem caminho não é cabeçalho: "---" é a remoção da linha "--",
-		// e "+++i;" a adição de "++i;".
-		{"---", false},
-		{"+++", false},
-		{"+++i;", false},
-		{"----", false},
-		{"diff --git a/file.go b/file.go", false},
-		{"@@ -1,5 +1,5 @@", false},
-		{"+added line", false},
-		{"-removed line", false},
-		{" context line", false},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.line, func(t *testing.T) {
-			assert.Equal(t, tt.expected, IsDiffHeader(tt.line))
-		})
-	}
-}
-
 func TestIsGitDiffHeader(t *testing.T) {
 	tests := []struct {
 		line     string

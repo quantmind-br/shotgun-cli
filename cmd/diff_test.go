@@ -12,32 +12,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/core/diff"
 )
 
-func TestIsDiffHeader(t *testing.T) {
-	tests := []struct {
-		name     string
-		line     string
-		expected bool
-	}{
-		{"triple minus", "--- a/file.go", true},
-		{"triple plus", "+++ b/file.go", true},
-		{"minus only", "--- ", true},
-		{"plus only", "+++ ", true},
-		{"single minus", "- removed line", false},
-		{"single plus", "+ added line", false},
-		{"double minus", "-- comment", false},
-		{"empty line", "", false},
-		{"regular text", "some text", false},
-		{"hunk header", "@@ -1,5 +1,6 @@", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := diff.IsDiffHeader(tt.line)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestIsGitDiffHeader(t *testing.T) {
 	tests := []struct {
 		name     string
