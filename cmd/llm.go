@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
@@ -82,8 +83,9 @@ func runLLMStatus(cmd *cobra.Command, args []string) error {
 	_ = w.Flush()
 
 	fmt.Println()
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(cfg)
 	if err != nil {
+		err = fmt.Errorf("failed to create provider: %w", err)
 		statusLabel := label("Status:")
 		statusValue := styles.ErrorStyle.Render("Not ready - " + err.Error())
 		fmt.Printf("%s %s\n", statusLabel, statusValue)
@@ -148,7 +150,7 @@ func runLLMDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check 4: Provider-specific
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(cfg)
 	if err == nil {
 		fmt.Print("Checking provider availability... ")
 		if provider.IsAvailable() {

@@ -12,13 +12,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/config"
 )
 
 var contextSendCmd = &cobra.Command{
 	Use:   "send [file]",
-	Short: "Send a context file to Gemini",
-	Long: `Send an existing context file (or stdin) directly to Google Gemini.
+	Short: "Send a context file to the configured LLM provider",
+	Long: `Send an existing context file (or stdin) directly to the configured LLM provider.
 
 This command sends the content of a file or stdin to the configured LLM provider
 and captures the response.
@@ -41,6 +42,11 @@ Examples:
 		return nil
 	},
 	RunE: runContextSend,
+}
+
+// newSendService is a variable so tests can substitute a registry-injected service.
+var newSendService = func() app.ContextService {
+	return app.NewContextService()
 }
 
 func runContextSend(cmd *cobra.Command, args []string) error {
@@ -87,49 +93,44 @@ func runContextSend(cmd *cobra.Command, args []string) error {
 		outputFile = fmt.Sprintf("llm-response-%s.md", timestamp)
 	}
 
-	// Build config
 	cfg := BuildLLMConfigWithOverrides(model, timeout)
 
-	// Create provider
-	llmProvider, err := CreateLLMProvider(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to create provider: %w", err)
+	// The service writes result.Response itself; --raw needs result.RawResponse,
+	// so that case opts out of the service write and saves below instead.
+	sendCfg := app.LLMSendConfig{
+		Provider:     cfg.Provider,
+		APIKey:       cfg.APIKey,
+		BaseURL:      cfg.BaseURL,
+		Model:        cfg.Model,
+		Timeout:      cfg.Timeout,
+		SaveResponse: outputFile != "" && !raw,
+		OutputPath:   outputFile,
 	}
 
-	if !llmProvider.IsAvailable() {
-		return fmt.Errorf("%s not available. Run 'shotgun-cli llm doctor' for help", llmProvider.Name())
-	}
-
-	if err := llmProvider.ValidateConfig(); err != nil {
-		return fmt.Errorf("%s configuration error: %w. Run 'shotgun-cli llm doctor' for help", llmProvider.Name(), err)
-	}
-
-	// Send
 	log.Info().
-		Str("provider", llmProvider.Name()).
+		Str("provider", string(cfg.Provider)).
 		Str("model", cfg.Model).
 		Int("content_length", len(content)).
 		Msg("Sending to LLM")
 
-	fmt.Printf("Sending to %s (%s)...\n", llmProvider.Name(), cfg.Model)
+	fmt.Printf("Sending to %s (%s)...\n", cfg.Provider, cfg.Model)
 
-	ctx := context.Background()
-	result, err := llmProvider.Send(ctx, content)
+	result, err := newSendService().SendToLLMWithProgress(context.Background(), content, sendCfg, nil)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return err
 	}
 
-	// Get response
 	response := result.Response
 	if raw {
 		response = result.RawResponse
 	}
 
-	// Output
 	if outputFile != "" {
-		// #nosec G703 -- o caminho vem de --output, informado pelo operador que já roda o binário.
-		if err := os.WriteFile(outputFile, []byte(response), 0600); err != nil {
-			return fmt.Errorf("failed to save response to '%s': %w", outputFile, err)
+		if raw {
+			// #nosec G703 -- o caminho vem de --output, informado pelo operador que já roda o binário.
+			if writeErr := os.WriteFile(outputFile, []byte(response), 0600); writeErr != nil {
+				return fmt.Errorf("failed to save response to '%s': %w", outputFile, writeErr)
+			}
 		}
 		fmt.Printf("Response saved to: %s\n", outputFile)
 	} else {
@@ -157,8 +158,8 @@ func formatDuration(d time.Duration) string {
 }
 
 func init() {
-	contextSendCmd.Flags().StringP("output", "o", "", "Output file for Gemini response")
-	contextSendCmd.Flags().StringP("model", "m", "", "Gemini model to use (default: from config)")
+	contextSendCmd.Flags().StringP("output", "o", "", "Output file for the LLM response")
+	contextSendCmd.Flags().StringP("model", "m", "", "Model to use (default: from config)")
 	contextSendCmd.Flags().Int("timeout", 0, "Timeout in seconds (default: from config)")
 	contextSendCmd.Flags().Bool("raw", false, "Output raw response without processing")
 

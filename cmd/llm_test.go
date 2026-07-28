@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/config"
 	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 )
@@ -57,55 +58,51 @@ func TestBuildLLMConfigWithOverrides_OnlyModel(t *testing.T) {
 	assert.Equal(t, 60, cfg.Timeout)
 }
 
-func TestCreateLLMProvider_OpenAI(t *testing.T) {
+func TestDefaultProviderRegistry_CreateOpenAI(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "openai")
 	viper.Set(config.KeyLLMAPIKey, "sk-test-key")
 
-	cfg := BuildLLMConfig()
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(BuildLLMConfig())
 
 	require.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.Equal(t, "OpenAI", provider.Name())
 }
 
-func TestCreateLLMProvider_Anthropic(t *testing.T) {
+func TestDefaultProviderRegistry_CreateAnthropic(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "anthropic")
 	viper.Set(config.KeyLLMAPIKey, "sk-ant-test-key")
 
-	cfg := BuildLLMConfig()
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(BuildLLMConfig())
 
 	require.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.Equal(t, "Anthropic", provider.Name())
 }
 
-func TestCreateLLMProvider_Gemini(t *testing.T) {
+func TestDefaultProviderRegistry_CreateGemini(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "gemini")
 	viper.Set(config.KeyLLMAPIKey, "test-gemini-key")
 
-	cfg := BuildLLMConfig()
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(BuildLLMConfig())
 
 	require.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.Equal(t, "Gemini", provider.Name())
 }
 
-func TestCreateLLMProvider_InvalidProvider(t *testing.T) {
+func TestDefaultProviderRegistry_CreateInvalidProvider(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "invalid-provider")
 
-	cfg := BuildLLMConfig()
-	provider, err := CreateLLMProvider(cfg)
+	provider, err := app.DefaultProviderRegistry.Create(BuildLLMConfig())
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, provider)
-	assert.Contains(t, err.Error(), "failed to create provider")
+	assert.Contains(t, err.Error(), "unsupported provider")
 }
 
 func TestRunLLMStatus_OpenAI_Configured(t *testing.T) {
@@ -531,84 +528,12 @@ func TestRunLLMList_ProviderDescriptions(t *testing.T) {
 	assert.Contains(t, output, "Gemini 2.5, Gemini 2.0")
 }
 
-func TestGetProviderRegistry(t *testing.T) {
-	registry := GetProviderRegistry()
+func TestDefaultProviderRegistry_SupportedProviders(t *testing.T) {
+	providers := app.DefaultProviderRegistry.SupportedProviders()
 
-	assert.NotNil(t, registry)
-
-	providers := registry.SupportedProviders()
 	assert.Contains(t, providers, llm.ProviderOpenAI)
 	assert.Contains(t, providers, llm.ProviderAnthropic)
 	assert.Contains(t, providers, llm.ProviderGemini)
-}
-
-func TestGetProviderRegistry_AllProvidersPresent(t *testing.T) {
-	registry := GetProviderRegistry()
-
-	providers := registry.SupportedProviders()
-
-	// Verify all expected providers are present
-	expectedProviders := []llm.ProviderType{
-		llm.ProviderOpenAI,
-		llm.ProviderAnthropic,
-		llm.ProviderGemini,
-	}
-
-	for _, expected := range expectedProviders {
-		found := false
-		for _, p := range providers {
-			if p == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected provider %s not found in registry", expected)
-		}
-	}
-}
-
-func TestGetProviderRegistry_CreatesProvider(t *testing.T) {
-	registry := GetProviderRegistry()
-
-	tests := []struct {
-		name     string
-		provider llm.ProviderType
-		model    string
-		apiKey   string
-	}{
-		{"OpenAI", llm.ProviderOpenAI, "gpt-4o", "sk-test"},
-		{"Anthropic", llm.ProviderAnthropic, "claude-sonnet-4-20250514", "sk-ant-test"},
-		{"Gemini", llm.ProviderGemini, "gemini-2.5-flash", "test-key"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &llm.Config{
-				Provider: tt.provider,
-				Model:    tt.model,
-				APIKey:   tt.apiKey,
-				Timeout:  60,
-			}
-
-			provider, err := registry.Create(*cfg)
-
-			if err != nil {
-				t.Logf("Provider creation returned error (may be expected): %v", err)
-			}
-			if provider != nil {
-				assert.NotNil(t, provider)
-			}
-		})
-	}
-}
-
-func TestGetProviderRegistry_Singleton(t *testing.T) {
-	registry1 := GetProviderRegistry()
-	registry2 := GetProviderRegistry()
-
-	// Should return the same registry instance
-	assert.Same(t, registry1, registry2)
 }
 
 func TestDisplayURL(t *testing.T) {

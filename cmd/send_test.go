@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +12,68 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/quantmind-br/shotgun-cli/internal/app"
+	"github.com/quantmind-br/shotgun-cli/internal/config"
+	"github.com/quantmind-br/shotgun-cli/internal/core/llm"
 )
+
+// mockLLMProvider is the reason these tests never reach the network.
+type mockLLMProvider struct {
+	available bool
+	result    *llm.Result
+	sendErr   error
+}
+
+func (m *mockLLMProvider) Name() string          { return "mock" }
+func (m *mockLLMProvider) IsAvailable() bool     { return m.available }
+func (m *mockLLMProvider) IsConfigured() bool    { return true }
+func (m *mockLLMProvider) ValidateConfig() error { return nil }
+
+func (m *mockLLMProvider) Send(ctx context.Context, content string) (*llm.Result, error) {
+	return m.result, m.sendErr
+}
+
+func (m *mockLLMProvider) SendWithProgress(
+	ctx context.Context, content string, progress func(stage string),
+) (*llm.Result, error) {
+	return m.result, m.sendErr
+}
+
+// newMockRegistry occupies the openai slot, so Registry.Create never builds a real client.
+func newMockRegistry(p llm.Provider) *llm.Registry {
+	r := llm.NewRegistry()
+	r.Register(llm.ProviderOpenAI, func(cfg llm.Config) (llm.Provider, error) { return p, nil })
+	return r
+}
+
+// installSendService swaps the package-level seam and restores it on cleanup.
+func installSendService(t *testing.T, registry *llm.Registry) {
+	t.Helper()
+	prev := newSendService
+	t.Cleanup(func() { newSendService = prev })
+	newSendService = func() app.ContextService {
+		return app.NewContextService(app.WithRegistry(registry))
+	}
+}
+
+// setViper restores the prior value on cleanup, so sibling tests keep their state.
+func setViper(t *testing.T, key string, value interface{}) {
+	t.Helper()
+	prev := viper.Get(key)
+	t.Cleanup(func() { viper.Set(key, prev) })
+	viper.Set(key, value)
+}
+
+func newSendCmd(t *testing.T) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{}
+	cmd.Flags().String("output", "", "")
+	cmd.Flags().String("model", "", "")
+	cmd.Flags().Int("timeout", 0, "")
+	cmd.Flags().Bool("raw", false, "")
+	return cmd
+}
 
 func isExpectedProviderError(err error) bool {
 	if err == nil {
@@ -385,4 +448,28 @@ func TestFormatDuration(t *testing.T) {
 			assert.Equal(t, tt.want, got, "formatDuration(%s) = %s, want %s", tt.duration, got, tt.want)
 		})
 	}
+}
+
+func TestRunContextSend_UsesInjectedService(t *testing.T) {
+	dir := t.TempDir()
+	promptFile := filepath.Join(dir, "prompt.md")
+	require.NoError(t, os.WriteFile(promptFile, []byte("hello context"), 0o600))
+	outputFile := filepath.Join(dir, "out.md")
+
+	mock := &mockLLMProvider{
+		available: true,
+		result:    &llm.Result{Response: "processed", RawResponse: `{"raw":"payload"}`},
+	}
+	installSendService(t, newMockRegistry(mock))
+	setViper(t, config.KeyLLMProvider, "openai")
+	setViper(t, config.KeyLLMAPIKey, "test-key")
+
+	cmd := newSendCmd(t)
+	require.NoError(t, cmd.Flags().Set("output", outputFile))
+
+	require.NoError(t, runContextSend(cmd, []string{promptFile}))
+
+	written, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	assert.Equal(t, "processed", string(written))
 }
