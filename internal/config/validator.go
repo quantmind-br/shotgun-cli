@@ -10,35 +10,17 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
-// ValidKeys returns all valid configuration keys.
+// ValidKeys returns all valid configuration keys, derived from the metadata
+// registry so the two cannot drift apart. Registering a key in
+// buildAllMetadata() is the single edit needed to make it usable.
 func ValidKeys() []string {
-	return []string{
-		// Scanner keys
-		KeyScannerMaxFiles,
-		KeyScannerMaxFileSize,
-		KeyScannerRespectGitignore,
-		KeyScannerSkipBinary,
-		KeyScannerIncludeHidden,
-		KeyScannerIncludeIgnored,
-		KeyScannerRespectShotgunignore,
-		// Context keys
-		KeyContextMaxSize,
-		KeyContextIncludeTree,
-		KeyContextIncludeSummary,
-		// Template keys
-		KeyTemplateCustomPath,
-		// Output keys
-		KeyOutputFormat,
-		KeyOutputClipboard,
-		// LLM Provider keys
-		KeyLLMProvider,
-		KeyLLMAPIKey,
-		KeyLLMBaseURL,
-		KeyLLMModel,
-		KeyLLMTimeout,
-		// LLM save response key
-		KeyLLMSaveResponse,
+	metadata := AllConfigMetadata()
+	keys := make([]string, 0, len(metadata))
+	for _, m := range metadata {
+		keys = append(keys, m.Key)
 	}
+
+	return keys
 }
 
 // deprecatedKeys maps retired configuration keys to the message shown when one is

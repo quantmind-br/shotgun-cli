@@ -47,6 +47,40 @@ func TestValidKeys(t *testing.T) {
 	}
 }
 
+// TestValidKeys_MatchesRegistry pins CI-009's contract: ValidKeys() is derived
+// from the metadata registry, so registering a key is the only edit needed to
+// make it settable. Before this, the two lists were maintained by hand and a key
+// had to appear in both to work at all.
+func TestValidKeys_MatchesRegistry(t *testing.T) {
+	t.Parallel()
+
+	metadata := AllConfigMetadata()
+	want := make([]string, 0, len(metadata))
+	for _, m := range metadata {
+		want = append(want, m.Key)
+	}
+
+	got := ValidKeys()
+	if len(got) != len(want) {
+		t.Fatalf("ValidKeys() has %d keys, registry has %d", len(got), len(want))
+	}
+
+	inRegistry := make(map[string]bool, len(want))
+	for _, k := range want {
+		inRegistry[k] = true
+	}
+	for _, k := range got {
+		if !inRegistry[k] {
+			t.Errorf("ValidKeys() returned %q, which is not in the metadata registry", k)
+		}
+	}
+	for _, k := range want {
+		if !IsValidKey(k) {
+			t.Errorf("registry key %q is not reported valid by IsValidKey", k)
+		}
+	}
+}
+
 func TestDeprecationMessage(t *testing.T) {
 	t.Parallel()
 
