@@ -218,7 +218,8 @@ func (m *FileSelectionModel) renderBody() string {
 		selectedCount := len(m.selections)
 		totalSize := m.calculateSelectedSize()
 		estimatedTokens := tokens.EstimateFromBytes(totalSize)
-		stats = styles.RenderTokenStats(selectedCount, formatSize(totalSize), tokens.FormatTokens(estimatedTokens))
+		stats = styles.RenderTokenStats(
+			selectedCount, utils.FormatBytes(totalSize), tokens.FormatTokens(estimatedTokens))
 
 		bar := components.NewUsageBar(totalSize, m.maxSizeBytes, m.maxSizeStr, estimatedTokens, m.width-4)
 		stats += "\n" + bar.View()
@@ -372,18 +373,4 @@ func (m *FileSelectionModel) walkTree(node *scanner.FileNode, fn func(*scanner.F
 	for _, child := range node.Children {
 		m.walkTree(child, fn)
 	}
-}
-
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

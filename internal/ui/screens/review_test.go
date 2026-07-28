@@ -545,51 +545,6 @@ func TestReviewModel_walkTree(t *testing.T) {
 	}
 }
 
-func TestFormatSizeHelper_Bytes(t *testing.T) {
-	t.Parallel()
-
-	result := formatSizeHelper(42)
-	if result != "42 B" {
-		t.Fatalf("expected '42 B', got '%s'", result)
-	}
-}
-
-func TestFormatSizeHelper_KB(t *testing.T) {
-	t.Parallel()
-
-	result := formatSizeHelper(1024)
-	if result != "1.0 KB" {
-		t.Fatalf("expected '1.0 KB', got '%s'", result)
-	}
-}
-
-func TestFormatSizeHelper_MB(t *testing.T) {
-	t.Parallel()
-
-	result := formatSizeHelper(1024 * 1024)
-	if result != "1.0 MB" {
-		t.Fatalf("expected '1.0 MB', got '%s'", result)
-	}
-}
-
-func TestFormatSizeHelper_GB(t *testing.T) {
-	t.Parallel()
-
-	result := formatSizeHelper(1024 * 1024 * 1024)
-	if result != "1.0 GB" {
-		t.Fatalf("expected '1.0 GB', got '%s'", result)
-	}
-}
-
-func TestFormatSizeHelper_Large(t *testing.T) {
-	t.Parallel()
-
-	result := formatSizeHelper(1536) // 1.5 KB
-	if !strings.HasPrefix(result, "1.5") {
-		t.Fatalf("expected '1.5 KB', got '%s'", result)
-	}
-}
-
 func TestReview_SetGeminiStates(t *testing.T) {
 	t.Parallel()
 

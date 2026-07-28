@@ -450,27 +450,6 @@ func TestFileSelectionWalkTree(t *testing.T) {
 	assert.Len(t, visitedPaths, 2)
 }
 
-func TestFormatSize(t *testing.T) {
-	tests := []struct {
-		bytes    int64
-		expected string
-	}{
-		{0, "0 B"},
-		{100, "100 B"},
-		{1024, "1.0 KB"},
-		{1536, "1.5 KB"},
-		{1024 * 1024, "1.0 MB"},
-		{1024 * 1024 * 1024, "1.0 GB"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			result := formatSize(tt.bytes)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestFileSelection_LoadingState_ShowsSpinner(t *testing.T) {
 	t.Parallel()
 

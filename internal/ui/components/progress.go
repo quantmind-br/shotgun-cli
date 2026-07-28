@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/quantmind-br/shotgun-cli/internal/core/tokens"
 	"github.com/quantmind-br/shotgun-cli/internal/ui/styles"
+	"github.com/quantmind-br/shotgun-cli/internal/utils"
 )
 
 // UsageBar represents a visual progress bar for context usage
@@ -42,7 +43,7 @@ func (b UsageBar) View() string {
 	}
 
 	// Current size
-	currentSize := formatSizeHelper(b.CurrentBytes)
+	currentSize := utils.FormatBytes(b.CurrentBytes)
 	currentTokens := tokens.FormatTokens(b.TotalTokens)
 
 	if b.MaxBytes > 0 {
@@ -92,20 +93,6 @@ func (b UsageBar) View() string {
 	}
 
 	return section.String()
-}
-
-func formatSizeHelper(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 type ProgressModel struct {

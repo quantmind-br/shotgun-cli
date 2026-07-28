@@ -216,7 +216,8 @@ func (m *ReviewModel) buildScrollableContent() string {
 	fileCount := len(m.selectedFiles)
 	filesIcon := lipgloss.NewStyle().Foreground(styles.PrimaryColor).Render("📁")
 	filesLabel := styles.TitleStyle.Render("Selected Files:")
-	filesStats := styles.RenderTokenStats(fileCount, formatSizeHelper(m.totalBytes), tokens.FormatTokens(m.totalTokens))
+	filesStats := styles.RenderTokenStats(
+		fileCount, utils.FormatBytes(m.totalBytes), tokens.FormatTokens(m.totalTokens))
 
 	content.WriteString(filesIcon + " " + filesLabel + " " + filesStats)
 	content.WriteString("\n\n")
@@ -535,18 +536,4 @@ func (m *ReviewModel) walkTree(node *scanner.FileNode, fn func(*scanner.FileNode
 	for _, child := range node.Children {
 		m.walkTree(child, fn)
 	}
-}
-
-func formatSizeHelper(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

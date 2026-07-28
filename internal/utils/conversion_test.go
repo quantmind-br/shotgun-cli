@@ -109,6 +109,10 @@ func TestFormatBytes(t *testing.T) {
 		{"zero", 0, "0 B"},
 		{"small value", 100, "100 B"},
 		{"large megabytes", 100 * 1024 * 1024, "100.0 MB"},
+
+		// Absorbed from the three byte-identical copies deleted from
+		// internal/ui/screens and internal/ui/components.
+		{"forty two bytes", 42, "42 B"},
 	}
 
 	for _, tt := range tests {
