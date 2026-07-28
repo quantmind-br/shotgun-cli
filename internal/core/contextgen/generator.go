@@ -43,6 +43,21 @@ type GenerateConfig struct {
 	IncludeIgnored bool              `json:"includeIgnored"` // Render ignored nodes in the tree
 }
 
+// DefaultGenerateConfig returns the documented generation ceilings.
+//
+// Callers that want these limits must ask for them: a zero limit on
+// GenerateConfig means "no limit", matching scanner.ScanConfig. Reaching these
+// values by leaving a field unset would hide a caller's missing configuration
+// behind a number nobody chose.
+func DefaultGenerateConfig() GenerateConfig {
+	return GenerateConfig{
+		MaxFileSize:  DefaultMaxSize,
+		MaxTotalSize: DefaultMaxSize,
+		MaxFiles:     DefaultMaxFiles,
+		TemplateVars: make(map[string]string),
+	}
+}
+
 type ContextData struct {
 	Task          string         `json:"task"`
 	Rules         string         `json:"rules"`

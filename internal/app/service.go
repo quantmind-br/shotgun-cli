@@ -142,15 +142,18 @@ func (s *DefaultContextService) GenerateWithProgress(
 
 	report("generating", "Generating context...", 0, 0)
 
-	genConfig := contextgen.GenerateConfig{
+	// ScannerLimits first, then the fields this path owns: SkipBinary is an
+	// explicit GenerateConfig field here and must win over the scanner's copy.
+	genInput := ScannerLimits(scanConfig, GeneratorConfigInput{
 		MaxTotalSize:   cfg.MaxSize,
 		TemplateVars:   cfg.TemplateVars,
 		Template:       cfg.Template,
-		SkipBinary:     cfg.SkipBinary,
 		IncludeTree:    cfg.IncludeTree,
-		IncludeIgnored: scanConfig.IncludeIgnored,
 		IncludeSummary: cfg.IncludeSummary,
-	}
+	})
+	genInput.SkipBinary = cfg.SkipBinary
+
+	genConfig := BuildGeneratorConfig(genInput)
 
 	var content string
 	if progress != nil {

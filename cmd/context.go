@@ -111,7 +111,7 @@ Examples:
 		}
 
 		// Validate max-size format
-		maxSizeStr, _ := cmd.Flags().GetString("max-size")
+		maxSizeStr := resolveMaxSize(cmd)
 		if _, err := utils.ParseSize(maxSizeStr); err != nil {
 			return fmt.Errorf("invalid max-size format '%s': %w (use formats like 1MB, 5GB, 500KB)", maxSizeStr, err)
 		}
@@ -138,12 +138,30 @@ Examples:
 	},
 }
 
+// resolveMaxSize returns the effective context size limit.
+//
+// The --max-size flag carries a literal default, so reading it directly meant
+// context.max-size never reached generation: a user who set 50MB in their config
+// still got the flag's 10MB. An explicitly passed flag still wins.
+func resolveMaxSize(cmd *cobra.Command) string {
+	maxSizeStr, _ := cmd.Flags().GetString("max-size")
+	if cmd.Flags().Changed("max-size") {
+		return maxSizeStr
+	}
+
+	if configured := viper.GetString(cfgkeys.KeyContextMaxSize); configured != "" {
+		return configured
+	}
+
+	return maxSizeStr
+}
+
 func buildGenerateConfig(cmd *cobra.Command) (GenerateConfig, error) {
 	rootPath, _ := cmd.Flags().GetString("root")
 	include, _ := cmd.Flags().GetStringSlice("include")
 	exclude, _ := cmd.Flags().GetStringSlice("exclude")
 	output, _ := cmd.Flags().GetString("output")
-	maxSizeStr, _ := cmd.Flags().GetString("max-size")
+	maxSizeStr := resolveMaxSize(cmd)
 	enforceLimit, _ := cmd.Flags().GetBool("enforce-limit")
 
 	// Template flags

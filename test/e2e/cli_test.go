@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -152,6 +153,72 @@ func TestCLIVersionReportsInjectedBuildInfo(t *testing.T) {
 				sentinel, got)
 		}
 	}
+}
+
+// TestCLIContextGenerateHonoursConfiguredLimits trava o contrato de CI-012: os
+// limites configurados chegam ao gerador.
+//
+// Antes, nenhum dos dois front ends encaminhava MaxFiles, então o gerador
+// substituía o zero pelo próprio teto de 1000 e uma seleção de 1200 arquivos
+// abortava com "maximum file count exceeded: 1000" mesmo com
+// scanner.max-files: 10000. E `context.max-size` do arquivo de config nunca era
+// lido: só a flag --max-size, cujo default literal é 10MB.
+func TestCLIContextGenerateHonoursConfiguredLimits(t *testing.T) {
+	root := repoRoot()
+
+	fixture := t.TempDir()
+	const fileCount = 1200
+	for i := range fileCount {
+		name := filepath.Join(fixture, fmt.Sprintf("f%04d.go", i))
+		if err := os.WriteFile(name, []byte("package main\n"), 0o600); err != nil {
+			t.Fatalf("não foi possível criar a fixture: %v", err)
+		}
+	}
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	cfgYAML := "scanner:\n  max-files: 10000\ncontext:\n  max-size: 50MB\n"
+	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0o600); err != nil {
+		t.Fatalf("não foi possível escrever o config: %v", err)
+	}
+
+	output := filepath.Join(t.TempDir(), "context.md")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, //nolint:gosec // test command with controlled args
+		"go", "run", ".", "context", "generate",
+		"--root", fixture, "--output", output, "--config", cfgPath,
+	)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), "SHOTGUN_VERBOSE=false")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("geração falhou com scanner.max-files=10000 e %d arquivos: %v\n%s", fileCount, err, out)
+	}
+
+	content, err := os.ReadFile(output) //nolint:gosec // path built by the test
+	if err != nil {
+		t.Fatalf("não foi possível ler a saída: %v", err)
+	}
+
+	// O rodapé do template renderiza MaxTotalSize; se context.max-size não
+	// chegasse ao gerador, ele diria 10.0MB.
+	if !strings.Contains(string(content), "50.0MB size limit") {
+		t.Errorf("o limite configurado (50MB) não chegou ao gerador; rodapé não bate:\n%s",
+			lastLines(string(content), 3))
+	}
+}
+
+// lastLines devolve as últimas n linhas de s, para mensagens de erro legíveis.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // TestCLILLMDoctorExitCode trava o contrato de exit code do `llm doctor`: com

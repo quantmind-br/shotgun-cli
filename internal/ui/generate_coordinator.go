@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/quantmind-br/shotgun-cli/internal/app"
 	"github.com/quantmind-br/shotgun-cli/internal/core/contextgen"
 	"github.com/quantmind-br/shotgun-cli/internal/core/scanner"
 	"github.com/quantmind-br/shotgun-cli/internal/core/template"
@@ -14,6 +15,9 @@ import (
 
 const generatePollInterval = 50 * time.Millisecond
 
+// GenerateConfig is a complete generation request. Every field here is read by
+// buildGeneratorConfig; the limits used to sit unread and unwritten, which is how
+// the TUI silently ran under the generator's own ceilings instead of the user's.
 type GenerateConfig struct {
 	FileTree       *scanner.FileNode
 	Selections     map[string]bool
@@ -24,8 +28,10 @@ type GenerateConfig struct {
 	MaxFileSize    int64
 	MaxTotalSize   int64
 	MaxFiles       int
+	SkipBinary     bool
 	IncludeTree    bool
 	IncludeSummary bool
+	IncludeIgnored bool
 }
 
 // GenerateCoordinator manages the context generation state machine. It mirrors
@@ -264,7 +270,8 @@ func (c *GenerateCoordinator) schedulePollLocked() tea.Cmd {
 
 // buildGeneratorConfig derives the core generator config from a run's own
 // request. It takes cfg as a parameter so the run goroutine never dereferences
-// c.config.
+// c.config, and it delegates to app.BuildGeneratorConfig so the TUI and the
+// headless path cannot drift apart again.
 //
 // A nil Template is tolerated: the wizard rejects one before it ever gets here,
 // but a panic inside the worker goroutine cannot be recovered by any tea.Cmd and
@@ -275,17 +282,22 @@ func buildGeneratorConfig(cfg *GenerateConfig) contextgen.GenerateConfig {
 		templateContent = cfg.Template.Content
 	}
 
-	return contextgen.GenerateConfig{
+	return app.BuildGeneratorConfig(app.GeneratorConfigInput{
+		Template: templateContent,
 		TemplateVars: map[string]string{
 			"TASK":           cfg.TaskDesc,
 			"RULES":          cfg.Rules,
 			"FILE_STRUCTURE": "",
 			"CURRENT_DATE":   time.Now().Format("2006-01-02"),
 		},
-		Template:       templateContent,
+		MaxTotalSize:   cfg.MaxTotalSize,
+		MaxFileSize:    cfg.MaxFileSize,
+		MaxFiles:       cfg.MaxFiles,
+		SkipBinary:     cfg.SkipBinary,
 		IncludeTree:    cfg.IncludeTree,
 		IncludeSummary: cfg.IncludeSummary,
-	}
+		IncludeIgnored: cfg.IncludeIgnored,
+	})
 }
 
 // Reset clears coordinator state and increments generation. While a run is

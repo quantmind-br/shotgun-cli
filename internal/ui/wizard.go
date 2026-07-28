@@ -968,11 +968,34 @@ func (m *WizardModel) handleStartGeneration(msg startGenerationMsg) tea.Cmd {
 		TaskDesc:       msg.taskDesc,
 		Rules:          msg.rules,
 		RootPath:       msg.rootPath,
+		MaxTotalSize:   m.contextMaxSize(),
 		IncludeTree:    m.wizardConfig.Context.IncludeTree,
 		IncludeSummary: m.wizardConfig.Context.IncludeSummary,
 	}
 
+	// The scanner's limits and the ignored-file toggle apply to generation too.
+	// Leaving them unset made the TUI run under the generator's own ceilings
+	// rather than the user's, and rendered a tree that omitted ignored files the
+	// user had explicitly selected.
+	if m.scanConfig != nil {
+		cfg.MaxFileSize = m.scanConfig.MaxFileSize
+		cfg.MaxFiles = int(m.scanConfig.MaxFiles)
+		cfg.SkipBinary = m.scanConfig.SkipBinary
+		cfg.IncludeIgnored = m.scanConfig.IncludeIgnored
+	}
+
 	return m.generateCoordinator.Start(cfg)
+}
+
+// contextMaxSize resolves context.max-size to bytes. An empty setting means no
+// limit, which is what validateContentSize has always assumed.
+func (m *WizardModel) contextMaxSize() int64 {
+	maxSizeStr := m.wizardConfig.Context.MaxSize
+	if maxSizeStr == "" {
+		return 0
+	}
+
+	return utils.ParseSizeWithDefault(maxSizeStr, 0)
 }
 
 func (m *WizardModel) handleRescanRequest() tea.Cmd {
