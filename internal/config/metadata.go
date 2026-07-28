@@ -77,6 +77,8 @@ const (
 	CategoryOutput ConfigCategory = "Output"
 	// CategoryLLM groups LLM provider configuration.
 	CategoryLLM ConfigCategory = "LLM Provider"
+	// CategoryGlobal groups settings that apply across every command.
+	CategoryGlobal ConfigCategory = "Global"
 )
 
 // ConfigMetadata describes a single configuration key.
@@ -142,6 +144,7 @@ func AllCategories() []ConfigCategory {
 		CategoryTemplate,
 		CategoryOutput,
 		CategoryLLM,
+		CategoryGlobal,
 	}
 }
 
@@ -294,6 +297,24 @@ func buildAllMetadata() []ConfigMetadata {
 			Category:     CategoryLLM,
 			Type:         TypeBool,
 			Description:  "Save LLM response to file",
+			DefaultValue: false,
+		},
+
+		// Global (2 keys). Both are also bound to persistent flags in
+		// cmd/root.go; registering them here is what makes them settable and
+		// completable like every other key.
+		{
+			Key:          KeyVerbose,
+			Category:     CategoryGlobal,
+			Type:         TypeBool,
+			Description:  "Enable verbose output",
+			DefaultValue: false,
+		},
+		{
+			Key:          KeyQuiet,
+			Category:     CategoryGlobal,
+			Type:         TypeBool,
+			Description:  "Suppress non-essential output",
 			DefaultValue: false,
 		},
 	}

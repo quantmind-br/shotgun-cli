@@ -20,8 +20,10 @@ func TestNewConfigWizard(t *testing.T) {
 	assert.False(t, wizard.ConfirmingQuit())
 	assert.Empty(t, wizard.SavedMessage())
 	assert.Empty(t, wizard.ErrorMessage())
-	assert.Len(t, wizard.categories, 5)
-	assert.Len(t, wizard.categoryScreens, 5)
+	// Derived from config.AllCategories(), so registering a category must not
+	// require editing a literal here.
+	assert.Len(t, wizard.categories, len(config.AllCategories()))
+	assert.Len(t, wizard.categoryScreens, len(config.AllCategories()))
 }
 
 func TestConfigWizard_Init(t *testing.T) {
@@ -82,13 +84,16 @@ func TestConfigWizard_CategoryNavigation_Wrap(t *testing.T) {
 	wizard := NewConfigWizard()
 	wizard.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 
+	// Derived, not hardcoded: the category count comes from the registry.
+	lastCategory := len(config.AllCategories()) - 1
+
 	wizard.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	assert.Equal(t, 4, wizard.ActiveCategory())
+	assert.Equal(t, lastCategory, wizard.ActiveCategory())
 
 	wizard.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, 0, wizard.ActiveCategory())
 
-	wizard.activeCategory = 4
+	wizard.activeCategory = lastCategory
 	wizard.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, 0, wizard.ActiveCategory())
 }

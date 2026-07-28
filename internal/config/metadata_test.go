@@ -38,7 +38,7 @@ func TestAllConfigMetadata_ReturnsAllKeys(t *testing.T) {
 	metadata := AllConfigMetadata()
 
 	assert.NotEmpty(t, metadata)
-	assert.Len(t, metadata, 19, "should have 19 configuration keys")
+	assert.Len(t, metadata, 21, "should have 21 configuration keys")
 }
 
 func TestAllConfigMetadata_MatchesValidKeys(t *testing.T) {
@@ -195,6 +195,7 @@ func TestGetByCategory_ReturnsCorrectKeys(t *testing.T) {
 		{CategoryTemplate, 1, []string{KeyTemplateCustomPath}},
 		{CategoryOutput, 2, []string{KeyOutputFormat, KeyOutputClipboard}},
 		{CategoryLLM, 6, []string{KeyLLMProvider, KeyLLMAPIKey}},
+		{CategoryGlobal, 2, []string{KeyVerbose, KeyQuiet}},
 	}
 
 	for _, tt := range tests {
@@ -228,12 +229,13 @@ func TestAllCategories_ReturnsAllCategories(t *testing.T) {
 
 	categories := AllCategories()
 
-	assert.Len(t, categories, 5)
+	assert.Len(t, categories, 6)
 	assert.Equal(t, CategoryScanner, categories[0])
 	assert.Equal(t, CategoryContext, categories[1])
 	assert.Equal(t, CategoryTemplate, categories[2])
 	assert.Equal(t, CategoryOutput, categories[3])
 	assert.Equal(t, CategoryLLM, categories[4])
+	assert.Equal(t, CategoryGlobal, categories[5])
 }
 
 func TestAllCategories_CoversAllMetadata(t *testing.T) {
@@ -276,6 +278,8 @@ func TestMetadataDefaults_MatchRootDefaults(t *testing.T) {
 		KeyLLMModel:                    "",
 		KeyLLMTimeout:                  300,
 		KeyLLMSaveResponse:             false,
+		KeyVerbose:                     false,
+		KeyQuiet:                       false,
 	}
 
 	for key, expectedDefault := range expectedDefaults {

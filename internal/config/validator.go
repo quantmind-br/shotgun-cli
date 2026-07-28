@@ -60,7 +60,7 @@ func ValidateValue(key, value string) error {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyLLMSaveResponse:
+		KeyLLMSaveResponse, KeyVerbose, KeyQuiet:
 		return validateBooleanValue(value)
 	case KeyOutputFormat:
 		return validateOutputFormat(value)
@@ -94,7 +94,7 @@ func ConvertValue(key, value string) (interface{}, error) {
 	case KeyScannerRespectGitignore, KeyScannerSkipBinary,
 		KeyScannerIncludeHidden, KeyScannerIncludeIgnored, KeyScannerRespectShotgunignore,
 		KeyContextIncludeTree, KeyContextIncludeSummary, KeyOutputClipboard,
-		KeyLLMSaveResponse:
+		KeyLLMSaveResponse, KeyVerbose, KeyQuiet:
 		return strings.ToLower(value) == "true", nil
 
 	default:
