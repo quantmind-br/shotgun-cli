@@ -9,29 +9,14 @@ import (
 
 // BuildLLMConfig builds the LLM configuration from Viper.
 func BuildLLMConfig() llm.Config {
-	provider := llm.ProviderType(viper.GetString(config.KeyLLMProvider))
-
-	// Get defaults for the provider.
-	defaults := llm.DefaultConfigs()[provider]
-
 	cfg := llm.Config{
-		Provider: provider,
+		Provider: llm.ProviderType(viper.GetString(config.KeyLLMProvider)),
 		APIKey:   viper.GetString(config.KeyLLMAPIKey),
 		BaseURL:  viper.GetString(config.KeyLLMBaseURL),
 		Model:    viper.GetString(config.KeyLLMModel),
 		Timeout:  viper.GetInt(config.KeyLLMTimeout),
 	}
-
-	// Apply defaults if not configured.
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = defaults.BaseURL
-	}
-	if cfg.Model == "" {
-		cfg.Model = defaults.Model
-	}
-	if cfg.Timeout == 0 {
-		cfg.Timeout = defaults.Timeout
-	}
+	cfg.WithDefaults()
 
 	return cfg
 }

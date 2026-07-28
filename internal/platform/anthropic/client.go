@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://api.anthropic.com"
 	anthropicVersion = "2023-06-01"
 	defaultMaxTokens = 8192
 )
@@ -24,11 +23,12 @@ type Client struct {
 // NewClient creates a new Anthropic client with the given configuration.
 // It validates the API key and sets default values for BaseURL, Model, MaxTokens, and Timeout if not provided.
 func NewClient(cfg llm.Config) (*Client, error) {
+	d := llm.DefaultConfigs()[llm.ProviderAnthropic]
 	base, err := llmbase.NewBaseClientWithDefaults(cfg, llmbase.DefaultConfig{
-		BaseURL:   defaultBaseURL,
-		Model:     "claude-sonnet-4-20250514",
+		BaseURL:   d.BaseURL,
+		Model:     d.Model,
 		MaxTokens: defaultMaxTokens,
-		Timeout:   300 * time.Second,
+		Timeout:   time.Duration(d.Timeout) * time.Second,
 	}, "Anthropic")
 	if err != nil {
 		return nil, err

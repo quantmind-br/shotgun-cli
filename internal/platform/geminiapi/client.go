@@ -10,10 +10,7 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/platform/llmbase"
 )
 
-const (
-	defaultBaseURL   = "https://generativelanguage.googleapis.com/v1beta"
-	defaultMaxTokens = 8192
-)
+const defaultMaxTokens = 8192
 
 // Client is the Google Gemini API implementation of the LLM provider.
 type Client struct {
@@ -23,11 +20,12 @@ type Client struct {
 // NewClient creates a new Gemini API client with the given configuration.
 // It validates the API key and sets default values for BaseURL, Model, MaxTokens, and Timeout if not provided.
 func NewClient(cfg llm.Config) (*Client, error) {
+	d := llm.DefaultConfigs()[llm.ProviderGemini]
 	base, err := llmbase.NewBaseClientWithDefaults(cfg, llmbase.DefaultConfig{
-		BaseURL:   defaultBaseURL,
-		Model:     "gemini-2.5-flash",
+		BaseURL:   d.BaseURL,
+		Model:     d.Model,
 		MaxTokens: defaultMaxTokens,
-		Timeout:   300 * time.Second,
+		Timeout:   time.Duration(d.Timeout) * time.Second,
 	}, "Gemini")
 	if err != nil {
 		return nil, err

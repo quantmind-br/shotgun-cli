@@ -33,6 +33,22 @@ func TestBuildLLMConfig_CustomValues(t *testing.T) {
 	assert.Equal(t, "https://custom.api.com", cfg.BaseURL)
 }
 
+func TestBuildLLMConfig_AppliesCatalogDefaults(t *testing.T) {
+	for provider, want := range llm.DefaultConfigs() {
+		t.Run(string(provider), func(t *testing.T) {
+			viper.Reset()
+			viper.Set(config.KeyLLMProvider, string(provider))
+			viper.Set(config.KeyLLMAPIKey, "sk-test-key")
+
+			cfg := BuildLLMConfig()
+
+			assert.Equal(t, want.BaseURL, cfg.BaseURL)
+			assert.Equal(t, want.Model, cfg.Model)
+			assert.Equal(t, want.Timeout, cfg.Timeout)
+		})
+	}
+}
+
 func TestBuildLLMConfigWithOverrides(t *testing.T) {
 	viper.Reset()
 	viper.Set(config.KeyLLMProvider, "anthropic")

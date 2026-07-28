@@ -10,8 +10,6 @@ import (
 	"github.com/quantmind-br/shotgun-cli/internal/platform/llmbase"
 )
 
-const defaultBaseURL = "https://api.openai.com/v1"
-
 // Client implements llm.Provider for OpenAI-compatible APIs.
 type Client struct {
 	*llmbase.BaseClient
@@ -19,10 +17,11 @@ type Client struct {
 
 // NewClient creates a new OpenAI client.
 func NewClient(cfg llm.Config) (*Client, error) {
+	d := llm.DefaultConfigs()[llm.ProviderOpenAI]
 	base, err := llmbase.NewBaseClientWithDefaults(cfg, llmbase.DefaultConfig{
-		BaseURL: defaultBaseURL,
-		Model:   "gpt-4o",
-		Timeout: 300 * time.Second,
+		BaseURL: d.BaseURL,
+		Model:   d.Model,
+		Timeout: time.Duration(d.Timeout) * time.Second,
 	}, "OpenAI")
 	if err != nil {
 		return nil, err
