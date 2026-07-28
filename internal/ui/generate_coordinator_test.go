@@ -100,8 +100,13 @@ func TestGenerateCoordinator_Poll_DuringGeneration(t *testing.T) {
 	mockGen := &mockGenerator{}
 	coord := NewGenerateCoordinator(mockGen)
 
+	// This test bypasses Start, so it must install the same invariants Start
+	// would: Poll returns nil unless a run is unreaped and current.
 	coord.progressCh = make(chan contextgen.GenProgress, 10)
 	coord.done = make(chan bool)
+	coord.running = true
+	coord.generation = 1
+	coord.activeGen = 1
 
 	go func() {
 		coord.progressCh <- contextgen.GenProgress{Stage: "testing", Message: "working"}
@@ -189,7 +194,19 @@ func TestGenerateCoordinator_Reset(t *testing.T) {
 	t.Parallel()
 
 	coord := NewGenerateCoordinator(&mockGenerator{})
-	coord.Start(&GenerateConfig{})
+	// Template must be non-nil: with the command actually invoked below,
+	// buildGeneratorConfig reads it inside the worker goroutine.
+	cmd := coord.Start(&GenerateConfig{
+		FileTree: &scanner.FileNode{Name: "root"},
+		Template: &template.Template{},
+	})
+
+	done := coord.done // capture before Reset may nil it
+	cmd()
+	<-done
+
+	// Reap before resetting: Reset preserves the channels of an unreaped run.
+	coord.Poll()
 
 	coord.Reset()
 
@@ -200,6 +217,18 @@ func TestGenerateCoordinator_Reset(t *testing.T) {
 		t.Error("config should be nil after reset")
 	}
 	if coord.progressCh != nil {
-		t.Error("progressCh should be nil after reset")
+		t.Error("progressCh should be nil after a reaped reset")
+	}
+	if coord.done != nil {
+		t.Error("done should be nil after a reaped reset")
+	}
+	if coord.content != "" || coord.genErr != nil {
+		t.Error("result state should be cleared after reset")
+	}
+	if coord.pending != nil {
+		t.Error("pending should be nil after reset")
+	}
+	if coord.generation == 0 {
+		t.Error("Reset should increment generation")
 	}
 }

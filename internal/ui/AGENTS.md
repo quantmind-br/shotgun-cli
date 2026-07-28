@@ -114,7 +114,8 @@ go test -v -run TestWizard ./internal/ui/                    # Wizard orchestrat
 go test -v -run TestScanCoordinator ./internal/ui/           # Coordinator
 ```
 
-**CI skips**: `TestScanCoordinator`, `TestGenerateCoordinator`, `TestWizardClipboardCopyCmd` (env-dependent)
+**CI skips**: `TestWizardClipboardCopyCmd` only (needs a clipboard utility). The
+coordinator tests run in CI and under `-race`.
 
 ## ANTI-PATTERNS
 

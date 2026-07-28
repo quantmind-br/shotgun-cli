@@ -45,7 +45,11 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestScanCoordinator|TestGenerateCoordinator|TestWizardClipboardCopyCmd" ./...
+          # Only TestWizardClipboardCopyCmd is skipped: it needs a clipboard
+          # utility the runner does not have. The coordinator tests used to be
+          # skipped here because their unsynchronised field access tripped the
+          # race detector; that cause is gone.
+          go test -v -race -covermode=atomic -coverprofile=coverage.out -skip "TestWizardClipboardCopyCmd" ./...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
