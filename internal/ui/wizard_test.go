@@ -2817,3 +2817,81 @@ func TestWizardModel_persistSelections_WritesDeselectedDelta(t *testing.T) {
 	require.Equal(t, []string{"b.go"}, got, "only the unselected non-ignored file is persisted")
 	require.Equal(t, []string{"b.go"}, wizard.deselected, "m.deselected reflects the persisted delta")
 }
+
+func TestWizard_LLMTick_YieldsTickMsg(t *testing.T) {
+	t.Parallel()
+
+	require.IsType(t, llmTickMsg{}, llmTick()())
+}
+
+func TestWizard_HandleSendToLLM_BatchesTick(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, &mockContextService{})
+	wizard.step = StepReview
+	wizard.generatedContent = "some content"
+	wizard.generatedFilePath = "/tmp/test.md"
+	wizard.wizardConfig = &WizardConfig{
+		LLM: LLMConfig{
+			Provider: "openai",
+			APIKey:   "test-key",
+		},
+	}
+	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
+
+	cmd := wizard.handleSendToLLM()
+	require.NotNil(t, cmd)
+
+	batch, ok := cmd().(tea.BatchMsg)
+	require.True(t, ok, "handleSendToLLM must return a tea.Batch")
+	require.Len(t, batch, 3, "batch must carry sendToLLMCmd, the spinner init and llmTick")
+}
+
+func TestWizard_LLMTickMsg_ReArmsWhileSending(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, &mockContextService{})
+	wizard.llmSending = true
+
+	_, cmd := wizard.Update(llmTickMsg{})
+	require.NotNil(t, cmd)
+	require.IsType(t, llmTickMsg{}, cmd())
+}
+
+func TestWizard_LLMTickMsg_LapsesWhenNotSending(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, &mockContextService{})
+	wizard.llmSending = false
+
+	_, cmd := wizard.Update(llmTickMsg{})
+	require.Nil(t, cmd)
+}
+
+func TestWizard_LLMTickChainStopsAfterCompletion(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, &mockContextService{})
+	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
+	wizard.llmSending = true
+
+	wizard.Update(screens.LLMCompleteMsg{OutputFile: "/tmp/out.md", Duration: time.Second})
+	require.False(t, wizard.llmSending)
+
+	_, cmd := wizard.Update(llmTickMsg{})
+	require.Nil(t, cmd)
+}
+
+func TestWizard_LLMTickChainStopsAfterError(t *testing.T) {
+	t.Parallel()
+
+	wizard := NewWizard("/tmp/test", &scanner.ScanConfig{}, nil, &mockContextService{})
+	wizard.review = screens.NewReview(nil, nil, nil, "", "", "")
+	wizard.llmSending = true
+
+	wizard.Update(screens.LLMErrorMsg{Err: fmt.Errorf("boom")})
+	require.False(t, wizard.llmSending)
+
+	_, cmd := wizard.Update(llmTickMsg{})
+	require.Nil(t, cmd)
+}

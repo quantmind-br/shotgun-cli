@@ -261,6 +261,14 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.LLMErrorMsg:
 		m.handleLLMError(msg)
 
+	case llmTickMsg:
+		// Self-terminating: handleLLMComplete and handleLLMError clear
+		// llmSending, so the first tick to arrive after the send finishes is
+		// the last one — the chain simply is not re-armed.
+		if m.llmSending {
+			cmds = append(cmds, llmTick())
+		}
+
 	// -- Async Coordinators --
 	case startScanMsg:
 		// Triggers the ScanCoordinator to begin async filesystem scan
@@ -829,6 +837,23 @@ func (m *WizardModel) handleClipboardComplete(msg screens.ClipboardCompleteMsg) 
 	})
 }
 
+// llmTickInterval is the cadence of llmTickMsg. The Review screen rounds the
+// elapsed send time to the second, so one second is the coarsest interval that
+// still advances the counter on every visible step.
+const llmTickInterval = time.Second
+
+// llmTickMsg re-renders the Review screen while a send is in flight so its
+// elapsed-time counter advances. sendToLLMCmd is a single blocking tea.Cmd that
+// emits no intermediate messages; without this tick the counter's cadence would
+// depend entirely on the progress overlay's spinner still being visible.
+type llmTickMsg struct{}
+
+func llmTick() tea.Cmd {
+	return tea.Tick(llmTickInterval, func(time.Time) tea.Msg {
+		return llmTickMsg{}
+	})
+}
+
 func (m *WizardModel) handleSendToLLM() tea.Cmd {
 	if m.step != StepReview || m.generatedContent == "" || m.llmSending {
 		return nil
@@ -851,7 +876,7 @@ func (m *WizardModel) handleSendToLLM() tea.Cmd {
 	}
 	m.progressComponent.UpdateMessage("", "Sending to LLM...")
 
-	return tea.Batch(m.sendToLLMCmd(), m.progressComponent.Init())
+	return tea.Batch(m.sendToLLMCmd(), m.progressComponent.Init(), llmTick())
 }
 
 func (m *WizardModel) handleLLMProgress(msg screens.LLMProgressMsg) {

@@ -909,3 +909,56 @@ func TestReviewModel_ExistingKeysStillWork(t *testing.T) {
 		t.Fatalf("'c' key should return clipboard copy command when generated")
 	}
 }
+
+func TestReview_LLMProgressMsgKeepsStartTime(t *testing.T) {
+	t.Parallel()
+
+	m := NewReview(nil, nil, nil, "", "", "")
+	m.SetLLMSending(true)
+	start := m.llmStartTime
+
+	handled, cmd := m.HandleMessage(LLMProgressMsg{Stage: "Connecting to OpenAI..."})
+	if !handled {
+		t.Fatalf("expected LLMProgressMsg to be handled")
+	}
+	if cmd != nil {
+		t.Fatalf("expected nil command, got %v", cmd)
+	}
+	if !m.llmStartTime.Equal(start) {
+		t.Fatalf("expected llmStartTime to stay %v, got %v", start, m.llmStartTime)
+	}
+	if !m.llmSending {
+		t.Fatalf("expected llmSending to remain true")
+	}
+}
+
+func TestReview_ViewRendersElapsedSendTime(t *testing.T) {
+	t.Parallel()
+
+	selectedFiles := map[string]bool{"/path/to/file1.go": true}
+	fileTree := &scanner.FileNode{
+		Name:  "root",
+		Path:  "/path",
+		IsDir: true,
+		Children: []*scanner.FileNode{
+			{
+				Name:  "file1.go",
+				Path:  "/path/to/file1.go",
+				IsDir: false,
+				Size:  512,
+			},
+		},
+	}
+	tmpl := &template.Template{Name: "Test", Content: "Content"}
+
+	m := NewReview(selectedFiles, fileTree, tmpl, "Task", "Rules", "")
+	m.SetSize(80, 40)
+	m.SetGenerated("/tmp/test.md", true)
+	m.SetLLMSending(true)
+	m.llmStartTime = time.Now().Add(-3 * time.Second)
+
+	view := m.View()
+	if !strings.Contains(view, "Sending to LLM... (3s)") {
+		t.Fatalf("expected elapsed counter to render (3s), got:\n%s", view)
+	}
+}

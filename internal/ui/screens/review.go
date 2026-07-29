@@ -146,7 +146,6 @@ func (m *ReviewModel) HandleMessage(msg tea.Msg) (handled bool, cmd tea.Cmd) {
 
 	case LLMProgressMsg:
 		m.llmSending = true
-		m.llmStartTime = time.Now()
 		return true, nil
 
 	case LLMCompleteMsg:
