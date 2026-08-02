@@ -3,14 +3,54 @@
 [![Tests](https://github.com/quantmind-br/shotgun-cli/actions/workflows/test.yml/badge.svg)](https://github.com/quantmind-br/shotgun-cli/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/quantmind-br/shotgun-cli/graph/badge.svg)](https://codecov.io/gh/quantmind-br/shotgun-cli)
 [![Go Report Card](https://goreportcard.com/badge/github.com/quantmind-br/shotgun-cli)](https://goreportcard.com/report/github.com/quantmind-br/shotgun-cli)
+[![License: Shotgun Community](https://img.shields.io/badge/license-Shotgun%20Community-blue)](LICENSE)
 
-## Project Overview
+Generate focused, reviewable codebase context for AI coding workflows from a
+CLI or an interactive terminal UI. Shotgun applies Git-aware ignore rules,
+estimates context size, renders reusable prompt templates, and can send the
+result to Anthropic, OpenAI, or Google Gemini.
 
-**Shotgun CLI** is a sophisticated Command-Line Interface tool written in Go that functions as a **Context Generation and AI Orchestration Engine**. The tool bridges complex codebases with AI language models, providing both interactive (TUI) and programmatic (CLI) interfaces for generating LLM-optimized codebase contexts and facilitating AI-assisted development workflows.
+## Install
 
-### Purpose and Main Functionality
+Download a binary from the [latest release](https://github.com/quantmind-br/shotgun-cli/releases/latest),
+or build from source with Go 1.23 or newer:
 
-The primary purpose of Shotgun CLI is to transform complex codebases into structured, LLM-optimized contexts that can be sent to AI models like Google Gemini. It intelligently scans file systems, applies layered ignore patterns, and generates comprehensive context files that include file structure representations and relevant content.
+```bash
+git clone https://github.com/quantmind-br/shotgun-cli.git
+cd shotgun-cli
+make build
+./build/shotgun-cli --help
+```
+
+## Quick start
+
+Launch the guided TUI:
+
+```bash
+shotgun-cli
+```
+
+Or generate a context file non-interactively:
+
+```bash
+shotgun-cli context generate \
+  --root ./my-project \
+  --output context.md \
+  --max-size 5MB
+```
+
+Configure Claude through the Anthropic provider and verify the setup:
+
+```bash
+shotgun-cli config set llm.provider anthropic
+shotgun-cli config set llm.api-key "$ANTHROPIC_API_KEY"
+shotgun-cli llm doctor
+```
+
+API keys stay in local configuration. Do not commit generated configuration or
+context files that may contain private source code.
+
+## Why Shotgun
 
 ### Key Features and Capabilities
 
@@ -22,13 +62,33 @@ The primary purpose of Shotgun CLI is to transform complex codebases into struct
 - **AI Integration**: Seamless integration with Google Gemini API via external tool execution
 - **Cross-platform Support**: Works across different operating systems with platform-specific optimizations
 
-### Likely Intended Use Cases
+### Common use cases
 
 - **Code Review Automation**: Generate comprehensive context for AI-powered code analysis
 - **Documentation Generation**: Create structured representations of codebases for AI-assisted documentation
 - **Refactoring Assistance**: Provide AI models with complete context for intelligent refactoring suggestions
 - **Onboarding Tools**: Help new developers understand complex codebase structures
 - **Code Migration**: Facilitate AI-assisted code migration between languages or frameworks
+
+## Project status
+
+Shotgun is actively maintained. Releases include cross-platform binaries, and
+the test matrix covers Linux, macOS, and Windows. Bug reports and focused
+contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[SECURITY.md](SECURITY.md).
+
+## Acknowledgements and license
+
+This project is based on
+[glebkudr/shotgun_code](https://github.com/glebkudr/shotgun_code), created by
+Gleb Kudryashov / Curly's Technology Tmi. The CLI-focused architecture and
+subsequent modifications in this repository are maintained by Diogo Soares
+Rodrigues.
+
+The upstream project is distributed under the
+[Shotgun Community License](LICENSE), which includes revenue and competitive-use
+restrictions. Those terms are preserved here. This is a source-available
+project, not an OSI-approved open-source license.
 
 ## Table of Contents
 
