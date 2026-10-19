@@ -997,7 +997,6 @@ model, _ = wizard.Update(GenerationCompleteMsg{
 - **Test File**: `internal/ui/wizard_test.go`
 - **Wizard Implementation**: `internal/ui/wizard.go`
 - **Screen Components**: `internal/ui/screens/`
-- **Architecture docs**: `openwiki/architecture.md`
 
 ## TUI Wizard State Transitions
 

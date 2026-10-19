@@ -288,16 +288,12 @@ Target 85%+ coverage overall, 90%+ for new code; 80% is the hard CI floor.
 
 ## Known Documentation Drift
 
-`README.md` and `openwiki/` predate several changes. When they conflict with code, **the code wins**:
+`README.md` predates several changes. When it conflicts with code, **the code wins**:
 
-- The send command is `shotgun-cli context send`, not `shotgun-cli send` (README, quickstart, workflows).
+- The send command is `shotgun-cli context send`, not `shotgun-cli send` (README).
 - The config TUI is `shotgun-cli config`; there is no `--interactive` flag and no `config show --format json`.
-- Template syntax is `{VAR}`, not `{{ .Var }}` — wrong in `openwiki/domains.md` and in `template render` help text. `template_selection.go` copy still mentions `{{FILES}}`; the real variable is `FILE_STRUCTURE`.
-- Ignore precedence puts `.gitignore` before the custom/`.shotgunignore` layer, the reverse of `openwiki/domains.md`. There is no repo-local `.shotgun/templates/` source.
+- Template syntax is `{VAR}`, not `{{ .Var }}` — wrong in `template render` help text. `template_selection.go` copy still mentions `{{FILES}}`; the real variable is `FILE_STRUCTURE`.
+- Ignore precedence puts `.gitignore` before the custom/`.shotgunignore` layer. There is no repo-local `.shotgun/templates/` source.
 - Stale defaults: `llm.provider` is `openai` (not blank/`gemini`), `scanner.max-files` is `10000`, `scanner.max-file-size` is `1MB`, `output.clipboard` is `true`, `context.max-size` is `10MB`.
 - `cmd/send.go` help text still says Gemini-only; the implementation uses the configured provider registry.
 - The Gemini platform package is `geminiapi`, not `gemini`.
-
-## OpenWiki
-
-Longer-form docs live in `/openwiki`: [quickstart](openwiki/quickstart.md) (current), `architecture.md` (current), `workflows.md` (partly stale), `domains.md` and `operations.md` (materially stale — see drift list above). Read the quickstart first, then follow its links, and verify specifics against source.
